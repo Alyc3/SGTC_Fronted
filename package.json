@@ -1,0 +1,32 @@
+{
+  "name": "sgtc-fronted-trazabilidad",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "drizzle-orm": "^0.45.2",
+    "expo": "~54.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-sqlite": "~16.0.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-dotenv": "^3.4.11",
+    "react-native-safe-area-context": "5.1.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.0.0",
+    "@types/uuid": "^10.0.0",
+    "babel-plugin-inline-import": "^3.0.0",
+    "babel-preset-expo": "^55.0.22",
+    "drizzle-kit": "^0.30.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.2"
+  }
+}

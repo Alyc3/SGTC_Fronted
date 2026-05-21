@@ -1,0 +1,75 @@
+export const Theme = {
+  colors: {
+    primary: '#442a22',
+    primaryContainer: '#5d4037',
+    onPrimary: '#ffffff',
+    secondary: '#3a6843',
+    secondaryContainer: '#b9ecbd',
+    onSecondaryContainer: '#3e6d47',
+    tertiary: '#412d11',
+    tertiaryContainer: '#594325',
+    background: '#fff8f3',
+    surface: '#fff8f3',
+    surfaceContainerLow: '#fcf2e7',
+    surfaceContainerLowest: '#ffffff',
+    onSurface: '#1f1b14',
+    onSurfaceVariant: '#504441',
+    error: '#ba1a1a',
+    success: '#386641',
+    outline: '#827470',
+    outlineVariant: 'rgba(212, 195, 190, 0.15)',
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    xxl: 48,
+  },
+  roundness: {
+    sm: 4,
+    md: 8,
+    lg: 12,
+    full: 9999,
+  },
+  typography: {
+    display: {
+      fontFamily: 'System',
+      fontSize: 32,
+      fontWeight: '700' as const,
+      lineHeight: 40,
+      color: '#1f1b14',
+    },
+    headline: {
+      fontFamily: 'System',
+      fontSize: 24,
+      fontWeight: '600' as const,
+      lineHeight: 32,
+      color: '#1f1b14',
+    },
+    body: {
+      fontFamily: 'System',
+      fontSize: 16,
+      fontWeight: '400' as const,
+      lineHeight: 24,
+      color: '#1f1b14',
+    },
+    label: {
+      fontFamily: 'System',
+      fontSize: 14,
+      fontWeight: '500' as const,
+      lineHeight: 20,
+      color: '#504441',
+    },
+  },
+  shadows: {
+    ambient: {
+      shadowColor: '#1f1b14',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.06,
+      shadowRadius: 24,
+      elevation: 2,
+    }
+  }
+};
