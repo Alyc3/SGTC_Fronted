@@ -1,13 +1,21 @@
 import React from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
-import { db } from './db';
+import { useDrizzleStudio } from 'expo-drizzle-studio-plugin';
+import { db, expoDb } from './db';
 import migrations from './db/migrations/migrations';
-import LotesScreen from './screens/LotesScreen'; 
+import { DrawerNavigator } from './navigation/DrawerNavigator'; 
 import { Theme } from './theme';
 
+// Import mandatory for gesture handler
+import 'react-native-gesture-handler';
+
 export default function App() {
+  // Activate Drizzle Studio (only works in dev mode)
+  useDrizzleStudio(expoDb);
+
   const { success, error } = useMigrations(db, migrations);
 
   if (error) console.error('Migration error:', error);
@@ -22,7 +30,9 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <LotesScreen />
+      <NavigationContainer>
+        <DrawerNavigator />
+      </NavigationContainer>
     </SafeAreaProvider>
   );
 }

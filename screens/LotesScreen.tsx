@@ -1,38 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   View, 
   Text, 
   FlatList, 
   StyleSheet, 
-  TouchableOpacity, 
-  ActivityIndicator,
-  Alert,
   StatusBar
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
-import { lotes as lotesSchema } from '../db/schema';
-import { syncService } from '../services/sync.service';
 import { Theme } from '../theme';
 
 const LotesScreen = () => {
   const { data: lotes } = useLiveQuery(db.query.lotes.findMany({
     with: { parcela: true, semilla: true }
   }));
-  const [syncing, setSyncing] = useState(false);
-
-  const handleSync = async () => {
-    try {
-      setSyncing(true);
-      await syncService.syncWithRemote();
-      Alert.alert('Éxito', 'Sincronización completada');
-    } catch (error) {
-      Alert.alert('Error', 'Falló la sincronización');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const renderItem = ({ item }: any) => (
     <View style={styles.card}>
@@ -67,44 +48,42 @@ const LotesScreen = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Theme.colors.background} />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerLabel}>EL TERROIR EDITORIAL</Text>
-          <Text style={styles.title}>Trazabilidad</Text>
-        </View>
-        <TouchableOpacity style={[styles.syncButton, syncing && styles.disabledButton]} onPress={handleSync} disabled={syncing}>
-          {syncing ? <ActivityIndicator color={Theme.colors.onPrimary} size="small" /> : <Text style={styles.syncButtonText}>Sync</Text>}
-        </TouchableOpacity>
-      </View>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Lotes Activos</Text>
-        <View style={styles.divider} />
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Theme.colors.primaryContainer} />
+      
+      {/* List Content with Header Integrated */}
       <FlatList
         data={lotes}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.headerLabel}>MODULO 1</Text>
+              <Text style={styles.title}>Trazabilidad</Text>
+            </View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Lotes Activos</Text>
+              <View style={styles.divider} />
+            </View>
+          </View>
+        }
         ListEmptyComponent={<Text style={styles.empty}>No hay registros en el libro mayor.</Text>}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.colors.background },
-  header: { paddingHorizontal: Theme.spacing.lg, paddingTop: Theme.spacing.xl, paddingBottom: Theme.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  header: { paddingBottom: Theme.spacing.md, paddingTop: Theme.spacing.md },
   headerLabel: { ...Theme.typography.label, letterSpacing: 2, fontSize: 10, marginBottom: Theme.spacing.xs },
-  title: { ...Theme.typography.display, fontSize: 28 },
-  syncButton: { backgroundColor: Theme.colors.primary, paddingHorizontal: Theme.spacing.md, paddingVertical: Theme.spacing.sm, borderRadius: Theme.roundness.full, ...Theme.shadows.ambient },
-  disabledButton: { opacity: 0.6 },
-  syncButtonText: { color: Theme.colors.onPrimary, fontWeight: '700', fontSize: 14 },
-  sectionHeader: { paddingHorizontal: Theme.spacing.lg, marginTop: Theme.spacing.md, marginBottom: Theme.spacing.sm },
+  title: { ...Theme.typography.display, fontSize: 28, marginBottom: Theme.spacing.lg, color: Theme.colors.primary },
+  sectionHeader: { marginTop: Theme.spacing.md, marginBottom: Theme.spacing.sm },
   sectionTitle: { ...Theme.typography.headline, fontSize: 18, color: Theme.colors.onSurfaceVariant },
   divider: { height: 2, backgroundColor: Theme.colors.surfaceContainerLow, marginTop: Theme.spacing.xs, width: 40 },
-  list: { padding: Theme.spacing.md },
+  list: { padding: Theme.spacing.lg },
   card: { backgroundColor: Theme.colors.surfaceContainerLowest, borderRadius: Theme.roundness.md, marginBottom: Theme.spacing.md, flexDirection: 'row', overflow: 'hidden', ...Theme.shadows.ambient },
   cardSideAccent: { width: 6, backgroundColor: Theme.colors.primary },
   cardContent: { flex: 1, padding: Theme.spacing.md, paddingLeft: Theme.spacing.lg },
