@@ -11,3 +11,4 @@ export const RolTrabajadorValues = ['Capataz', 'Sembrador', 'Recolector', 'Clasi
 export const EtapaProcesoValues = ['Sembrado', 'Cosechado', 'Despulpado', 'Secado', 'Tostado', 'Molido', 'Empaquetado', 'Transporte'] as const;
 export const SubFaseSiembraValues = ['Germinacion', 'Vivero', 'Crecimiento', 'Floracion', 'Maduracion'] as const;
 export const EtapaActualValues = ['Pendiente', 'En_Proceso', 'Completada'] as const;
+export const EtapaLoteValues = ['Reservado', 'En_Produccion', 'Completada'] as const;
