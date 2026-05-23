@@ -6,7 +6,7 @@ CREATE TABLE `semillas` (
 	`anexo_ruta` text,
 	`anexo_tamano` integer,
 	`anexo_creacion` text,
-	`is_synced` integer DEFAULT 0 NOT NULL
+	`is_synced` integer DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `parcelas` (
@@ -18,14 +18,14 @@ CREATE TABLE `parcelas` (
 	`phSuelo` real,
 	`textura` text NOT NULL,
 	`altitudMsnm` real,
-	`cortinasRompevientos` integer DEFAULT 0,
+	`cortinasRompevientos` integer DEFAULT false,
 	`orientacionLadera` text NOT NULL,
 	`tipoTerreno` text NOT NULL,
 	`tipoZona` text,
 	`estado` text DEFAULT 'Libre' NOT NULL,
 	`fecha_creacion` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`fecha_modificacion` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	`is_synced` integer DEFAULT 0 NOT NULL
+	`is_synced` integer DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `parcelas_codigo_unique` ON `parcelas` (`codigo`);--> statement-breakpoint
@@ -43,7 +43,7 @@ CREATE TABLE `lotes` (
 	`calidadFinal` text,
 	`fecha_creacion` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`fecha_modificacion` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	`is_synced` integer DEFAULT 0 NOT NULL,
+	`is_synced` integer DEFAULT false NOT NULL,
 	FOREIGN KEY (`parcela_id`) REFERENCES `parcelas`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`semilla_id`) REFERENCES `semillas`(`id`) ON UPDATE no action ON DELETE no action
 );
@@ -58,7 +58,7 @@ CREATE TABLE `personal` (
 	`rol` text NOT NULL,
 	`fecha_creacion` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`fecha_modificacion` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	`is_synced` integer DEFAULT 0 NOT NULL
+	`is_synced` integer DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `personal_identificacion_unique` ON `personal` (`identificacion`);--> statement-breakpoint
@@ -73,7 +73,7 @@ CREATE TABLE `asignacion_personal` (
 	`fecha_jornada` text,
 	`horasTrabajadas` real,
 	`cantidad_cosechada` real,
-	`is_synced` integer DEFAULT 0 NOT NULL,
+	`is_synced` integer DEFAULT false NOT NULL,
 	FOREIGN KEY (`lote_id`) REFERENCES `lotes`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`trabajador_id`) REFERENCES `personal`(`id`) ON UPDATE no action ON DELETE no action
 );
@@ -87,6 +87,6 @@ CREATE TABLE `estado_etapa` (
 	`fecha_final` text,
 	`duracion_calculada` real,
 	`subFaseSiembra` text,
-	`is_synced` integer DEFAULT 0 NOT NULL,
+	`is_synced` integer DEFAULT false NOT NULL,
 	FOREIGN KEY (`lote_id`) REFERENCES `lotes`(`id`) ON UPDATE no action ON DELETE no action
 );

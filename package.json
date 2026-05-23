@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:generate:named": "drizzle-kit generate --name"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
