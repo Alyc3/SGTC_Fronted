@@ -8,6 +8,7 @@ import RegistroSemillaScreen from '../screens/RegistroSemillaScreen';
 import InventarioSemillasScreen from '../screens/InventarioSemillasScreen';
 import GestionParcelaScreen from '../screens/GestionParcelaScreen';
 import ListarParcelaScreen from '../screens/ListarParcelaScreen';
+import GestionLoteScreen from '../screens/GestionLoteScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import { Theme } from '../theme';
 import { 
@@ -95,6 +96,14 @@ export const DrawerNavigator = () => {
         options={{ 
           title: 'Nueva Parcela',
           drawerIcon: ({ color }) => <Map size={20} color={color} />
+        }}
+      />
+      <Drawer.Screen 
+        name="GestionLote" 
+        component={GestionLoteScreen} 
+        options={{ 
+          title: 'Gestionar Lote',
+          drawerItemStyle: { display: 'none' }
         }}
       />
       <Drawer.Screen 

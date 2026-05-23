@@ -6,44 +6,59 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Search,
   Plus,
   ChevronRight,
   Maximize2,
   Mountain,
+  Trash2,
+  Boxes,
+  Edit,
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { parcelasService } from '../services';
+import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
+import { db } from '../db';
 
 const ListarParcelaScreen = ({ navigation }: any) => {
-  const [parcelas, setParcelas] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: parcelasRaw } = useLiveQuery(db.query.parcelas.findMany({
+    with: { lotes: true }
+  }));
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    fetchParcelas();
-  }, []);
+  const parcelas = parcelasRaw || [];
+  const loading = !parcelasRaw;
 
-  const fetchParcelas = async () => {
-    try {
-      setLoading(true);
-      const data = await parcelasService.getAll();
-      setParcelas(data);
-    } catch (error) {
-      console.error('Error fetching parcelas:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleDelete = (id: string, nombre: string) => {
+    Alert.alert(
+      'Eliminar Parcela',
+      `¿Está seguro que desea eliminar la parcela "${nombre}"? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Eliminar', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await parcelasService.delete(id);
+            } catch (error) {
+              Alert.alert('Error', 'No se pudo eliminar la parcela.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const filteredParcelas = parcelas.filter((p) =>
-    p.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.ubicacion && p.ubicacion.toLowerCase().includes(searchQuery.toLowerCase()))
+    p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.tipoTerreno.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalExtension = parcelas.reduce((acc, p) => acc + (p.hectareas || 0), 0);
@@ -59,7 +74,7 @@ const ListarParcelaScreen = ({ navigation }: any) => {
           <Search size={20} color={Theme.colors.onSurfaceVariant} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by code or zone..."
+            placeholder="Buscar por nombre o zona..."
             placeholderTextColor={Theme.colors.outline}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -94,12 +109,12 @@ const ListarParcelaScreen = ({ navigation }: any) => {
               <TouchableOpacity
                 key={item.id}
                 style={styles.parcelCard}
-                onPress={() => navigation.navigate('GestionParcela', { id: item.id })}
+                onPress={() => navigation.navigate('GestionParcela', { id: item.id, readOnly: true })}
               >
                 <View style={styles.cardAccent} />
                 <View style={styles.cardMain}>
                   <View style={styles.cardHeader}>
-                    <Text style={styles.parcelCode}>{item.codigo}</Text>
+                    <Text style={styles.parcelCode}>{item.nombre}</Text>
                     <View style={[styles.badge, { backgroundColor: Theme.colors.secondaryContainer }]}>
                       <Text style={[styles.badgeText, { color: Theme.colors.onSecondaryContainer }]}>
                         {item.tipoTerreno.toUpperCase()}
@@ -116,8 +131,30 @@ const ListarParcelaScreen = ({ navigation }: any) => {
                       <Mountain size={14} color={Theme.colors.outline} />
                       <Text style={styles.metaText}>{item.tipoTerreno}</Text>
                     </View>
+                    <View style={styles.metaItem}>
+                      <Boxes size={14} color={Theme.colors.outline} />
+                      <Text style={styles.metaText}>{item.lotes?.length || 0} Lotes</Text>
+                    </View>
                   </View>
+
+                  {item.lotes && item.lotes.length > 0 ? (
+                    <Text style={styles.lotesSummary} numberOfLines={1}>
+                      {item.lotes.map((l: any) => `LOT-${l.codigo}`).join(', ')}
+                    </Text>
+                  ) : null}
                 </View>
+                <TouchableOpacity 
+                  onPress={() => navigation.navigate('GestionParcela', { id: item.id })}
+                  style={{ padding: 8, marginRight: 4 }}
+                >
+                  <Edit size={20} color={Theme.colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => handleDelete(item.id, item.nombre)}
+                  style={{ padding: 8, marginRight: 8 }}
+                >
+                  <Trash2 size={20} color={Theme.colors.error} />
+                </TouchableOpacity>
                 <ChevronRight size={20} color={Theme.colors.outline} />
               </TouchableOpacity>
             ))}
@@ -257,6 +294,13 @@ const styles = StyleSheet.create({
   metaText: {
     ...Theme.typography.labelSm,
     color: Theme.colors.onSurfaceVariant,
+  },
+  lotesSummary: {
+    ...Theme.typography.labelSm,
+    color: Theme.colors.outline,
+    fontSize: 10,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   fab: {
     position: 'absolute',

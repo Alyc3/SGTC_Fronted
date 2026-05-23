@@ -1,10 +1,11 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
+import { sql, relations } from 'drizzle-orm';
 import { TexturaSueloValues, OrientacionLaderaValues, TipoTerrenoValues, EstadoParcelaValues } from './enums';
+import { lotes } from './lotes';
 
 export const parcelas = sqliteTable('parcelas', {
   id: text('id').primaryKey(),
-  codigo: text('codigo').unique().notNull(),
+  nombre: text('nombreParcela').unique().notNull(),
   hectareas: real('hectareas').notNull(),
   latitud: real('latitud'),
   longitud: real('longitud'),
@@ -20,3 +21,7 @@ export const parcelas = sqliteTable('parcelas', {
   fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
 });
+
+export const parcelasRelations = relations(parcelas, ({ many }) => ({
+  lotes: many(lotes),
+}));

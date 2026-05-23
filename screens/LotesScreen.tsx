@@ -4,16 +4,43 @@ import {
   Text, 
   FlatList, 
   StyleSheet, 
-  StatusBar
+  StatusBar,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
 import { Theme } from '../theme';
+import { Trash2, Edit } from 'lucide-react-native';
+import { parcelasService } from '../services';
+import { useNavigation } from '@react-navigation/native';
 
 const LotesScreen = () => {
+  const navigation = useNavigation<any>();
   const { data: lotes } = useLiveQuery(db.query.lotes.findMany({
     with: { parcela: true, semilla: true }
   }));
+
+  const handleDelete = (id: string, codigo: string) => {
+    Alert.alert(
+      'Eliminar Lote',
+      `¿Está seguro que desea eliminar el lote LOT-${codigo}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Eliminar', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await parcelasService.deleteLote(id);
+            } catch (error) {
+              Alert.alert('Error', 'No se pudo eliminar el lote.');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const renderItem = ({ item }: any) => (
     <View style={styles.card}>
@@ -21,16 +48,19 @@ const LotesScreen = () => {
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
           <Text style={styles.codigo}>LOT-{item.codigo}</Text>
-          <View style={[styles.badge, { backgroundColor: item.is_synced ? Theme.colors.secondaryContainer : Theme.colors.surfaceContainerLow }]}>
-            <Text style={[styles.badgeText, { color: item.is_synced ? Theme.colors.onSecondaryContainer : Theme.colors.onSurfaceVariant }]}>
-              {item.is_synced ? 'SINC' : 'PEND'}
-            </Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => navigation.navigate('GestionLote', { id: item.id, parcelaId: item.parcela_id })}>
+              <Edit size={20} color={Theme.colors.primary} style={{ marginRight: 12 }} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleDelete(item.id, item.codigo)}>
+              <Trash2 size={20} color={Theme.colors.error} />
+            </TouchableOpacity>
           </View>
         </View>
         <View style={styles.detailsGrid}>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Parcela</Text>
-            <Text style={styles.detailValue}>{item.parcela?.codigo}</Text>
+            <Text style={styles.detailValue}>{item.parcela?.nombre}</Text>
           </View>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Variedad</Text>
@@ -88,6 +118,7 @@ const styles = StyleSheet.create({
   cardSideAccent: { width: 6, backgroundColor: Theme.colors.primary },
   cardContent: { flex: 1, padding: Theme.spacing.md, paddingLeft: Theme.spacing.lg },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Theme.spacing.md },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   codigo: { ...Theme.typography.headline, color: Theme.colors.primary, fontSize: 20 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: Theme.roundness.sm },
   badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },

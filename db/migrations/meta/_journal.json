@@ -8,6 +8,13 @@
       "when": 1779517022277,
       "tag": "0000_lumpy_ghost_rider",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1779558896168,
+      "tag": "0001_--name=cambio_atributos_parcela",
+      "breakpoints": true
     }
   ]
 }

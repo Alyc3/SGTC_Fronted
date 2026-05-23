@@ -14,8 +14,8 @@ export const parcelasSync = {
     for (const record of pending) {
       try {
         await sql`
-          INSERT INTO parcelas (id, codigo, hectareas, ubicacion, ph_suelo, textura, altitud_msnm, orientacion_ladera, tipo_terreno, estado, is_synced)
-          VALUES (${record.id}, ${record.codigo}, ${record.hectareas}, ${record.ubicacion}, ${record.phSuelo}, ${record.textura}, ${record.altitudMsnm}, ${record.orientacionLadera}, ${record.tipoTerreno}, ${record.estado}, true)
+          INSERT INTO parcelas (id, nombre, hectareas, latitud, longitud, ph_suelo, textura, altitud_msnm, orientacion_ladera, tipo_terreno, estado, is_synced)
+          VALUES (${record.id}, ${record.nombre}, ${record.hectareas}, ${record.latitud}, ${record.longitud}, ${record.phSuelo}, ${record.textura}, ${record.altitudMsnm}, ${record.orientacionLadera}, ${record.tipoTerreno}, ${record.estado}, true)
           ON CONFLICT (id) DO UPDATE SET estado = EXCLUDED.estado, is_synced = true
         `;
 

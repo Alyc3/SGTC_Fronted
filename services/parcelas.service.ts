@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { parcelas } from '../db/schema';
+import { parcelas, lotes } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as Location from 'expo-location';
@@ -7,6 +7,16 @@ import * as Location from 'expo-location';
 export const parcelasService = {
   async getAll() {
     return await db.query.parcelas.findMany();
+  },
+  async getById(id: string) {
+    return await db.query.parcelas.findFirst({
+      where: eq(parcelas.id, id),
+      with: { 
+        lotes: { 
+          with: { semilla: true } 
+        } 
+      }
+    });
   },
   async getLocation() {
     try {
@@ -41,6 +51,25 @@ export const parcelasService = {
   },
   async delete(id: string) {
     return await db.delete(parcelas).where(eq(parcelas.id, id)).returning();
+  },
+  async deleteLote(id: string) {
+    return await db.delete(lotes).where(eq(lotes.id, id)).returning();
+  },
+  async getLoteById(id: string) {
+    return await db.query.lotes.findFirst({
+      where: eq(lotes.id, id),
+      with: { semilla: true }
+    });
+  },
+  async createLote(data: typeof lotes.$inferInsert) {
+    return await db.insert(lotes).values({ ...data, id: data.id ?? uuidv4() }).returning();
+  },
+  async updateLote(id: string, data: Partial<typeof lotes.$inferInsert>) {
+    return await db.update(lotes).set({ 
+      ...data, 
+      is_synced: false,
+      fecha_modificacion: new Date().toISOString() 
+    }).where(eq(lotes.id, id)).returning();
   },
   validate(data: { hectareas?: string | number | null }) {
     if (data.hectareas === undefined || data.hectareas === null || data.hectareas === '') {
