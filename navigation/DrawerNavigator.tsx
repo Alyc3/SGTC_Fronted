@@ -7,12 +7,14 @@ import ConfiguracionScreen from '../screens/ConfiguracionScreen';
 import RegistroSemillaScreen from '../screens/RegistroSemillaScreen';
 import InventarioSemillasScreen from '../screens/InventarioSemillasScreen';
 import GestionParcelaScreen from '../screens/GestionParcelaScreen';
+import ListarParcelaScreen from '../screens/ListarParcelaScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import { Theme } from '../theme';
 import { 
   LayoutDashboard, 
   Boxes, 
   Map, 
+  List,
   Sprout, 
   PlusCircle, 
   Users, 
@@ -80,10 +82,18 @@ export const DrawerNavigator = () => {
         }}
       />
       <Drawer.Screen 
+        name="ListarParcela" 
+        component={ListarParcelaScreen} 
+        options={{ 
+          title: 'Listado de Parcelas',
+          drawerIcon: ({ color }) => <List size={20} color={color} />
+        }}
+      />
+      <Drawer.Screen 
         name="GestionParcela" 
         component={GestionParcelaScreen} 
         options={{ 
-          title: 'Gestión de Parcela',
+          title: 'Nueva Parcela',
           drawerIcon: ({ color }) => <Map size={20} color={color} />
         }}
       />

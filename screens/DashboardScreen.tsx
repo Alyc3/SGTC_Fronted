@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   syncBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.5)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: Theme.roundness.sm },
   syncText: { ...Theme.typography.label, fontSize: 10, color: Theme.colors.onSurfaceVariant },
   statsGrid: { flexDirection: 'row', gap: Theme.spacing.md, marginBottom: Theme.spacing.xl },
-  statCard: { flex: 1, backgroundColor: Theme.colors.surfaceContainerLowest, padding: Theme.spacing.lg, borderRadius: Theme.roundness.xxl, ...Theme.shadows.ambient },
+  statCard: { flex: 1, backgroundColor: Theme.colors.greenVariant, padding: Theme.spacing.lg, borderRadius: Theme.roundness.xxl, ...Theme.shadows.ambient },
   statNumber: { ...Theme.typography.display, fontSize: 32, marginTop: 8, color: Theme.colors.primary },
   statLabel: { ...Theme.typography.label, fontSize: 12, color: Theme.colors.onSurfaceVariant, marginTop: 4 },
   section: { marginBottom: Theme.spacing.xl },

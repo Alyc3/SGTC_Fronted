@@ -9,4 +9,5 @@ export const semillas = sqliteTable('semillas', {
   anexo_tamano: integer('anexo_tamano'),
   anexo_creacion: text('anexo_creacion'),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
+  
 });

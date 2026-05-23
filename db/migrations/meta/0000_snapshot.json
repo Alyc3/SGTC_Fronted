@@ -1,11 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "646f990f-dada-41e6-91fa-501d238c23c4",
+  "id": "bf81663e-2986-43eb-9236-e67da11899c4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "asignacion_personal": {
-      "name": "asignacion_personal",
+    "semillas": {
+      "name": "semillas",
       "columns": {
         "id": {
           "name": "id",
@@ -14,66 +14,44 @@
           "notNull": true,
           "autoincrement": false
         },
-        "lote_id": {
-          "name": "lote_id",
+        "variedad": {
+          "name": "variedad",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "etapa": {
-          "name": "etapa",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "trabajador_id": {
-          "name": "trabajador_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "tipo_grano": {
-          "name": "tipo_grano",
+        "paisOrigen": {
+          "name": "paisOrigen",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "pago_calculado": {
-          "name": "pago_calculado",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "fechaAsignacion": {
-          "name": "fechaAsignacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "fecha_jornada": {
-          "name": "fecha_jornada",
+        "distribuidor": {
+          "name": "distribuidor",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "horasTrabajadas": {
-          "name": "horasTrabajadas",
-          "type": "real",
+        "anexo_ruta": {
+          "name": "anexo_ruta",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "cantidad_cosechada": {
-          "name": "cantidad_cosechada",
-          "type": "real",
+        "anexo_tamano": {
+          "name": "anexo_tamano",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "anexo_creacion": {
+          "name": "anexo_creacion",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -88,39 +66,13 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "asignacion_personal_lote_id_lotes_id_fk": {
-          "name": "asignacion_personal_lote_id_lotes_id_fk",
-          "tableFrom": "asignacion_personal",
-          "tableTo": "lotes",
-          "columnsFrom": [
-            "lote_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "asignacion_personal_trabajador_id_personal_id_fk": {
-          "name": "asignacion_personal_trabajador_id_personal_id_fk",
-          "tableFrom": "asignacion_personal",
-          "tableTo": "personal",
-          "columnsFrom": [
-            "trabajador_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
-    "estado_etapa": {
-      "name": "estado_etapa",
+    "parcelas": {
+      "name": "parcelas",
       "columns": {
         "id": {
           "name": "id",
@@ -129,18 +81,82 @@
           "notNull": true,
           "autoincrement": false
         },
-        "lote_id": {
-          "name": "lote_id",
+        "codigo": {
+          "name": "codigo",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "etapa": {
-          "name": "etapa",
+        "hectareas": {
+          "name": "hectareas",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "latitud": {
+          "name": "latitud",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "longitud": {
+          "name": "longitud",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "phSuelo": {
+          "name": "phSuelo",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "textura": {
+          "name": "textura",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "altitudMsnm": {
+          "name": "altitudMsnm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "cortinasRompevientos": {
+          "name": "cortinasRompevientos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": false
+        },
+        "orientacionLadera": {
+          "name": "orientacionLadera",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tipoTerreno": {
+          "name": "tipoTerreno",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tipoZona": {
+          "name": "tipoZona",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "estado": {
@@ -149,35 +165,23 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'Pendiente'"
+          "default": "'Libre'"
         },
-        "fecha_inicio": {
-          "name": "fecha_inicio",
+        "fecha_creacion": {
+          "name": "fecha_creacion",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
-        "fecha_final": {
-          "name": "fecha_final",
+        "fecha_modificacion": {
+          "name": "fecha_modificacion",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "duracion_calculada": {
-          "name": "duracion_calculada",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "subFaseSiembra": {
-          "name": "subFaseSiembra",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
         },
         "is_synced": {
           "name": "is_synced",
@@ -188,24 +192,19 @@
           "default": false
         }
       },
-      "indexes": {},
-      "foreignKeys": {
-        "estado_etapa_lote_id_lotes_id_fk": {
-          "name": "estado_etapa_lote_id_lotes_id_fk",
-          "tableFrom": "estado_etapa",
-          "tableTo": "lotes",
-          "columnsFrom": [
-            "lote_id"
+      "indexes": {
+        "parcelas_codigo_unique": {
+          "name": "parcelas_codigo_unique",
+          "columns": [
+            "codigo"
           ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "isUnique": true
         }
       },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "lotes": {
       "name": "lotes",
@@ -353,133 +352,8 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
-    },
-    "parcelas": {
-      "name": "parcelas",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "codigo": {
-          "name": "codigo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "hectareas": {
-          "name": "hectareas",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "ubicacion": {
-          "name": "ubicacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "phSuelo": {
-          "name": "phSuelo",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "textura": {
-          "name": "textura",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "altitudMsnm": {
-          "name": "altitudMsnm",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "cortinasRompevientos": {
-          "name": "cortinasRompevientos",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "orientacionLadera": {
-          "name": "orientacionLadera",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "tipoTerreno": {
-          "name": "tipoTerreno",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "tipoZona": {
-          "name": "tipoZona",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "estado": {
-          "name": "estado",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'Libre'"
-        },
-        "fecha_creacion": {
-          "name": "fecha_creacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "fecha_modificacion": {
-          "name": "fecha_modificacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "is_synced": {
-          "name": "is_synced",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        }
-      },
-      "indexes": {
-        "parcelas_codigo_unique": {
-          "name": "parcelas_codigo_unique",
-          "columns": [
-            "codigo"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "personal": {
       "name": "personal",
@@ -562,10 +436,11 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
-    "semillas": {
-      "name": "semillas",
+    "asignacion_personal": {
+      "name": "asignacion_personal",
       "columns": {
         "id": {
           "name": "id",
@@ -574,43 +449,167 @@
           "notNull": true,
           "autoincrement": false
         },
-        "variedad": {
-          "name": "variedad",
+        "lote_id": {
+          "name": "lote_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "paisOrigen": {
-          "name": "paisOrigen",
+        "etapa": {
+          "name": "etapa",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "trabajador_id": {
+          "name": "trabajador_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tipo_grano": {
+          "name": "tipo_grano",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "distribuidor": {
-          "name": "distribuidor",
+        "pago_calculado": {
+          "name": "pago_calculado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fechaAsignacion": {
+          "name": "fechaAsignacion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "fecha_jornada": {
+          "name": "fecha_jornada",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "anexo_ruta": {
-          "name": "anexo_ruta",
-          "type": "text",
+        "horasTrabajadas": {
+          "name": "horasTrabajadas",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "anexo_tamano": {
-          "name": "anexo_tamano",
+        "cantidad_cosechada": {
+          "name": "cantidad_cosechada",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "is_synced": {
+          "name": "is_synced",
           "type": "integer",
           "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "asignacion_personal_lote_id_lotes_id_fk": {
+          "name": "asignacion_personal_lote_id_lotes_id_fk",
+          "tableFrom": "asignacion_personal",
+          "tableTo": "lotes",
+          "columnsFrom": [
+            "lote_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "asignacion_personal_trabajador_id_personal_id_fk": {
+          "name": "asignacion_personal_trabajador_id_personal_id_fk",
+          "tableFrom": "asignacion_personal",
+          "tableTo": "personal",
+          "columnsFrom": [
+            "trabajador_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "estado_etapa": {
+      "name": "estado_etapa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lote_id": {
+          "name": "lote_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "etapa": {
+          "name": "etapa",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "estado": {
+          "name": "estado",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'Pendiente'"
+        },
+        "fecha_inicio": {
+          "name": "fecha_inicio",
+          "type": "text",
+          "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "anexo_creacion": {
-          "name": "anexo_creacion",
+        "fecha_final": {
+          "name": "fecha_final",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duracion_calculada": {
+          "name": "duracion_calculada",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subFaseSiembra": {
+          "name": "subFaseSiembra",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -626,11 +625,27 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "estado_etapa_lote_id_lotes_id_fk": {
+          "name": "estado_etapa_lote_id_lotes_id_fk",
+          "tableFrom": "estado_etapa",
+          "tableTo": "lotes",
+          "columnsFrom": [
+            "lote_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     }
   },
+  "views": {},
   "enums": {},
   "_meta": {
     "schemas": {},
