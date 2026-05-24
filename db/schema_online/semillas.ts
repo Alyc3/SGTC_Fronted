@@ -1,8 +1,8 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { pgTable, text, boolean, timestamp, integer } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { catalogo } from './catalogo';
 
-export const semillas = sqliteTable('semillas', {
+export const semillas = pgTable('semillas', {
   id: text('id').primaryKey(),
   variedad_id: text('variedad_id').references(() => catalogo.id).notNull(),
   pais_origen_id: text('pais_origen_id').references(() => catalogo.id),
@@ -15,8 +15,8 @@ export const semillas = sqliteTable('semillas', {
   anexo_ruta: text('anexo_ruta'),
   anexo_tamano: integer('anexo_tamano'),
   anexo_creacion: text('anexo_creacion'),
-  fecha_creacion: text('fecha_creacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
-  fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
-  activo: integer('activo', { mode: 'boolean' }).default(1).notNull(), // Use 1 instead of true for SQLite compatibility check
-  is_synced: integer('is_synced', { mode: 'boolean' }).default(0).notNull() // Use 0 instead of false
+  fecha_creacion: timestamp('fecha_creacion').defaultNow().notNull(),
+  fecha_modificacion: timestamp('fecha_modificacion').defaultNow().notNull(),
+  activo: boolean('activo').default(true).notNull(),
+  is_synced: boolean('is_synced').default(false).notNull()
 });

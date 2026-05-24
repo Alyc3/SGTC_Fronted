@@ -17,7 +17,8 @@ import {
   Globe2,
   Truck,
   CalendarDays,
-  ShieldCheck
+  ShieldCheck,
+  Edit,
 } from 'lucide-react-native';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
@@ -25,11 +26,20 @@ import { Theme } from '../theme';
 
 const InventarioSemillasScreen = ({ navigation }: any) => {
   const { data: semillas } = useLiveQuery(db.query.semillas.findMany({
+    with: {
+      variedad: true,
+      pais_origen: true,
+      distribuidor: true,
+    },
     orderBy: (semillas, { desc }) => [desc(semillas.anexo_creacion)]
   }));
 
   const renderItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.card} activeOpacity={0.9}>
+    <TouchableOpacity 
+      style={styles.card} 
+      activeOpacity={0.9}
+      onPress={() => navigation.navigate('RegistroSemilla', { id: item.id, readOnly: true })}
+    >
       
       <View style={styles.cardMain}>
         <View style={styles.cardHeader}>
@@ -39,14 +49,22 @@ const InventarioSemillasScreen = ({ navigation }: any) => {
             </View>
             <View>
               <Text style={styles.cardCategory}>PATRIMONIO GENÉTICO</Text>
-              <Text style={styles.cardTitle}>{item.variedad}</Text>
+              <Text style={styles.cardTitle}>{item.variedad?.valor || 'Sin nombre'}</Text>
             </View>
           </View>
-          <View style={[styles.badge, item.is_synced ? styles.badgeSynced : styles.badgePending]}>
-            <ShieldCheck size={10} color={item.is_synced ? Theme.colors.onPrimary : Theme.colors.primary} style={{marginRight: 4}} />
-            <Text style={[styles.badgeText, { color: item.is_synced ? Theme.colors.onPrimary : Theme.colors.primary }]}>
-              {item.is_synced ? 'NUBE' : 'LOCAL'}
-            </Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('RegistroSemilla', { id: item.id })}
+              style={styles.actionIconButton}
+            >
+              <Edit size={18} color={Theme.colors.onPrimary} />
+            </TouchableOpacity>
+            <View style={[styles.badge, item.is_synced ? styles.badgeSynced : styles.badgePending]}>
+              <ShieldCheck size={10} color={item.is_synced ? Theme.colors.onPrimary : Theme.colors.primary} style={{marginRight: 4}} />
+              <Text style={[styles.badgeText, { color: item.is_synced ? Theme.colors.onPrimary : Theme.colors.primary }]}>
+                {item.is_synced ? 'NUBE' : 'LOCAL'}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -58,7 +76,7 @@ const InventarioSemillasScreen = ({ navigation }: any) => {
               <Globe2 size={16} color="rgba(255,255,255,0.85)" />
               <Text style={styles.detailLabel}>ORIGEN</Text>
             </View>
-            <Text style={styles.detailValue} numberOfLines={1}>{item.paisOrigen || 'Desconocido'}</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>{item.pais_origen?.valor || 'Desconocido'}</Text>
           </View>
 
           <View style={styles.gridItem}>
@@ -66,7 +84,7 @@ const InventarioSemillasScreen = ({ navigation }: any) => {
               <Truck size={16} color="rgba(255,255,255,0.85)" />
               <Text style={styles.detailLabel}>PROVEEDOR</Text>
             </View>
-            <Text style={styles.detailValue} numberOfLines={1}>{item.distribuidor || 'N/A'}</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>{item.distribuidor?.valor || 'N/A'}</Text>
           </View>
         </View>
 
@@ -99,7 +117,6 @@ const InventarioSemillasScreen = ({ navigation }: any) => {
           <View style={styles.header}>
             <View style={styles.headerTop}>
               <View>
-                <Text style={styles.headerLabel}>LIBRO MAYOR</Text>
                 <Text style={styles.title}>Semillas registradas</Text>
               </View>
               <TouchableOpacity 
@@ -157,7 +174,16 @@ const styles = StyleSheet.create({
   searchIcon: { marginRight: 10 },
   searchInput: { ...Theme.typography.body, flex: 1, paddingVertical: 12, fontSize: 15 },
   list: { paddingBottom: 40 },
-
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionIconButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+  },
   card: { 
     backgroundColor: Theme.colors.onSecondaryContainer,
     borderRadius: 20, 

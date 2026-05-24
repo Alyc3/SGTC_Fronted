@@ -8,6 +8,7 @@ import { db, expoDb } from './db';
 import migrations from './db/migrations/migrations';
 import { DrawerNavigator } from './navigation/DrawerNavigator'; 
 import { Theme } from './theme';
+import { seedService } from './services';
 
 // Import mandatory for gesture handler
 import 'react-native-gesture-handler';
@@ -17,6 +18,12 @@ export default function App() {
   useDrizzleStudio(expoDb);
 
   const { success, error } = useMigrations(db, migrations);
+
+  React.useEffect(() => {
+    if (success) {
+      seedService.initCatalogo();
+    }
+  }, [success]);
 
   if (error) console.error('Migration error:', error);
 

@@ -1,4 +1,5 @@
 export * from './enums';
+export * from './catalogo';
 export * from './semillas';
 export * from './parcelas';
 export * from './lotes';

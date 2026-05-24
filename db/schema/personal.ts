@@ -11,5 +11,6 @@ export const personal = sqliteTable('personal', {
   rol: text('rol', { enum: RolTrabajadorValues }).notNull(),
   fecha_creacion: text('fecha_creacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
+  activo: integer('activo', { mode: 'boolean' }).default(1).notNull(),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
 });

@@ -2,7 +2,8 @@ import { DATABASE_URL } from '@env';
 import { 
   semillasSync, 
   parcelasSync, 
-  personalSync 
+  personalSync,
+  catalogoSync 
 } from './online';
 
 /**
@@ -20,6 +21,7 @@ export const syncService = {
 
     try {
       // Ejecución secuencial de sincronizadores especializados
+      await catalogoSync.sync();
       await semillasSync.sync();
       await parcelasSync.sync();
       await parcelasSync.syncLotes();

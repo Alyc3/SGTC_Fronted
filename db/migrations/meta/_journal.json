@@ -36,6 +36,20 @@
       "when": 1779595785850,
       "tag": "0004_harsh_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1779599970130,
+      "tag": "0005_next_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1779603269764,
+      "tag": "0006_violet_naoko",
+      "breakpoints": true
     }
   ]
 }

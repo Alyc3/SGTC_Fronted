@@ -120,7 +120,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
       resetForm();
     }
     navigation.setOptions({
-      title: readOnly ? 'Detalle Parcela' : isEditing ? 'Editar Parcela' : 'Nueva Parcela'
+      title: readOnly ? 'Visualizar Parcela' : isEditing ? 'Actualizar Parcela' : 'Nueva Parcela'
     });
   }, [parcelId, isEditing, readOnly]);
 

@@ -86,16 +86,16 @@ export const DrawerNavigator = () => {
         name="ListarParcela" 
         component={ListarParcelaScreen} 
         options={{ 
-          title: 'Listado de Parcelas',
-          drawerIcon: ({ color }) => <List size={20} color={color} />
+          title: 'Parcelas',
+          drawerIcon: ({ color }) => <Map size={20} color={color} />
         }}
       />
       <Drawer.Screen 
         name="GestionParcela" 
         component={GestionParcelaScreen} 
         options={{ 
-          title: 'Nueva Parcela',
-          drawerIcon: ({ color }) => <Map size={20} color={color} />
+          title: 'Gestionar Parcela',
+          drawerItemStyle: { display: 'none' }
         }}
       />
       <Drawer.Screen 

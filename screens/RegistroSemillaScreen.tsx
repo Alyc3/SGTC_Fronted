@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   StatusBar,
   Modal,
   FlatList,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import {
   ArrowRight,
@@ -21,27 +23,40 @@ import {
   Menu,
   Search,
   CircleUser,
+  Trash2,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../theme';
-import { semillasService } from '../services';
+import { semillasService, catalogoService } from '../services';
+import { v4 as uuidv4 } from 'uuid';
 
-const SelectInput = ({ label, value, options, onSelect, placeholder, showActions }: any) => {
+const SelectInput = ({ label, value, options, onSelect, onAddNew, placeholder, showActions, loading, readOnly }: any) => {
   const [modalVisible, setModalVisible] = useState(false);
+
+  const selectedOption = options.find((opt: any) => opt.id === value);
+
+  const displayOptions = readOnly 
+    ? options 
+    : [...options, { id: 'ADD_NEW', valor: `+ Agregar nuevo ${label.toLowerCase()}...`, isSpecial: true }];
 
   return (
     <View style={styles.inputContainer}>
       <Text style={styles.inputLabel}>{label}</Text>
       <TouchableOpacity
-        style={styles.selectWrapper}
+        style={[styles.selectWrapper, readOnly && { backgroundColor: Theme.colors.surfaceContainerLow }]}
         activeOpacity={0.7}
-        onPress={() => setModalVisible(true)}
+        onPress={() => !loading && !readOnly && setModalVisible(true)}
+        disabled={loading || readOnly}
       >
-        <Text style={[styles.selectText, !value && { color: Theme.colors.onSurfaceVariant }]}>
-          {value || placeholder}
-        </Text>
+        {loading ? (
+          <ActivityIndicator size="small" color={Theme.colors.primary} />
+        ) : (
+          <Text style={[styles.selectText, !value && { color: Theme.colors.onSurfaceVariant }]}>
+            {selectedOption ? selectedOption.valor : placeholder}
+          </Text>
+        )}
         <View style={styles.selectIcons}>
-          {showActions && (
+          {!readOnly && showActions && (
             <View style={styles.actionIcons}>
               <Plus size={14} color={Theme.colors.onSurfaceVariant} style={styles.iconSpacing} />
               <Edit2 size={12} color={Theme.colors.onSurfaceVariant} style={styles.iconSpacing} />
@@ -65,18 +80,27 @@ const SelectInput = ({ label, value, options, onSelect, placeholder, showActions
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{label}</Text>
             <FlatList
-              data={options}
-              keyExtractor={(item) => item}
+              data={displayOptions}
+              keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.optionItem}
                   onPress={() => {
-                    onSelect(item);
-                    setModalVisible(false);
+                    if (item.id === 'ADD_NEW') {
+                      setModalVisible(false);
+                      onAddNew();
+                    } else {
+                      onSelect(item.id);
+                      setModalVisible(false);
+                    }
                   }}
                 >
-                  <Text style={[styles.optionText, value === item && styles.optionTextSelected]}>
-                    {item}
+                  <Text style={[
+                    styles.optionText, 
+                    value === item.id && styles.optionTextSelected,
+                    item.isSpecial && { color: Theme.colors.primary, fontWeight: '700', fontStyle: 'italic' }
+                  ]}>
+                    {item.valor}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -88,59 +112,236 @@ const SelectInput = ({ label, value, options, onSelect, placeholder, showActions
   );
 };
 
-const RegistroSemillaScreen = ({ navigation }: any) => {
-  const [variedad, setVariedad] = useState('');
-  const [paisOrigen, setPaisOrigen] = useState('');
-  const [distribuidor, setDistribuidor] = useState('');
-  const [metodoSecado, setMetodoSecado] = useState('');
-  const [seleccion, setSeleccion] = useState('');
-  const [olor, setOlor] = useState('');
-  const [color, setColor] = useState('');
-  const [integridad, setIntegridad] = useState('');
+const RegistroSemillaScreen = ({ navigation, route }: any) => {
+  const seedId = route.params?.id;
+  const readOnly = route.params?.readOnly ?? false;
+  const isEditing = !!seedId;
+
+  const [variedadId, setVariedadId] = useState('');
+  const [paisOrigenId, setPaisOrigenId] = useState('');
+  const [distribuidorId, setDistribuidorId] = useState('');
+  const [metodoSecadoId, setMetodoSecadoId] = useState('');
+  const [seleccionId, setSeleccionId] = useState('');
+  const [olorId, setOlorId] = useState('');
+  const [colorId, setColorId] = useState('');
+  const [integridadId, setIntegridadId] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  const resetForm = () => {
+    setVariedadId('');
+    setPaisOrigenId('');
+    setDistribuidorId('');
+    setMetodoSecadoId('');
+    setSeleccionId('');
+    setOlorId('');
+    setColorId('');
+    setIntegridadId('');
+  };
+
+  // Catalog options state
+  const [options, setOptions] = useState({
+    variedades: [],
+    paises: [],
+    distribuidores: [],
+    metodosSecado: [],
+    selecciones: [],
+    olores: [],
+    colores: [],
+    integridades: []
+  });
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  // New Catalog Item Modal
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [newVal, setNewVal] = useState('');
+  const [activeCategory, setActiveCategory] = useState({ key: '', label: '' });
+
+  useEffect(() => {
+    loadCatalogs().then(() => {
+      if (seedId) {
+        loadSeedData();
+      } else {
+        resetForm();
+      }
+    });
+    navigation.setOptions({
+      title: readOnly ? 'Visualizar Semilla' : isEditing ? 'Actualizar Semilla' : 'Nueva Semilla'
+    });
+  }, [seedId, isEditing, readOnly]);
+
+  const loadCatalogs = async () => {
+    try {
+      setLoadingOptions(true);
+      const [v, p, d, ms, s, o, c, i] = await Promise.all([
+        catalogoService.getByCategoria('VARIEDAD_CAFE'),
+        catalogoService.getByCategoria('PAIS_ORIGEN'),
+        catalogoService.getByCategoria('DISTRIBUIDOR'),
+        catalogoService.getByCategoria('METODO_SECADO'),
+        catalogoService.getByCategoria('SELECCION'),
+        catalogoService.getByCategoria('OLOR'),
+        catalogoService.getByCategoria('COLOR'),
+        catalogoService.getByCategoria('INTEGRIDAD')
+      ]);
+
+      setOptions({
+        variedades: v,
+        paises: p,
+        distribuidores: d,
+        metodosSecado: ms,
+        selecciones: s,
+        olores: o,
+        colores: c,
+        integridades: i
+      } as any);
+    } catch (error) {
+      console.error('Error loading catalogs:', error);
+      Alert.alert('Error', 'No se pudieron cargar las opciones del catálogo.');
+    } finally {
+      setLoadingOptions(false);
+    }
+  };
+
+  const loadSeedData = async () => {
+    try {
+      setLoading(true);
+      const seed = await semillasService.getById(seedId);
+      if (seed) {
+        setVariedadId(seed.variedad_id);
+        setPaisOrigenId(seed.pais_origen_id || '');
+        setDistribuidorId(seed.distribuidor_id || '');
+        setMetodoSecadoId(seed.metodo_secado_id || '');
+        setSeleccionId(seed.seleccion_id || '');
+        setOlorId(seed.olor_id || '');
+        setColorId(seed.color_id || '');
+        setIntegridadId(seed.integridad_id || '');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo cargar la información de la semilla.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddNew = (key: string, label: string) => {
+    setActiveCategory({ key, label });
+    setNewVal('');
+    setAddModalVisible(true);
+  };
+
+  const saveNewCatalogItem = async () => {
+    if (!newVal.trim()) return;
+    try {
+      setLoadingOptions(true);
+      const newItem = await catalogoService.create({
+        id: uuidv4(),
+        categoria: activeCategory.key,
+        valor: newVal.trim(),
+        activo: true,
+        origen_local: true,
+        is_synced: false
+      });
+      
+      await loadCatalogs();
+      
+      // Auto-select the new item
+      const setterMap: any = {
+        'VARIEDAD_CAFE': setVariedadId,
+        'PAIS_ORIGEN': setPaisOrigenId,
+        'DISTRIBUIDOR': setDistribuidorId,
+        'METODO_SECADO': setMetodoSecadoId,
+        'SELECCION': setSeleccionId,
+        'OLOR': setOlorId,
+        'COLOR': setColorId,
+        'INTEGRIDAD': setIntegridadId
+      };
+      
+      if (setterMap[activeCategory.key]) {
+        setterMap[activeCategory.key](newItem[0].id);
+      }
+      
+      setAddModalVisible(false);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo agregar el elemento al catálogo.');
+    } finally {
+      setLoadingOptions(false);
+    }
+  };
 
   const handleSave = async () => {
-    if (!variedad) {
+    if (!variedadId) {
       Alert.alert('Error', 'La identificación botánica es necesaria.');
       return;
     }
     try {
       setLoading(true);
-      await semillasService.create({
-        id: Date.now().toString(),
-        variedad,
-        paisOrigen,
-        distribuidor,
-        metodoSecado,
-        seleccion,
-        olor,
-        color,
-        integridad,
+      const data = {
+        variedad_id: variedadId,
+        pais_origen_id: paisOrigenId || null,
+        distribuidor_id: distribuidorId || null,
+        metodo_secado_id: metodoSecadoId || null,
+        seleccion_id: seleccionId || null,
+        olor_id: olorId || null,
+        color_id: colorId || null,
+        integridad_id: integridadId || null,
         anexo_creacion: new Date().toISOString(),
-      });
-      Alert.alert('Éxito', 'Registro confirmado.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      };
+
+      if (isEditing) {
+        await semillasService.update(seedId, data);
+        Alert.alert('Éxito', 'Semilla actualizada.', [{ 
+          text: 'OK', 
+          onPress: () => {
+            resetForm();
+            navigation.navigate('InventarioSemillas');
+          } 
+        }]);
+      } else {
+        await semillasService.create({ ...data, id: uuidv4() });
+        Alert.alert('Éxito', 'Registro confirmado.', [{ 
+          text: 'OK', 
+          onPress: () => {
+            resetForm();
+            navigation.navigate('InventarioSemillas');
+          } 
+        }]);
+      }
     } catch (error) {
+      console.error('Save error:', error);
       Alert.alert('Error', 'Fallo en la persistencia.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      'Dar de baja',
+      '¿Está seguro que desea dar de baja esta semilla? Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Confirmar', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await semillasService.delete(seedId);
+              resetForm();
+              navigation.navigate('InventarioSemillas');
+            } catch (error) {
+              Alert.alert('Error', 'No se pudo procesar la baja.');
+            } finally {
+              setLoading(false);
+            }
+          } 
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Theme.colors.background} />
-      
-      {/* Top Navigation Bar */}
-      <View style={styles.topNav}>
-        <View style={styles.navLeft}>
-          <Menu size={24} color={Theme.colors.primary} />
-          <Text style={styles.navLogo}>The Terroir Editorial</Text>
-        </View>
-        <View style={styles.navRight}>
-          <Search size={24} color={Theme.colors.onSurfaceVariant} />
-          <CircleUser size={24} color={Theme.colors.primary} />
-        </View>
-      </View>
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
@@ -152,13 +353,15 @@ const RegistroSemillaScreen = ({ navigation }: any) => {
         >
           {/* Hero Section */}
           <View style={styles.heroSection}>
-            <Text style={styles.title}>Registro de semillas</Text>
+            <Text style={styles.title}>
+              {readOnly ? 'Visualización' : isEditing ? 'Actualización' : 'Registro'} de semillas
+            </Text>
             <Text style={styles.description}>
               Complete la identificación técnica para certificar el origen y calidad del lote.
             </Text>
           </View>
 
-          {/* Form Sections */}
+          {/* Form Canvas */}
           <View style={styles.formCanvas}>
             
             {/* Botanical Identification */}
@@ -170,27 +373,36 @@ const RegistroSemillaScreen = ({ navigation }: any) => {
               
               <SelectInput 
                 label="Variedad / Tipo de café" 
-                value={variedad} 
-                options={['Caturra Amarillo', 'Geisha Panama Reserve', 'Bourbon Sidra', 'Typica Mejorado']}
-                onSelect={setVariedad}
+                value={variedadId} 
+                options={options.variedades}
+                onSelect={setVariedadId}
+                onAddNew={() => handleAddNew('VARIEDAD_CAFE', 'Variedad')}
                 placeholder="Seleccione variedad..."
                 showActions
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
               <SelectInput 
                 label="Origen" 
-                value={paisOrigen} 
-                options={['Huila, Colombia', 'Valle Central, Costa Rica', 'Sidama, Ethiopia', 'Antigua, Guatemala']}
-                onSelect={setPaisOrigen}
+                value={paisOrigenId} 
+                options={options.paises}
+                onSelect={setPaisOrigenId}
+                onAddNew={() => handleAddNew('PAIS_ORIGEN', 'Origen')}
                 placeholder="Seleccione origen..."
                 showActions
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
               <SelectInput 
                 label="Distribuidor" 
-                value={distribuidor} 
-                options={['Global Estate Partners Ltd.', 'Origin Select Imports', 'Terroir Sourcing Collective']}
-                onSelect={setDistribuidor}
+                value={distribuidorId} 
+                options={options.distribuidores}
+                onSelect={setDistribuidorId}
+                onAddNew={() => handleAddNew('DISTRIBUIDOR', 'Distribuidor')}
                 placeholder="Seleccione distribuidor..."
                 showActions
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
             </View>
 
@@ -203,38 +415,53 @@ const RegistroSemillaScreen = ({ navigation }: any) => {
 
               <SelectInput 
                 label="Método de secado" 
-                value={metodoSecado} 
-                options={['Al sol en patio', 'Camas africanas', 'Marquesinas', 'Mecánico', 'Mixto', 'Secado a la sombra']}
-                onSelect={setMetodoSecado}
+                value={metodoSecadoId} 
+                options={options.metodosSecado}
+                onSelect={setMetodoSecadoId}
+                onAddNew={() => handleAddNew('METODO_SECADO', 'Método de secado')}
                 placeholder="Seleccione el método..."
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
               <SelectInput 
                 label="Selección" 
-                value={seleccion} 
-                options={['Manual', 'Por flotación', 'Por mallas / Zarandas', 'Mecánica / Neumática', 'Óptica / Electrónica']}
-                onSelect={setSeleccion}
+                value={seleccionId} 
+                options={options.selecciones}
+                onSelect={setSeleccionId}
+                onAddNew={() => handleAddNew('SELECCION', 'Selección')}
                 placeholder="Seleccione el tipo de selección..."
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
               <SelectInput 
                 label="Olor" 
-                value={olor} 
-                options={['Fresco', 'A tierra / Moho', 'Fermento / Avinagrado', 'Reposado / Rancio', 'A humo']}
-                onSelect={setOlor}
+                value={olorId} 
+                options={options.olores}
+                onSelect={setOlorId}
+                onAddNew={() => handleAddNew('OLOR', 'Olor')}
                 placeholder="Seleccione el perfil de olor..."
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
               <SelectInput 
                 label="Color" 
-                value={color} 
-                options={['Amarillo pajizo / Claro', 'Blanquecino / Hueso', 'Grisáceo / Opaco', 'Manchado / Moteado']}
-                onSelect={setColor}
+                value={colorId} 
+                options={options.colores}
+                onSelect={setColorId}
+                onAddNew={() => handleAddNew('COLOR', 'Color')}
                 placeholder="Seleccione el tono observado..."
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
               <SelectInput 
                 label="Integridad" 
-                value={integridad} 
-                options={['Intact o / Completo', 'Fisurado / Agrietado', 'Pelado / Trillado parcialmente', 'Aplastado / Machacado', 'Perforado / Brocado']}
-                onSelect={setIntegridad}
+                value={integridadId} 
+                options={options.integridades}
+                onSelect={setIntegridadId}
+                onAddNew={() => handleAddNew('INTEGRIDAD', 'Integridad')}
                 placeholder="Seleccione el estado de integridad..."
+                loading={loadingOptions}
+                readOnly={readOnly}
               />
             </View>
 
@@ -257,27 +484,77 @@ const RegistroSemillaScreen = ({ navigation }: any) => {
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
-              <TouchableOpacity 
-                style={[styles.primaryButton, loading && { opacity: 0.7 }]} 
-                onPress={handleSave} 
-                disabled={loading}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {loading ? 'Procesando...' : 'Confirm Registration'}
-                </Text>
-                <ArrowRight size={20} color={Theme.colors.onSecondary} />
-              </TouchableOpacity>
+              {!readOnly && (
+                <TouchableOpacity 
+                  style={[styles.primaryButton, loading && { opacity: 0.7 }]} 
+                  onPress={handleSave} 
+                  disabled={loading}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios' : 'Confirm Registration'}
+                  </Text>
+                  <ArrowRight size={20} color={Theme.colors.onSecondary} />
+                </TouchableOpacity>
+              )}
               
+              {isEditing && !readOnly && (
+                <TouchableOpacity 
+                  style={styles.deleteButton} 
+                  onPress={handleDelete}
+                  disabled={loading}
+                >
+                  <Trash2 size={18} color={Theme.colors.error} />
+                  <Text style={styles.deleteButtonText}>Dar de baja</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity 
                 style={styles.cancelButton} 
-                onPress={() => navigation.goBack()}
+                onPress={() => {
+                  resetForm();
+                  navigation.navigate('InventarioSemillas');
+                }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{readOnly ? 'Volver' : 'Cancel'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Modal for adding new catalog item */}
+      <Modal
+        visible={addModalVisible}
+        transparent={true}
+        animationType="slide"
+      >
+        <View style={styles.addModalOverlay}>
+          <View style={styles.addModalContent}>
+            <Text style={styles.addModalTitle}>Nuevo/a {activeCategory.label}</Text>
+            <TextInput
+              style={styles.addInput}
+              placeholder={`Nombre de ${activeCategory.label.toLowerCase()}...`}
+              value={newVal}
+              onChangeText={setNewVal}
+              autoFocus
+            />
+            <View style={styles.addModalActions}>
+              <TouchableOpacity 
+                style={styles.addCancelBtn} 
+                onPress={() => setAddModalVisible(false)}
+              >
+                <Text style={styles.addCancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.addSaveBtn} 
+                onPress={saveNewCatalogItem}
+              >
+                <Text style={styles.addSaveBtnText}>Agregar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -383,7 +660,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    // Editorial shadow
     shadowColor: Theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -488,6 +764,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Theme.colors.onSecondary,
   },
+  deleteButton: {
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Theme.colors.error,
+  },
+  deleteButtonText: {
+    fontFamily: 'System',
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.error,
+  },
   cancelButton: {
     backgroundColor: Theme.colors.surfaceContainerHigh,
     alignItems: 'center',
@@ -537,6 +830,59 @@ const styles = StyleSheet.create({
   optionTextSelected: {
     fontWeight: '800',
     color: Theme.colors.primary,
+  },
+  addModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  addModalContent: {
+    backgroundColor: Theme.colors.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 32,
+    paddingBottom: Platform.OS === 'ios' ? 48 : 32,
+  },
+  addModalTitle: {
+    fontFamily: 'System',
+    fontSize: 20,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+    marginBottom: 20,
+  },
+  addInput: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: Theme.colors.onSurface,
+    marginBottom: 24,
+  },
+  addModalActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  addCancelBtn: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: Theme.colors.surfaceContainerHigh,
+  },
+  addCancelBtnText: {
+    fontWeight: '700',
+    color: Theme.colors.onSurface,
+  },
+  addSaveBtn: {
+    flex: 2,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: Theme.colors.primary,
+  },
+  addSaveBtnText: {
+    fontWeight: '700',
+    color: Theme.colors.white,
   },
 });
 

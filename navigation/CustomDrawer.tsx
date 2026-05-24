@@ -20,7 +20,6 @@ export const CustomDrawer = (props: DrawerContentComponentProps) => {
           <Text style={styles.headerTitle}>STGC</Text>
           <View style={styles.brandAccent} />
         </View>
-        <Text style={styles.headerSubtitle}>Libro Mayor Digital</Text>
       </SafeAreaView>
 
       {/* Menú de Navegación - Contenedor con scroll limpio */}
