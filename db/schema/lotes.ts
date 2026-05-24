@@ -11,23 +11,12 @@ export const lotes = sqliteTable('lotes', {
   semilla_id: text('semilla_id').references(() => semillas.id).notNull(),
   zona_seleccionada: text('zona_seleccionada'),
   hectareas_lote: real('hectareas_lote'),
-  variedadCafe: text('variedadCafe'),
-  porcentajeProgreso: real('porcentajeProgreso').default(0),
-  costoTotalManoObra: real('costoTotalManoObra').default(0),
+  variedadCafe: text('variedad_cafe'),
+  porcentajeProgreso: real('porcentaje_progreso').default(0),
+  costoTotalManoObra: real('costo_total_mano_obra').default(0),
   estado_lote: text('estado_lote', { enum: EstadoLoteValues }).default('Creado').notNull(),
-  calidadFinal: text('calidadFinal', { enum: CalidadFinalValues }),
+  calidadFinal: text('calidad_final', { enum: CalidadFinalValues }),
   fecha_creacion: text('fecha_creacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
 });
-
-export const lotesRelations = relations(lotes, ({ one }) => ({
-  parcela: one(parcelas, {
-    fields: [lotes.parcela_id],
-    references: [parcelas.id],
-  }),
-  semilla: one(semillas, {
-    fields: [lotes.semilla_id],
-    references: [semillas.id],
-  }),
-}));

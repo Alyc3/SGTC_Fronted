@@ -220,6 +220,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     try {
       setLoading(true);
       const data = {
+        id: parcelId,
         nombre,
         hectareas: parseFloat(hectareas),
         latitud: latitude,
@@ -231,7 +232,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
         orientacionLadera: orientacion,
         tipoTerreno,
         tipoZona: JSON.stringify(selectedZonas),
-        estado: 'Libre'
+        estado: 'Libre' as const
       };
 
       if (isEditing) {
@@ -693,7 +694,7 @@ const styles = StyleSheet.create({
   loteItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.surfaceContainerLowest,
+    backgroundColor: Theme.colors.surfaceContainerLow,
     padding: Theme.spacing.md,
     borderRadius: Theme.roundness.lg,
     borderWidth: 1,
@@ -733,7 +734,7 @@ const styles = StyleSheet.create({
   loteBadgeText: {
     ...Theme.typography.labelSm,
     fontSize: 10,
-    color: Theme.colors.onPrimaryContainer,
+    color: Theme.colors.primaryContainer,
   },
   section: {
     marginTop: Theme.spacing.lg,

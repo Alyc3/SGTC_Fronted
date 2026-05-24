@@ -15,6 +15,27 @@
       "when": 1779558896168,
       "tag": "0001_--name=cambio_atributos_parcela",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779592170487,
+      "tag": "0002_natural_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1779595047329,
+      "tag": "0003_ancient_sentry",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1779595785850,
+      "tag": "0004_harsh_red_hulk",
+      "breakpoints": true
     }
   ]
 }

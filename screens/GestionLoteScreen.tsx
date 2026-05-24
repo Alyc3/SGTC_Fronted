@@ -93,6 +93,7 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
     try {
       setLoading(true);
       const data = {
+        id: loteId || `lote-${Date.now()}`,
         codigo,
         parcela_id: parcelaId,
         semilla_id: semillaId,
@@ -212,7 +213,7 @@ const styles = StyleSheet.create({
   inputSuffix: { ...Theme.typography.labelSm, color: Theme.colors.outline, marginLeft: Theme.spacing.sm },
   errorText: { ...Theme.typography.labelSm, color: Theme.colors.error, fontSize: 10, marginTop: 4 },
   pickerWrapper: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Theme.roundness.full, borderWidth: 1, borderColor: Theme.colors.outlineVariant, backgroundColor: Theme.colors.surfaceContainerLowest },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Theme.roundness.full, borderWidth: 1, borderColor: Theme.colors.outlineVariant, backgroundColor: Theme.colors.surfaceContainerLow },
   pickerItemActive: { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary },
   pickerText: { ...Theme.typography.labelSm, color: Theme.colors.onSurfaceVariant },
   pickerTextActive: { color: Theme.colors.white, fontWeight: '700' },

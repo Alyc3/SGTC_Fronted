@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "5ba09e12-9d06-4e62-aa00-389f7415edf7"
+      }
+    },
+    "android": {
+      "package": "com.alyce12012.sgtcfrontedtrazabilidad"
+    }
+  }
+}

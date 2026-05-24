@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   sectionTitle: { ...Theme.typography.headline, fontSize: 18, color: Theme.colors.onSurfaceVariant },
   divider: { height: 2, backgroundColor: Theme.colors.surfaceContainerLow, marginTop: Theme.spacing.xs, width: 40 },
   list: { padding: Theme.spacing.lg },
-  card: { backgroundColor: Theme.colors.surfaceContainerLowest, borderRadius: Theme.roundness.md, marginBottom: Theme.spacing.md, flexDirection: 'row', overflow: 'hidden', ...Theme.shadows.ambient },
+  card: { backgroundColor: Theme.colors.surfaceContainerLow, borderRadius: Theme.roundness.md, marginBottom: Theme.spacing.md, flexDirection: 'row', overflow: 'hidden', ...Theme.shadows.ambient },
   cardSideAccent: { width: 6, backgroundColor: Theme.colors.primary },
   cardContent: { flex: 1, padding: Theme.spacing.md, paddingLeft: Theme.spacing.lg },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Theme.spacing.md },

@@ -10,6 +10,6 @@ export const estado_etapa = sqliteTable('estado_etapa', {
   fecha_inicio: text('fecha_inicio'),
   fecha_final: text('fecha_final'),
   duracion_calculada: real('duracion_calculada'),
-  subFaseSiembra: text('subFaseSiembra', { enum: SubFaseSiembraValues }),
+  subFaseSiembra: text('sub_fase_siembra', { enum: SubFaseSiembraValues }),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
 });

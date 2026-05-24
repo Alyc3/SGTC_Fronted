@@ -1,19 +1,28 @@
 export const Theme = {
   colors: {
-    primary: '#3E2723', // Dark Brown
+    primary: '#442A22', // Editorial Dark Brown
     primaryContainer: '#5D4037',
     onPrimary: '#ffffff',
+    onPrimaryContainer: '#D4ADA1',
+    onPrimaryFixed: '#2C160E',
     secondary: '#889E81', // Sage Green
     secondaryContainer: '#E8F5E9',
-    onSecondaryContainer: '#2E7D32',
-    background: '#FDF8F4', // Warm Cream
-    surface: '#ffffff',
-    surfaceContainerLow: '#FDF8F4',
-    surfaceContainerHighest: '#F5F5F5',
-    onSurface: '#3E2723',
-    onSurfaceVariant: '#795548',
+    onSecondaryContainer: '#3E6D47',
+    onSecondary: '#ffffff',
+    tertiary: '#412D11',
+    background: '#FFF8F3', // Editorial Cream
+    surface: '#FFF8F3',
+    surfaceDim: '#E2D9CE',
+    surfaceContainerLow: '#FCF2E7',
+    surfaceContainerHigh: '#F1E7DC',
+    surfaceContainerHighest: '#EBE1D6',
+    surfaceContainerLowest: '#ffffff',
+    surfaceContainer: '#F6ECE1',
+    onBackground: '#1F1B14',
+    onSurface: '#1F1B14',
+    onSurfaceVariant: '#504441',
     outline: '#D7CCC8',
-    outlineVariant: '#EFEBE9',
+    outlineVariant: 'rgba(235, 225, 214, 0.3)',
     error: '#B71C1C',
     success: '#889E81',
     white: '#ffffff',
