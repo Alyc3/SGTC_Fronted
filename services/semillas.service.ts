@@ -29,10 +29,24 @@ export const semillasService = {
     return await db.update(semillas)
       .set({ 
         activo: false, 
-        is_synced: false,
+        is_synced: false, 
         fecha_modificacion: new Date().toISOString() 
       })
       .where(eq(semillas.id, id))
       .returning();
+  },
+  search(data: any[], query: string) {
+    if (!query || query.trim() === '') return data;
+    const s = query.toLowerCase().trim();
+    return data.filter(item => 
+      item.variedad?.valor?.toLowerCase().includes(s) ||
+      item.pais_origen?.valor?.toLowerCase().includes(s) ||
+      item.distribuidor?.valor?.toLowerCase().includes(s) ||
+      item.color?.valor?.toLowerCase().includes(s) ||
+      item.olor?.valor?.toLowerCase().includes(s) ||
+      item.metodo_secado?.valor?.toLowerCase().includes(s) ||
+      item.seleccion?.valor?.toLowerCase().includes(s) ||
+      item.integridad?.valor?.toLowerCase().includes(s)
+    );
   }
 };

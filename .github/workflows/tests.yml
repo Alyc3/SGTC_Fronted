@@ -33,6 +33,6 @@ jobs:
 
       - name: Ejecutar tests
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EXPO_PUBLIC_DATABASE_URL: ${{ secrets.EXPO_PUBLIC_DATABASE_URL }}
         run: |
           python -m pytest tests/

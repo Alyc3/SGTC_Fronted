@@ -21,6 +21,37 @@ export const catalogoService = {
     });
   },
 
+  async validateNewItem(categoria: string, valor: string): Promise<{ isValid: boolean; error?: string }> {
+    const cleanValue = valor.trim();
+    
+    if (!cleanValue) {
+      return { isValid: false, error: 'El valor no puede estar vacío.' };
+    }
+
+    // Validación de caracteres (solo letras, espacios y el slash para el origen)
+    if (categoria === 'PAIS_ORIGEN') {
+      const regexOrigen = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+\/[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+      if (!regexOrigen.test(cleanValue)) {
+        return { isValid: false, error: 'Formato inválido. Debe ser exactamente CIUDAD/PAIS (solo letras).' };
+      }
+    } else {
+      const regexGeneral = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+      if (!regexGeneral.test(cleanValue)) {
+        return { isValid: false, error: 'No se permiten números ni caracteres especiales.' };
+      }
+    }
+
+    // Verificar duplicados ignorando mayúsculas y minúsculas
+    const existingItems = await this.getByCategoria(categoria);
+    const isDuplicate = existingItems.some(item => item.valor.toLowerCase() === cleanValue.toLowerCase());
+
+    if (isDuplicate) {
+      return { isValid: false, error: 'Ya existe un registro con este valor en el catálogo.' };
+    }
+
+    return { isValid: true };
+  },
+
   async create(data: typeof catalogo.$inferInsert) {
     const id = data.id || uuidv4();
     return await db.insert(catalogo).values({ ...data, id }).returning();

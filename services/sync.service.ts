@@ -1,4 +1,4 @@
-import { DATABASE_URL } from '@env';
+import { EXPO_PUBLIC_DATABASE_URL } from '@env';
 import { 
   semillasSync, 
   parcelasSync, 
@@ -14,8 +14,8 @@ export const syncService = {
   async syncWithRemote() {
     console.log('--- Iniciando Sincronización Modular (App -> Neon) ---');
     
-    if (!DATABASE_URL) {
-      console.error('Error: DATABASE_URL no definida');
+    if (!EXPO_PUBLIC_DATABASE_URL) {
+      console.error('Error: EXPO_PUBLIC_DATABASE_URL no definida');
       return;
     }
 

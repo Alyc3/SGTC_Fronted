@@ -29,6 +29,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../theme';
 import { semillasService, catalogoService } from '../services';
 import { v4 as uuidv4 } from 'uuid';
+import { CustomAlert } from '../components/GlobalAlert';
 
 const SelectInput = ({ label, value, options, onSelect, onAddNew, placeholder, showActions, loading, readOnly }: any) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -126,6 +127,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
   const [colorId, setColorId] = useState('');
   const [integridadId, setIntegridadId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [metadata, setMetadata] = useState({ created: '', updated: '' });
   
   const resetForm = () => {
     setVariedadId('');
@@ -136,6 +138,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
     setOlorId('');
     setColorId('');
     setIntegridadId('');
+    setMetadata({ created: '', updated: '' });
   };
 
   // Catalog options state
@@ -214,11 +217,31 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
         setOlorId(seed.olor_id || '');
         setColorId(seed.color_id || '');
         setIntegridadId(seed.integridad_id || '');
+        setMetadata({
+          created: seed.fecha_creacion || (seed as any).anexo_creacion || '',
+          updated: seed.fecha_modificacion || ''
+        });
       }
     } catch (error) {
-      Alert.alert('Error', 'No se pudo cargar la información de la semilla.');
+      CustomAlert.show('ERROR', 'Error', 'No se pudo cargar la información de la semilla.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '—';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateString;
     }
   };
 
@@ -230,8 +253,17 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
 
   const saveNewCatalogItem = async () => {
     if (!newVal.trim()) return;
+    
     try {
       setLoadingOptions(true);
+      
+      const validation = await catalogoService.validateNewItem(activeCategory.key, newVal);
+      if (!validation.isValid) {
+        CustomAlert.show('ERROR', 'Error de validación', validation.error || 'Valor inválido');
+        setLoadingOptions(false);
+        return;
+      }
+
       const newItem = await catalogoService.create({
         id: uuidv4(),
         categoria: activeCategory.key,
@@ -260,8 +292,9 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
       }
       
       setAddModalVisible(false);
+      CustomAlert.show('SUCCESS', 'Éxito', `${activeCategory.label} agregado correctamente.`);
     } catch (error) {
-      Alert.alert('Error', 'No se pudo agregar el elemento al catálogo.');
+      CustomAlert.show('ERROR', 'Error', 'No se pudo agregar el elemento al catálogo.');
     } finally {
       setLoadingOptions(false);
     }
@@ -269,74 +302,60 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
 
   const handleSave = async () => {
     if (!variedadId) {
-      Alert.alert('Error', 'La identificación botánica es necesaria.');
+      CustomAlert.show('ALERTA', 'Campo Requerido', 'La identificación botánica es necesaria.');
       return;
     }
-    try {
-      setLoading(true);
-      const data = {
-        variedad_id: variedadId,
-        pais_origen_id: paisOrigenId || null,
-        distribuidor_id: distribuidorId || null,
-        metodo_secado_id: metodoSecadoId || null,
-        seleccion_id: seleccionId || null,
-        olor_id: olorId || null,
-        color_id: colorId || null,
-        integridad_id: integridadId || null,
-        anexo_creacion: new Date().toISOString(),
-      };
 
-      if (isEditing) {
-        await semillasService.update(seedId, data);
-        Alert.alert('Éxito', 'Semilla actualizada.', [{ 
-          text: 'OK', 
-          onPress: () => {
-            resetForm();
-            navigation.navigate('InventarioSemillas');
-          } 
-        }]);
-      } else {
-        await semillasService.create({ ...data, id: uuidv4() });
-        Alert.alert('Éxito', 'Registro confirmado.', [{ 
-          text: 'OK', 
-          onPress: () => {
-            resetForm();
-            navigation.navigate('InventarioSemillas');
-          } 
-        }]);
-      }
-    } catch (error) {
-      console.error('Save error:', error);
-      Alert.alert('Error', 'Fallo en la persistencia.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const processSave = async () => {
+      try {
+        setLoading(true);
+        const data = {
+          variedad_id: variedadId,
+          pais_origen_id: paisOrigenId || null,
+          distribuidor_id: distribuidorId || null,
+          metodo_secado_id: metodoSecadoId || null,
+          seleccion_id: seleccionId || null,
+          olor_id: olorId || null,
+          color_id: colorId || null,
+          integridad_id: integridadId || null,
+        };
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Dar de baja',
-      '¿Está seguro que desea dar de baja esta semilla? Esta acción no se puede deshacer.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Confirmar', 
-          style: 'destructive', 
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await semillasService.delete(seedId);
-              resetForm();
-              navigation.navigate('InventarioSemillas');
-            } catch (error) {
-              Alert.alert('Error', 'No se pudo procesar la baja.');
-            } finally {
-              setLoading(false);
-            }
-          } 
+        if (isEditing) {
+          await semillasService.update(seedId, { ...data, fecha_modificacion: new Date().toISOString() });
+          CustomAlert.show('SUCCESS', 'Éxito', 'Semilla actualizada correctamente.');
+        } else {
+          const now = new Date().toISOString();
+          await semillasService.create({ 
+            ...data, 
+            id: uuidv4(), 
+            fecha_creacion: now,
+            fecha_modificacion: now,
+            anexo_creacion: now 
+          } as any);
+          CustomAlert.show('SUCCESS', 'Éxito', 'Registro confirmado exitosamente.');
         }
-      ]
-    );
+        resetForm();
+        navigation.navigate('InventarioSemillas');
+      } catch (error) {
+        console.error('Save error:', error);
+        CustomAlert.show('ERROR', 'Error', 'Fallo en la persistencia de datos.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (isEditing) {
+      Alert.alert(
+        'Confirmar Actualización',
+        '¿Desea guardar los cambios realizados en esta semilla?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Actualizar', onPress: processSave }
+        ]
+      );
+    } else {
+      processSave();
+    }
   };
 
   return (
@@ -468,9 +487,15 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
             {/* Metadata Footer */}
             <View style={styles.metadataFooter}>
               <View style={styles.metadataItem}>
-                <Text style={styles.metadataLabel}>Creation Date</Text>
-                <Text style={styles.metadataValue}>Oct 24, 2023 — 09:45 AM</Text>
+                <Text style={styles.metadataLabel}>FECHA DE CREACIÓN</Text>
+                <Text style={styles.metadataValue}>{formatDate(metadata.created)}</Text>
               </View>
+              {metadata.updated ? (
+                <View style={styles.metadataItem}>
+                  <Text style={styles.metadataLabel}>ÚLTIMA MODIFICACIÓN</Text>
+                  <Text style={styles.metadataValue}>{formatDate(metadata.updated)}</Text>
+                </View>
+              ) : null}
               <View style={styles.technicianBadge}>
                 <View style={styles.technicianIcon}>
                   <User size={14} color={Theme.colors.onPrimaryFixed} />
@@ -494,17 +519,6 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                     {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios' : 'Confirm Registration'}
                   </Text>
                   <ArrowRight size={20} color={Theme.colors.onSecondary} />
-                </TouchableOpacity>
-              )}
-              
-              {isEditing && !readOnly && (
-                <TouchableOpacity 
-                  style={styles.deleteButton} 
-                  onPress={handleDelete}
-                  disabled={loading}
-                >
-                  <Trash2 size={18} color={Theme.colors.error} />
-                  <Text style={styles.deleteButtonText}>Dar de baja</Text>
                 </TouchableOpacity>
               )}
 

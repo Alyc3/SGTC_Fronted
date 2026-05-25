@@ -71,32 +71,66 @@ export const parcelasService = {
       fecha_modificacion: new Date().toISOString() 
     }).where(eq(lotes.id, id)).returning();
   },
-  validate(data: { hectareas?: string | number | null }) {
-    if (data.hectareas === undefined || data.hectareas === null || data.hectareas === '') {
-      return 'El campo hectáreas es obligatorio.';
-    }
-    
-    const strVal = data.hectareas.toString();
-    const val = parseFloat(strVal);
-    
-    if (isNaN(val)) {
-      return 'Debe ser un número válido.';
+  async checkNombreUnico(nombre: string, excludeId?: string) {
+    const existing = await db.query.parcelas.findFirst({
+      where: (parcelas, { eq, and, ne }) => {
+        const baseFilter = eq(parcelas.nombre, nombre);
+        return excludeId ? and(baseFilter, ne(parcelas.id, excludeId)) : baseFilter;
+      }
+    });
+    return !existing;
+  },
+  validate(data: { nombre?: string, hectareas?: string | number | null, altitud?: string | number | null }) {
+    const errors: Record<string, string> = {};
+
+    if (data.nombre !== undefined) {
+      if (!data.nombre || data.nombre.trim() === '') {
+        errors.nombre = 'El nombre de la parcela es obligatorio.';
+      } else if (data.nombre.length < 3) {
+        errors.nombre = 'El nombre debe tener al menos 3 caracteres.';
+      } else if (data.nombre.length > 20) {
+        errors.nombre = 'El nombre no puede exceder los 20 caracteres.';
+      } else if (/\s/.test(data.nombre)) {
+        errors.nombre = 'El nombre no debe contener espacios.';
+      } else if (/[^a-zA-Z0-9]/.test(data.nombre)) {
+        errors.nombre = 'No se permiten caracteres especiales.';
+      }
     }
 
-    // Validación de 1 a 3 dígitos (parte entera)
-    const integerPart = Math.floor(Math.abs(val)).toString();
-    if (integerPart.length > 3) {
-      return 'Es el máximo de hectáreas configuradas.';
+    if (data.hectareas !== undefined) {
+      const strVal = data.hectareas.toString();
+      if (!strVal || strVal.trim() === '') {
+        errors.hectareas = 'El campo hectáreas es obligatorio.';
+      } else if (/[^0-9.]/.test(strVal)) {
+        errors.hectareas = 'Solo se permiten números.';
+      } else {
+        const val = parseFloat(strVal);
+        if (isNaN(val)) {
+          errors.hectareas = 'Debe ser un número válido.';
+        } else if (val < 0.1) {
+          errors.hectareas = 'El mínimo es 0.1 hectárea.';
+        }
+      }
     }
 
-    if (val < 1) {
-      return 'El mínimo es 1 hectárea.';
+    if (data.altitud !== undefined) {
+      const strVal = data.altitud.toString();
+      if (!strVal || strVal.trim() === '') {
+        errors.altitud = 'La altitud es obligatoria (Calibre GPS).';
+      }
     }
 
-    if (val > 100) {
-      return 'Es el máximo de hectáreas configuradas.';
+    // New mandatory checks for terrain fields
+    if ((data as any).tipoTerreno === undefined || (data as any).tipoTerreno === '') {
+      errors.tipoTerreno = 'El tipo de terreno es obligatorio.';
+    }
+    if ((data as any).orientacionLadera === undefined || (data as any).orientacionLadera === '') {
+      errors.orientacionLadera = 'La orientación es obligatoria.';
+    }
+    if ((data as any).textura === undefined || (data as any).textura === '') {
+      errors.textura = 'La textura del suelo es obligatoria.';
     }
 
-    return null;
+    return Object.keys(errors).length > 0 ? errors : null;
   }
 };

@@ -2,9 +2,9 @@ import { db } from '../../db';
 import { catalogo } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { neon } from '@neondatabase/serverless';
-import { DATABASE_URL } from '@env';
+import { EXPO_PUBLIC_DATABASE_URL } from '@env';
 
-const sql = neon(DATABASE_URL);
+const sql = neon(EXPO_PUBLIC_DATABASE_URL);
 
 export const catalogoSync = {
   async sync() {
@@ -12,6 +12,10 @@ export const catalogoSync = {
     if (pending.length === 0) return;
 
     for (const record of pending) {
+      if (!record.categoria || !record.valor) {
+        console.warn(`Record ${record.id} skipped due to missing mandatory fields.`);
+        continue;
+      }
       try {
         await sql`
           INSERT INTO catalogo (

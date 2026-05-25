@@ -18,7 +18,7 @@ El sistema utiliza **Drizzle ORM** como fuente única de verdad. Las definicione
 Para manejar ambos entornos, el proyecto cuenta con dos configuraciones de Drizzle:
 
 1.  **`drizzle.config.ts`**: Configuración para SQLite (Entorno Offline).
-2.  **`drizzle.online.config.ts`**: Configuración para PostgreSQL (Entorno Online). Utiliza la variable `DATABASE_URL` de tu archivo `.env`.
+2.  **`drizzle.online.config.ts`**: Configuración para PostgreSQL (Entorno Online). Utiliza la variable `EXPO_PUBLIC_DATABASE_URL` de tu archivo `.env`.
 
 ---
 

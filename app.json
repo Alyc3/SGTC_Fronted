@@ -1,12 +1,35 @@
 {
   "expo": {
+    "name": "Tierra Fertil",
+    "slug": "sgtc-fronted-trazabilidad",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon_stgc.png",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alyce12012.sgtcfrontedtrazabilidad"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon_stgc.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.alyce12012.sgtcfrontedtrazabilidad"
+    },
+    "web": {
+      "favicon": "./assets/icon_stgc.png"
+    },
+    "plugins": [
+      "expo-sqlite"
+    ],
     "extra": {
       "eas": {
         "projectId": "5ba09e12-9d06-4e62-aa00-389f7415edf7"
       }
-    },
-    "android": {
-      "package": "com.alyce12012.sgtcfrontedtrazabilidad"
     }
   }
 }

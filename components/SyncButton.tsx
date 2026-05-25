@@ -14,6 +14,7 @@ import { semillas, parcelas, lotes } from '../db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { syncService } from '../services/sync.service';
 import { Theme } from '../theme';
+import { CustomAlert } from './GlobalAlert';
 
 export const SyncButton = () => {
   const [syncing, setSyncing] = useState(false);
@@ -35,16 +36,16 @@ export const SyncButton = () => {
 
   const handleSync = async () => {
     if (totalPending === 0) {
-      Alert.alert('Todo al día', 'No hay datos pendientes de sincronizar.');
+      CustomAlert.show('ALERTA', 'Todo al día', 'No hay datos pendientes de sincronizar.');
       return;
     }
 
     try {
       setSyncing(true);
       await syncService.syncWithRemote();
-      Alert.alert('Éxito', 'Sincronización con la nube completada.');
+      CustomAlert.show('SUCCESS', 'Éxito', 'Sincronización con la nube completada.');
     } catch (error) {
-      Alert.alert('Error', 'Fallo al conectar con Neon DB. Verifique su conexión.');
+      CustomAlert.show('ERROR', 'Error', 'Fallo al conectar con Neon DB. Verifique su conexión.');
     } finally {
       setSyncing(false);
     }

@@ -110,7 +110,7 @@ export const DrawerNavigator = () => {
         name="InventarioSemillas" 
         component={InventarioSemillasScreen} 
         options={{ 
-          title: 'Inventario Semillas',
+          title: 'Semillas',
           drawerIcon: ({ color }) => <Sprout size={20} color={color} />
         }}
       />
@@ -119,7 +119,7 @@ export const DrawerNavigator = () => {
         component={RegistroSemillaScreen} 
         options={{ 
           title: 'Nueva Semilla',
-          drawerIcon: ({ color }) => <PlusCircle size={20} color={color} />
+          drawerItemStyle: { display: 'none' }
         }}
       />
       <Drawer.Screen 

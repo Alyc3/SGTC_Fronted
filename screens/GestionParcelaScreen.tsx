@@ -33,6 +33,7 @@ import {
   TexturaSueloValues,
   TipoZona
 } from '../db/schema';
+import { Image } from 'react-native';
 
 const InputField = ({ label, value, onChangeText, placeholder, keyboardType, suffix, error, styles, editable = true }: any) => (
   <View style={styles.inputContainer}>
@@ -85,6 +86,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
   const [altitud, setAltitud] = useState('');
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+  const [errorNombre, setErrorNombre] = useState('');
   const [errorHectareas, setErrorHectareas] = useState('');
   const [phSuelo, setPhSuelo] = useState(6.5);
   const [tipoTerreno, setTipoTerreno] = useState<typeof TipoTerrenoValues[number]>('Irregular');
@@ -102,6 +104,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     setAltitud('');
     setLatitude(null);
     setLongitude(null);
+    setErrorNombre('');
     setErrorHectareas('');
     setPhSuelo(6.5);
     setTipoTerreno('Irregular');
@@ -135,6 +138,8 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
         setAltitud(parcel.altitudMsnm?.toString() || '');
         setLatitude(parcel.latitud);
         setLongitude(parcel.longitud);
+        setErrorNombre('');
+        setErrorHectareas('');
         setPhSuelo(parcel.phSuelo || 6.5);
         setTipoTerreno(parcel.tipoTerreno as any);
         setOrientacion(parcel.orientacionLadera as any);
@@ -204,6 +209,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
   };
 
   const handleSave = async () => {
+    setErrorNombre('');
     setErrorHectareas('');
     
     if (!nombre || !hectareas || !altitud) {
@@ -211,14 +217,32 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
       return;
     }
 
-    const hectareasError = parcelasService.validate({ hectareas });
-    if (hectareasError) {
-      setErrorHectareas(hectareasError);
+    const validationErrors = parcelasService.validate({ 
+      nombre, 
+      hectareas, 
+      altitud,
+      tipoTerreno,
+      orientacionLadera: orientacion,
+      textura
+    } as any);
+    if (validationErrors) {
+      if (validationErrors.nombre) setErrorNombre(validationErrors.nombre);
+      if (validationErrors.hectareas) setErrorHectareas(validationErrors.hectareas);
+      if (validationErrors.altitud) Alert.alert('Error', validationErrors.altitud);
       return;
     }
 
     try {
       setLoading(true);
+
+      // Validar unicidad del nombre
+      const esNombreUnico = await parcelasService.checkNombreUnico(nombre, parcelId);
+      if (!esNombreUnico) {
+        setErrorNombre('Este nombre de parcela ya existe.');
+        setLoading(false);
+        return;
+      }
+
       const data = {
         id: parcelId,
         nombre,
@@ -291,42 +315,31 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
               <InputField
                 label="Nombre de Parcela"
                 value={nombre}
-                onChangeText={setNombre}
+                onChangeText={(text: string) => {
+                  setNombre(text);
+                  if (errorNombre) setErrorNombre('');
+                }}
                 placeholder="Nombre de la Parcela"
+                error={errorNombre}
                 styles={styles}
                 editable={!readOnly}
               />
 
-              <View style={styles.row}>
-                <View style={{ flex: 1, marginRight: Theme.spacing.sm }}>
-                  <InputField
-                    label="Hectáreas"
-                    value={hectareas}
-                    onChangeText={(text: string) => {
-                      setHectareas(text);
-                      if (errorHectareas) setErrorHectareas('');
-                    }}
-                    placeholder="0.0"
-                    keyboardType="numeric"
-                    suffix="ha"
-                    error={errorHectareas}
-                    styles={styles}
-                    editable={!readOnly}
-                  />
-                </View>
-                <View style={{ flex: 1, marginLeft: Theme.spacing.sm }}>
-                  <InputField
-                    label="Altitud"
-                    value={altitud}
-                    onChangeText={setAltitud}
-                    placeholder="1800"
-                    keyboardType="numeric"
-                    suffix="meters"
-                    styles={styles}
-                    editable={!readOnly}
-                  />
-                </View>
-              </View>
+              <InputField
+                label="Hectáreas"
+                value={hectareas}
+                onChangeText={(text: string) => {
+                  const sanitized = text.replace(/[^0-9]/g, '').slice(0, 3);
+                  setHectareas(sanitized);
+                  if (errorHectareas) setErrorHectareas('');
+                }}
+                placeholder="0"
+                keyboardType="number-pad"
+                suffix="ha"
+                error={errorHectareas}
+                styles={styles}
+                editable={!readOnly}
+              />
 
               {/* Terrain Geometry (Segmented Control) */}
               <View style={styles.section}>
@@ -470,6 +483,18 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
                 </TouchableOpacity>
               </View>
 
+              {/* Altitud (Moved here and made read-only) */}
+              <View style={styles.section}>
+                <InputField
+                  label="Altitud"
+                  value={altitud}
+                  placeholder="1800"
+                  suffix="meters"
+                  styles={styles}
+                  editable={false}
+                />
+              </View>
+
               {/* Associated Lotes Section */}
               {lotesAssociated.length > 0 ? (
                 <View style={styles.section}>
@@ -495,6 +520,11 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
 
             {/* GPS Overlay on Placeholder Image */}
             <View style={styles.imagePlaceholder}>
+              <Image 
+                source={require('../assets/terrain_profile.png')} 
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
               <View style={styles.imageOverlay}>
                 <View style={styles.gpsRow}>
                   <TouchableOpacity 

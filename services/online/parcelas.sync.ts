@@ -2,9 +2,9 @@ import { db } from '../../db';
 import { parcelas, lotes } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { neon } from '@neondatabase/serverless';
-import { DATABASE_URL } from '@env';
+import { EXPO_PUBLIC_DATABASE_URL } from '@env';
 
-const sql = neon(DATABASE_URL);
+const sql = neon(EXPO_PUBLIC_DATABASE_URL);
 
 export const parcelasSync = {
   async sync() {

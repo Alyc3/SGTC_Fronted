@@ -1,5 +1,5 @@
 declare module "@env" {
-  export const DATABASE_URL: string;
+  export const EXPO_PUBLIC_DATABASE_URL: string;
 }
 
 declare module "*.sql" {
