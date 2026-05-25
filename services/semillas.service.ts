@@ -2,12 +2,70 @@ import { db } from '../db';
 import { semillas } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { neon } from '@neondatabase/serverless';
+import { EXPO_PUBLIC_DATABASE_URL } from '@env';
+
+const sql = neon(EXPO_PUBLIC_DATABASE_URL);
 
 export const semillasService = {
   async getAll() {
-    return await db.query.semillas.findMany({
-      where: eq(semillas.activo, true)
+    // 1. Obtener semillas locales con relaciones completas
+    const localSeeds = await db.query.semillas.findMany({
+      where: eq(semillas.activo, true),
+      with: {
+        variedad: true,
+        pais_origen: true,
+      }
     });
+
+    // 2. Obtener semillas online con JOINs para variedad y país
+    let onlineSeeds: any[] = [];
+    if (EXPO_PUBLIC_DATABASE_URL) {
+      try {
+        onlineSeeds = await sql`
+          SELECT s.*, 
+                 v.valor as variedad_nombre,
+                 p.valor as pais_nombre
+          FROM semillas s 
+          LEFT JOIN catalogo v ON s.variedad_id = v.id 
+          LEFT JOIN catalogo p ON s.pais_origen_id = p.id
+          WHERE s.activo = true
+        `;
+      } catch (err) {
+        console.error('Error fetching online seeds:', err);
+      }
+    }
+
+    // 3. Fusionar y Normalizar con Doble Deduplicación (ID y Atributos Técnicos)
+    const seedMap = new Map();
+    const technicalKeySet = new Set(); // Para evitar duplicados con diferente ID
+    
+    const addSeedToMap = (s: any, isLocal: boolean) => {
+      const varietyName = s.variedad?.valor || s.variedad_nombre || 'Desconocida';
+      const countryName = s.pais_origen?.valor || s.pais_nombre || 'Desconocido';
+      
+      // Creamos una clave técnica basada en contenido: "Variedad_Pais"
+      const technicalKey = `${varietyName}_${countryName}`.toLowerCase();
+
+      // Solo agregamos si no existe el ID Y no existe la clave técnica
+      if (!seedMap.has(s.id) && !technicalKeySet.has(technicalKey)) {
+        seedMap.set(s.id, {
+          ...s,
+          variedadNombre: varietyName,
+          paisNombre: countryName,
+          origenDatos: isLocal ? 'Local' : 'Online'
+        });
+        technicalKeySet.add(technicalKey);
+      }
+    };
+
+    // Procesar Locales primero (tienen prioridad)
+    localSeeds.forEach(s => addSeedToMap(s, true));
+
+    // Procesar Online después
+    onlineSeeds.forEach(s => addSeedToMap(s, false));
+
+    return Array.from(seedMap.values());
   },
   async getById(id: string) {
     return await db.query.semillas.findFirst({

@@ -5,10 +5,14 @@ import {
   asignacion_personal,
   SubFaseSiembraValues,
   EtapaActualValues,
-  EtapaProcesoValues
+  EtapaProcesoValues,
+  semillas,
+  parcelas
 } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+
+import { semillasService } from './semillas.service';
 
 export const lotesService = {
   async getAll() {
@@ -18,6 +22,41 @@ export const lotesService = {
         semilla: true,
       }
     });
+  },
+
+  async getSeeds() {
+    try {
+      console.log('[lotesService] Iniciando obtención de semillas técnicas...');
+      const seeds = await semillasService.getAll();
+      console.log(`[lotesService] Semillas recuperadas: ${seeds.length}`);
+      
+      seeds.forEach((s, i) => {
+        console.log(`  #${i + 1}: [${s.origenDatos}] ID=${s.id.slice(0,8)}... | Variedad=${s.variedadNombre} | Origen=${s.paisNombre}`);
+      });
+      return seeds;
+    } catch (error) {
+      console.error('[lotesService] Error al obtener semillas:', error);
+      throw error;
+    }
+  },
+
+  async getParcelInfo(id: string) {
+    return await db.query.parcelas.findFirst({
+      where: eq(parcelas.id, id),
+      with: {
+        lotes: true
+      }
+    });
+  },
+
+  generateLotCode(parcelName: string, variety: string) {
+    const date = new Date();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(-2);
+    // Sanitize variety and parcelName (remove spaces, etc)
+    const cleanParcel = parcelName.replace(/\s+/g, '').slice(0, 3).toUpperCase();
+    const cleanVariety = variety.replace(/\s+/g, '').slice(0, 5).toUpperCase();
+    return `${cleanParcel}-${cleanVariety}-${month}${year}`;
   },
 
   async create(data: typeof lotes.$inferInsert) {

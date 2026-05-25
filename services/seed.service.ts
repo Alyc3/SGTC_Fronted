@@ -56,6 +56,13 @@ const INITIAL_CATALOGO = [
 ];
 
 export const seedService = {
+  // Función para generar un ID determinista basado en el contenido
+  generateDeterministicId(categoria: string, valor: string) {
+    const combined = `${categoria}_${valor}`.toLowerCase().replace(/\s+/g, '_');
+    // Simple cleaning to avoid special chars in ID
+    return combined.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9_]/g, '');
+  },
+
   async initCatalogo() {
     try {
       // 1. Verificar si ya hay datos en el catálogo para no duplicar
@@ -66,12 +73,13 @@ export const seedService = {
         return;
       }
 
-      console.log('--- Iniciando Auto-poblado de Catálogo (Seed) ---');
+      console.log('--- Iniciando Auto-poblado de Catálogo (Seed Determinista) ---');
       
       // 2. Insertar los valores iniciales
       for (const item of INITIAL_CATALOGO) {
+        const deterministicId = this.generateDeterministicId(item.categoria, item.valor);
         await catalogoService.create({
-          id: uuidv4(),
+          id: deterministicId,
           categoria: item.categoria,
           valor: item.valor,
           activo: true,
@@ -80,7 +88,7 @@ export const seedService = {
         });
       }
 
-      console.log(`--- Seed completado: ${INITIAL_CATALOGO.length} registros creados. ---`);
+      console.log(`--- Seed completado: ${INITIAL_CATALOGO.length} registros creados con IDs estables. ---`);
     } catch (error) {
       console.error('Error durante el seed del catálogo:', error);
     }

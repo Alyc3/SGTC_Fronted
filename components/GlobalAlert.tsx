@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  Modal,
 } from 'react-native';
-import { CheckCircle, XCircle, AlertTriangle, X } from 'lucide-react-native';
+import { CheckCircle2, XCircle, AlertCircle, X } from 'lucide-react-native';
 import { Theme } from '../theme';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export type AlertType = 'SUCCESS' | 'ERROR' | 'ALERTA';
 
@@ -22,7 +23,7 @@ interface AlertState {
   message: string;
 }
 
-// Singleton controller to trigger alerts globally
+// Singleton controller
 let alertRef: any = null;
 
 export const CustomAlert = {
@@ -39,45 +40,43 @@ export const GlobalAlert = () => {
     message: '',
   });
 
-  const translateY = React.useRef(new Animated.Value(-100)).current;
+  const scale = React.useRef(new Animated.Value(0.9)).current;
   const opacity = React.useRef(new Animated.Value(0)).current;
 
   const show = useCallback((type: AlertType, title: string, message: string) => {
     setState({ visible: true, type, title, message });
 
     Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: Platform.OS === 'ios' ? 60 : 40,
-        duration: 400,
+      Animated.spring(scale, {
+        toValue: 1,
         useNativeDriver: true,
+        tension: 50,
+        friction: 7,
       }),
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 400,
+        duration: 300,
         useNativeDriver: true,
       }),
     ]).start();
-
-    // Auto hide after 4 seconds
-    setTimeout(hide, 4000);
-  }, [translateY, opacity]);
+  }, [scale, opacity]);
 
   const hide = useCallback(() => {
     Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: -100,
-        duration: 300,
+      Animated.timing(scale, {
+        toValue: 0.9,
+        duration: 200,
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 300,
+        duration: 200,
         useNativeDriver: true,
       }),
     ]).start(() => {
       setState(prev => ({ ...prev, visible: false }));
     });
-  }, [translateY, opacity]);
+  }, [scale, opacity]);
 
   useEffect(() => {
     alertRef = { show };
@@ -92,101 +91,128 @@ export const GlobalAlert = () => {
     switch (state.type) {
       case 'SUCCESS':
         return {
-          color: Theme.colors.success,
-          Icon: CheckCircle,
-          bg: Theme.colors.secondaryContainer,
+          color: Theme.colors.secondary,
+          Icon: CheckCircle2,
         };
       case 'ERROR':
         return {
           color: Theme.colors.error,
           Icon: XCircle,
-          bg: Theme.colors.errorContainer,
         };
       case 'ALERTA':
       default:
         return {
           color: Theme.colors.primary,
-          Icon: AlertTriangle,
-          bg: Theme.colors.surfaceContainerHigh,
+          Icon: AlertCircle,
         };
     }
   };
 
-  const { color, Icon, bg } = getTheme();
+  const { color, Icon } = getTheme();
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          transform: [{ translateY }],
-          opacity,
-          backgroundColor: Theme.colors.surfaceContainerLowest,
-          borderColor: bg,
-        },
-      ]}
+    <Modal
+      transparent
+      visible={state.visible}
+      animationType="none"
+      onRequestClose={hide}
     >
-      <View style={[styles.indicator, { backgroundColor: color }]} />
-      <View style={styles.iconContainer}>
-        <Icon size={24} color={color} />
+      <View style={styles.overlay}>
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              transform: [{ scale }],
+              opacity,
+            },
+          ]}
+        >
+          <View style={styles.header}>
+            <View style={[styles.iconBadge, { backgroundColor: color + '15' }]}>
+              <Icon size={28} color={color} />
+            </View>
+            <TouchableOpacity onPress={hide} style={styles.closeBtn}>
+              <X size={20} color={Theme.colors.outline} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.content}>
+            <Text style={styles.title}>{state.title}</Text>
+            <Text style={styles.message}>{state.message}</Text>
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: color }]} 
+            onPress={hide}
+          >
+            <Text style={styles.actionButtonText}>
+              {state.type === 'SUCCESS' ? 'ENTENDIDO' : 'ACEPTAR'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
-      <View style={styles.content}>
-        <Text style={[styles.title, { color: Theme.colors.onSurface }]}>{state.title.toUpperCase()}</Text>
-        <Text style={[styles.message, { color: Theme.colors.onSurfaceVariant }]}>{state.message}</Text>
-      </View>
-      <TouchableOpacity onPress={hide} style={styles.closeButton}>
-        <X size={18} color={Theme.colors.outline} />
-      </TouchableOpacity>
-    </Animated.View>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(28, 27, 20, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
   container: {
-    position: 'absolute',
-    top: 0,
-    left: 20,
-    right: 20,
-    zIndex: 9999,
-    flexDirection: 'row',
-    borderRadius: Theme.roundness.lg,
-    padding: Theme.spacing.md,
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: Theme.colors.white,
+    borderRadius: 28,
+    padding: 24,
     ...Theme.shadows.ambient,
-    borderWidth: 1,
-    elevation: 10,
-    minHeight: 70,
+    elevation: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  iconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  indicator: {
-    position: 'absolute',
-    left: 0,
-    top: 12,
-    bottom: 12,
-    width: 4,
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-  iconContainer: {
-    marginRight: Theme.spacing.md,
-    marginLeft: Theme.spacing.xs,
+  closeBtn: {
+    padding: 4,
   },
   content: {
-    flex: 1,
-    justifyContent: 'center',
+    marginBottom: 28,
   },
   title: {
-    ...Theme.typography.label,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 2,
+    ...Theme.typography.headline,
+    fontSize: 20,
+    color: Theme.colors.onSurface,
+    marginBottom: 8,
   },
   message: {
     ...Theme.typography.body,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 15,
+    color: Theme.colors.onSurfaceVariant,
+    lineHeight: 22,
   },
-  closeButton: {
-    padding: Theme.spacing.xs,
+  actionButton: {
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    ...Theme.typography.label,
+    color: Theme.colors.white,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 });

@@ -46,21 +46,21 @@ const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
 
           <View style={styles.content}>
             {/* Branding */}
-            <Text style={styles.brandSubtitle}>Est. 1984</Text>
-            <Text style={styles.brandTitle}>The Terroir Editorial</Text>
+            <Text style={styles.brandSubtitle}>Est. 2020</Text>
+            <Text style={styles.brandTitle}>Tierra Fertil</Text>
             <Text style={styles.tagline}>
-              Tracing the journey from soil to cup with scientific precision and editorial grace.
+              Un recorrido desde la tierra hasta la taza, con precisión científica y elegancia narrativa.
             </Text>
 
             {/* Form Header */}
             <View style={styles.formHeader}>
-              <Text style={styles.welcomeText}>Welcome back</Text>
-              <Text style={styles.subText}>Enter your credentials to access the plantation logs.</Text>
+              <Text style={styles.welcomeText}>Bienvenido</Text>
+              <Text style={styles.subText}>Ingresa tus credenciales para tener acceso al sistema.</Text>
             </View>
 
             {/* Inputs */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email Address</Text>
+              <Text style={styles.label}>Correo Electronico</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -76,9 +76,9 @@ const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
 
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
-                <Text style={styles.label}>Password</Text>
+                <Text style={styles.label}>Contraseña</Text>
                 <TouchableOpacity>
-                  <Text style={styles.forgotLink}>Forgot Password?</Text>
+                  <Text style={styles.forgotLink}>Olvidaste la contraseña?</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.inputWrapper}>
@@ -94,21 +94,21 @@ const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
                   onPress={() => setIsPasswordVisible(!isPasswordVisible)}
                   style={styles.iconButton}
                 >
-                  <Text style={styles.toggleText}>{isPasswordVisible ? 'Hide' : 'Show'}</Text>
+                  <Text style={styles.toggleText}>{isPasswordVisible ? 'Hide' : 'Mostrar'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Action Button */}
             <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8}>
-              <Text style={styles.loginButtonText}>Login</Text>
+              <Text style={styles.loginButtonText}>Iniciar Sesion</Text>
             </TouchableOpacity>
 
             {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>New technician? </Text>
+              <Text style={styles.footerText}>Nuevo tecnico? </Text>
               <TouchableOpacity>
-                <Text style={styles.requestLink}>Access Request</Text>
+                <Text style={styles.requestLink}>Pide acceso</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -23,6 +23,7 @@ import {
   Leaf,
   Trash2,
   Edit,
+  Plus,
 } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { Theme } from '../theme';
@@ -553,14 +554,15 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
                 </View>
                 </View>
 
-                {/* Secondary Action Button */}
+                {/* Secondary Action Button - Agregar Lote */}
                 {isEditing && !readOnly && (
-                <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => navigation.navigate('GestionLote', { parcelaId: parcelId })}
-                >
-                <Text style={styles.secondaryButtonText}>Agregar Lote</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => navigation.navigate('GestionLote', { parcelaId: parcelId })}
+                  >
+                    <Plus size={18} color={Theme.colors.secondary} />
+                    <Text style={styles.secondaryButtonText}>Agregar Lote</Text>
+                  </TouchableOpacity>
                 )}
 
                 {/* Primary Action Button */}
@@ -966,17 +968,22 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   secondaryButton: {
-    backgroundColor: Theme.colors.background,
-    paddingVertical: 12,
-    borderRadius: Theme.roundness.xxl,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: Theme.spacing.lg,
+    borderRadius: Theme.roundness.full,
+    alignSelf: 'center',
     marginTop: Theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: Theme.colors.primaryContainer,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.secondary,
+    backgroundColor: 'transparent',
+    gap: 8,
   },
   secondaryButtonText: {
-    ...Theme.typography.label,
-    color: Theme.colors.primary,
+    ...Theme.typography.labelSm,
+    color: Theme.colors.secondary,
     fontWeight: '700',
   },
 });

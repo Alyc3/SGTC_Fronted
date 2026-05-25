@@ -2,23 +2,52 @@ import { db } from '../db';
 import { catalogo } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { neon } from '@neondatabase/serverless';
+import { EXPO_PUBLIC_DATABASE_URL } from '@env';
+
+const sql = neon(EXPO_PUBLIC_DATABASE_URL);
 
 export const catalogoService = {
   async getAll() {
-    return await db.query.catalogo.findMany({
+    const localItems = await db.query.catalogo.findMany({
       where: eq(catalogo.activo, true),
       orderBy: (catalogo, { asc }) => [asc(catalogo.valor)]
     });
+
+    let onlineItems: any[] = [];
+    if (EXPO_PUBLIC_DATABASE_URL) {
+      try {
+        onlineItems = await sql`SELECT * FROM catalogo WHERE activo = true ORDER BY valor ASC`;
+      } catch (err) {
+        console.error('Error fetching online catalogue:', err);
+      }
+    }
+
+    // Fusionar con Doble Validación (ID y Contenido)
+    const itemMap = new Map();
+    const contentSet = new Set(); // Para evitar "Colombia" con 2 IDs distintos
+
+    const addItem = (item: any) => {
+      const cleanValue = (item.valor || '').trim().toLowerCase();
+      const contentKey = `${item.categoria}_${cleanValue}`;
+
+      if (!itemMap.has(item.id) && !contentSet.has(contentKey)) {
+        itemMap.set(item.id, item);
+        contentSet.add(contentKey);
+      }
+    };
+
+    // Prioridad Local
+    localItems.forEach(addItem);
+    // Complemento Online
+    onlineItems.forEach(addItem);
+
+    return Array.from(itemMap.values()).sort((a, b) => a.valor.localeCompare(b.valor));
   },
 
   async getByCategoria(categoria: string) {
-    return await db.query.catalogo.findMany({
-      where: and(
-        eq(catalogo.categoria, categoria),
-        eq(catalogo.activo, true)
-      ),
-      orderBy: (catalogo, { asc }) => [asc(catalogo.valor)]
-    });
+    const all = await this.getAll();
+    return all.filter(item => item.categoria === categoria && item.activo);
   },
 
   async validateNewItem(categoria: string, valor: string): Promise<{ isValid: boolean; error?: string }> {
