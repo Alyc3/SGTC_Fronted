@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StatusBar,
@@ -20,7 +19,7 @@ import {
   Plus,
   Edit2,
   User,
-  Menu,
+  ChevronRight,
   Search,
   CircleUser,
   Trash2,
@@ -198,7 +197,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
       } as any);
     } catch (error) {
       console.error('Error loading catalogs:', error);
-      Alert.alert('Error', 'No se pudieron cargar las opciones del catálogo.');
+      CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar las opciones del catálogo.');
     } finally {
       setLoadingOptions(false);
     }
@@ -345,13 +344,14 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
     };
 
     if (isEditing) {
-      Alert.alert(
+      CustomAlert.show(
+        'ALERTA',
         'Confirmar Actualización',
         '¿Desea guardar los cambios realizados en esta semilla?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Actualizar', onPress: processSave }
-        ]
+        processSave,
+        'ACTUALIZAR',
+        () => {},
+        'CANCELAR'
       );
     } else {
       processSave();

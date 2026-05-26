@@ -1,5 +1,7 @@
 import { catalogoService } from './catalogo.service';
 import { v4 as uuidv4 } from 'uuid';
+import { db } from '../db';
+import { catalogo } from '../db/schema';
 
 const INITIAL_CATALOGO = [
   // Variedades de Café
@@ -65,11 +67,11 @@ export const seedService = {
 
   async initCatalogo() {
     try {
-      // 1. Verificar si ya hay datos en el catálogo para no duplicar
-      const existing = await catalogoService.getAll();
+      // 1. Verificar si ya hay datos locales en el catálogo para no duplicar
+      const existingLocal = await db.query.catalogo.findMany();
       
-      if (existing.length > 0) {
-        console.log('--- El catálogo ya contiene datos. Omitiendo seed. ---');
+      if (existingLocal.length > 0) {
+        console.log('--- El catálogo local ya contiene datos. Omitiendo seed inicial. ---');
         return;
       }
 

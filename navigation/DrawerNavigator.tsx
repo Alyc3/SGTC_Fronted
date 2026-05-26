@@ -3,6 +3,7 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { CustomDrawer } from './CustomDrawer';
 import LotesScreen from '../screens/LotesScreen';
 import PersonalScreen from '../screens/PersonalScreen';
+import RegisterPersonalScreen from '../screens/RegisterPersonalScreen';
 import ConfiguracionScreen from '../screens/ConfiguracionScreen';
 import RegistroSemillaScreen from '../screens/RegistroSemillaScreen';
 import InventarioSemillasScreen from '../screens/InventarioSemillasScreen';
@@ -11,13 +12,12 @@ import ListarParcelaScreen from '../screens/ListarParcelaScreen';
 import GestionLoteScreen from '../screens/GestionLoteScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import { Theme } from '../theme';
+import { useAuthStore } from '../store/authStore';
 import { 
   LayoutDashboard, 
   Boxes, 
   Map, 
-  List,
   Sprout, 
-  PlusCircle, 
   Users, 
   Settings 
 } from 'lucide-react-native';
@@ -25,6 +25,14 @@ import {
 const Drawer = createDrawerNavigator();
 
 export const DrawerNavigator = () => {
+  const role = useAuthStore((state) => state.role);
+
+  // Definición de permisos por rol
+  const canAccessLotes = ['ADMIN', 'GESTOR_INVENTARIO', 'CAPATAZ'].includes(role || '');
+  const canAccessParcelas = ['ADMIN', 'CAPATAZ'].includes(role || '');
+  const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO'].includes(role || '');
+  const canAccessPersonal = ['ADMIN', 'CAPATAZ'].includes(role || '');
+
   return (
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawer {...props} />}
@@ -32,17 +40,17 @@ export const DrawerNavigator = () => {
       screenOptions={{
         headerShown: true,
         headerStyle: {
-          backgroundColor: Theme.colors.primaryContainer, // Fondo café Espresso Medio
+          backgroundColor: Theme.colors.primaryContainer,
           elevation: 0,
           shadowOpacity: 0,
           borderBottomWidth: 0,
         },
-        headerTintColor: Theme.colors.onPrimary, // Texto e iconos claros (Blanco)
+        headerTintColor: Theme.colors.onPrimary,
         headerTitleStyle: {
           ...Theme.typography.headline,
           fontSize: 18,
           fontWeight: '700',
-          color: Theme.colors.onPrimary, // Blanco explícito
+          color: Theme.colors.onPrimary,
         },
         drawerType: 'slide',
         overlayColor: 'rgba(31, 27, 20, 0.4)',
@@ -74,22 +82,27 @@ export const DrawerNavigator = () => {
           drawerIcon: ({ color }) => <LayoutDashboard size={20} color={color} />
         }}
       />
+
       <Drawer.Screen 
         name="Lotes" 
         component={LotesScreen} 
         options={{ 
           title: 'Gestión de Lotes',
-          drawerIcon: ({ color }) => <Boxes size={20} color={color} />
+          drawerIcon: ({ color }) => <Boxes size={20} color={color} />,
+          drawerItemStyle: canAccessLotes ? {} : { display: 'none' }
         }}
       />
+
       <Drawer.Screen 
         name="ListarParcela" 
         component={ListarParcelaScreen} 
         options={{ 
           title: 'Parcelas',
-          drawerIcon: ({ color }) => <Map size={20} color={color} />
+          drawerIcon: ({ color }) => <Map size={20} color={color} />,
+          drawerItemStyle: canAccessParcelas ? {} : { display: 'none' }
         }}
       />
+
       <Drawer.Screen 
         name="GestionParcela" 
         component={GestionParcelaScreen} 
@@ -98,6 +111,7 @@ export const DrawerNavigator = () => {
           drawerItemStyle: { display: 'none' }
         }}
       />
+
       <Drawer.Screen 
         name="GestionLote" 
         component={GestionLoteScreen} 
@@ -106,14 +120,17 @@ export const DrawerNavigator = () => {
           drawerItemStyle: { display: 'none' }
         }}
       />
+
       <Drawer.Screen 
         name="InventarioSemillas" 
         component={InventarioSemillasScreen} 
         options={{ 
           title: 'Semillas',
-          drawerIcon: ({ color }) => <Sprout size={20} color={color} />
+          drawerIcon: ({ color }) => <Sprout size={20} color={color} />,
+          drawerItemStyle: canAccessSemillas ? {} : { display: 'none' }
         }}
       />
+
       <Drawer.Screen 
         name="RegistroSemilla" 
         component={RegistroSemillaScreen} 
@@ -122,14 +139,26 @@ export const DrawerNavigator = () => {
           drawerItemStyle: { display: 'none' }
         }}
       />
+
       <Drawer.Screen 
         name="Personal" 
         component={PersonalScreen} 
         options={{ 
           title: 'Personal',
-          drawerIcon: ({ color }) => <Users size={20} color={color} />
+          drawerIcon: ({ color }) => <Users size={20} color={color} />,
+          drawerItemStyle: canAccessPersonal ? {} : { display: 'none' }
         }}
       />
+
+      <Drawer.Screen 
+        name="RegisterPersonal" 
+        component={RegisterPersonalScreen} 
+        options={{ 
+          title: 'Registro de Personal',
+          drawerItemStyle: { display: 'none' }
+        }}
+      />
+
       <Drawer.Screen 
         name="Configuracion" 
         component={ConfiguracionScreen} 

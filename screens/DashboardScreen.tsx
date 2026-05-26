@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  StatusBar
+  StatusBar,
+  Image,
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   Boxes, 
   ChevronRight,
@@ -16,100 +20,207 @@ import {
   RefreshCw,
   TrendingUp,
   Cloud,
-  Users
+  Users,
+  Sprout,
+  Map as MapIcon,
+  AlertTriangle,
+  FileText
 } from 'lucide-react-native';
 import { Theme } from '../theme';
+import { dashboardService, ActivityItemData } from '../services';
+
+const { width } = Dimensions.get('window');
 
 const DashboardScreen = ({ navigation }: any) => {
+  const [stats, setStats] = useState({ activeLotsCount: 0, personalCount: 0 });
+  const [activities, setActivities] = useState<ActivityItemData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [s, a] = await Promise.all([
+        dashboardService.getStats(),
+        dashboardService.getRecentActivity()
+      ]);
+      setStats(s);
+      setActivities(a);
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [loadDashboardData])
+  );
+
+  const getTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffInMs = now.getTime() - then.getTime();
+    const diffInMin = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMin < 1) return 'Ahora mismo';
+    if (diffInMin < 60) return `Hace ${diffInMin} min`;
+    const diffInHrs = Math.floor(diffInMin / 60);
+    if (diffInHrs < 24) return `Hace ${diffInHrs} h`;
+    return then.toLocaleDateString();
+  };
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Theme.colors.primaryContainer} />
+      <StatusBar barStyle="dark-content" backgroundColor={Theme.colors.background} />
       
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Editorial - Reducido el padding superior ya que el Navigator ya tiene su header */}
+        {/* Welcome Header */}
         <View style={styles.header}>
-          <Text style={styles.headerLabel}>MODULO 1</Text>
-          <Text style={styles.title}>Dashboard Principal</Text>
-          <Text style={styles.headerDescription}>
-            Vista general del patrimonio cafetero y control de operaciones en tiempo real.
-          </Text>
-          <View style={styles.accentBar} />
+          <Text style={styles.welcomeLabel}>BIENVENIDO, ADMINISTRADOR</Text>
+          <Text style={styles.title}>Panel de Control</Text>
         </View>
 
-        {/* Status Widget */}
-        <View style={styles.statusWidget}>
-          <View style={styles.statusInfo}>
-            <View style={styles.statusIconContainer}>
-              <Cloud size={24} color={Theme.colors.secondary} />
+        {/* Terrain Status Card (Featured) */}
+        <TouchableOpacity style={styles.featuredCard} activeOpacity={0.9}>
+          <Image 
+            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBQF9N3etNOAjoGtBpCr-pDBS4ikWlmv8J96T4VisN8df5y93m7e0YRNmedXWEtsUN4GloGrijWvEd2RHVNnM_GYeyHfeIG8pIwfOp0Dk3F8jsfWTxbfl8sgckchbRElDtNvqkjVrxE16TUfBV1QtrIsOqnOSpFUi6BNxwKHDe0KwnaKcHF2BH-rtGj7G4XUYsBKOvU8VEmUjwfKL56sYyPUGQNIvL9egFSXvEjt4gqbZeByXXgM4pQ5DzsgqqElh2JllJzME5VU74' }}
+            style={styles.featuredImage}
+          />
+          <View style={styles.featuredOverlay}>
+            <View style={styles.statusBadge}>
+              <Cloud size={14} color={Theme.colors.secondary} />
+              <Text style={styles.statusBadgeText}>ESTADO DEL TERRENO</Text>
             </View>
-            <View>
-              <Text style={styles.statusLabel}>ESTADO ACTUAL</Text>
-              <Text style={styles.statusValue}>ÓPTIMO</Text>
-            </View>
+            <Text style={styles.featuredTitle}>Actual: Óptimo</Text>
+            <Text style={styles.featuredSubtitle}>Condiciones ideales para la cosecha</Text>
           </View>
-          <View style={styles.syncBadge}>
-            <RefreshCw size={12} color={Theme.colors.onSurfaceVariant} />
-            <Text style={styles.syncText}>Sincronizado</Text>
+        </TouchableOpacity>
+
+        {/* Overview Stats (Vista General) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Vista General</Text>
+          <View style={styles.statsRow}>
+            <StatCard 
+              label="Lotes Activos"
+              value={loading ? '...' : stats.activeLotsCount.toString()}
+              icon={<Boxes size={20} color={Theme.colors.primary} />}
+              onPress={() => navigation.navigate('Lotes')}
+            />
+            <StatCard 
+              label="Personal"
+              value={loading ? '...' : stats.personalCount.toString()}
+              icon={<Users size={20} color={Theme.colors.primary} />}
+              onPress={() => navigation.navigate('Personal')}
+            />
           </View>
         </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <TouchableOpacity 
-            style={styles.statCard}
-            onPress={() => navigation.navigate('Lotes')}
-          >
-            <Boxes size={24} color={Theme.colors.primary} />
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Lotes Activos</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.statCard}
-            onPress={() => navigation.navigate('Personal')}
-          >
-            <Users size={24} color={Theme.colors.primary} />
-            <Text style={styles.statNumber}>45</Text>
-            <Text style={styles.statLabel}>Personal</Text>
-          </TouchableOpacity>
+        {/* Quick Actions (Acciones Rápidas) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+          <View style={styles.actionsGrid}>
+            <ActionCard 
+              label="Semillas"
+              icon={<Sprout size={24} color={Theme.colors.onSecondaryContainer} />}
+              color={Theme.colors.secondary}
+              labelColor={Theme.colors.onPrimary}
+              onPress={() => navigation.navigate('InventarioSemillas')}
+            />
+            <ActionCard 
+              label="Parcelas"
+              icon={<MapIcon size={24} color={Theme.colors.onSecondaryContainer} />}
+              color={Theme.colors.secondary}
+              labelColor={Theme.colors.onPrimary}
+              onPress={() => navigation.navigate('ListarParcela')}
+            />
+            <ActionCard 
+              label="Lotes"
+              icon={<Boxes size={24} color={Theme.colors.onSecondaryContainer} />}
+              color={Theme.colors.secondary}
+              labelColor={Theme.colors.onPrimary}
+              onPress={() => navigation.navigate('Lotes')}
+            />
+            <ActionCard 
+              label="Personal"
+              icon={<Users size={24} color={Theme.colors.onSecondaryContainer} />}
+              color={Theme.colors.secondary}
+              labelColor={Theme.colors.onPrimary}
+              onPress={() => navigation.navigate('Personal')}
+            />
+          </View>
         </View>
 
-        {/* Activity List */}
+        {/* Recent Activity (Actividad Reciente) */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <History size={18} color={Theme.colors.primary} />
             <Text style={styles.sectionTitle}>Actividad Reciente</Text>
+            <TouchableOpacity>
+              <Text style={styles.viewAllText}>Ver todo</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.activityList}>
-            <ActivityItem 
-              icon={<Activity size={18} color={Theme.colors.primary} />}
-              title="Lote #084 Actualizado"
-              meta="Hace 5 min • Sincronizado"
-            />
-            <ActivityItem 
-              icon={<UserPlus size={18} color={Theme.colors.primary} />}
-              title="Nuevo Operador: Juan P."
-              meta="Hace 12 min • Sincronizado"
-            />
+            {loading ? (
+              <ActivityIndicator color={Theme.colors.primary} style={{ marginVertical: 20 }} />
+            ) : activities.length > 0 ? (
+              activities.map((item) => (
+                <ActivityItem 
+                  key={item.id}
+                  icon={
+                    item.type === 'LOT_UPDATE' ? <FileText size={18} color={Theme.colors.primary} /> :
+                    item.type === 'NEW_PERSONAL' ? <UserPlus size={18} color={Theme.colors.primary} /> :
+                    item.type === 'INCIDENT' ? <AlertTriangle size={18} color={Theme.colors.error} /> :
+                    <RefreshCw size={18} color={Theme.colors.primary} />
+                  }
+                  title={item.title}
+                  meta={`${getTimeAgo(item.timestamp)} • ${item.isSynced ? 'Sincronizado' : 'Local'}`}
+                  isError={item.isError}
+                />
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No hay actividad reciente registrada.</Text>
+            )}
           </View>
         </View>
 
-        <View style={styles.inspirationCard}>
-          <Text style={styles.inspirationQuote}>"La pureza nace en la semilla"</Text>
-          <Text style={styles.inspirationSub}>STGC Modulo de Trazabilidad © 2026</Text>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>STGC Módulo de Trazabilidad © 2026</Text>
         </View>
       </ScrollView>
     </View>
   );
 };
 
-const ActivityItem = ({ icon, title, meta }: any) => (
+const StatCard = ({ label, value, icon, onPress }: any) => (
+  <TouchableOpacity style={styles.statCard} onPress={onPress}>
+    <View style={styles.statIconContainer}>{icon}</View>
+    <View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  </TouchableOpacity>
+);
+
+const ActionCard = ({ label, icon, color, labelColor, onPress }: any) => (
+  <TouchableOpacity 
+    style={[styles.actionCard, { backgroundColor: color }]} 
+    onPress={onPress}
+  >
+    <View style={styles.actionIconContainer}>{icon}</View>
+    <Text style={[styles.actionLabel, labelColor && { color: labelColor }]}>{label}</Text>
+  </TouchableOpacity>
+);
+
+const ActivityItem = ({ icon, title, meta, isError }: any) => (
   <TouchableOpacity style={styles.activityCard}>
-    <View style={styles.activityIcon}>{icon}</View>
+    <View style={[styles.activityIcon, isError && { backgroundColor: Theme.colors.errorContainer }]}>
+      {icon}
+    </View>
     <View style={styles.activityContent}>
       <Text style={styles.activityTitle}>{title}</Text>
       <Text style={styles.activityMeta}>{meta}</Text>
@@ -119,36 +230,207 @@ const ActivityItem = ({ icon, title, meta }: any) => (
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Theme.colors.background },
-  scrollContent: { padding: Theme.spacing.lg, paddingBottom: 40 },
-  header: { marginBottom: Theme.spacing.lg }, // Reducido de XL a LG
-  headerLabel: { ...Theme.typography.label, fontSize: 10, letterSpacing: 2, color: Theme.colors.primary, marginBottom: 4 },
-  title: { ...Theme.typography.display, fontSize: 28, marginBottom: 8, color: Theme.colors.primary },
-  headerDescription: { ...Theme.typography.body, fontSize: 14, color: Theme.colors.onSurfaceVariant, lineHeight: 20 },
-  accentBar: { height: 4, backgroundColor: Theme.colors.primary, width: 60, marginTop: Theme.spacing.lg, borderRadius: 2 },
-  statusWidget: { backgroundColor: Theme.colors.surfaceContainerLow, borderRadius: Theme.roundness.lg, padding: Theme.spacing.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Theme.spacing.lg },
-  statusInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  statusIconContainer: { backgroundColor: Theme.colors.surfaceContainerLow, padding: 10, borderRadius: Theme.roundness.md },
-  statusLabel: { ...Theme.typography.label, fontSize: 9, letterSpacing: 1, color: Theme.colors.outline },
-  statusValue: { ...Theme.typography.headline, fontSize: 18, color: Theme.colors.secondary },
-  syncBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.5)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: Theme.roundness.sm },
-  syncText: { ...Theme.typography.label, fontSize: 10, color: Theme.colors.onSurfaceVariant },
-  statsGrid: { flexDirection: 'row', gap: Theme.spacing.md, marginBottom: Theme.spacing.xl },
-  statCard: { flex: 1, backgroundColor: Theme.colors.primary, padding: Theme.spacing.lg, borderRadius: Theme.roundness.xxl, ...Theme.shadows.ambient },
-  statNumber: { ...Theme.typography.display, fontSize: 32, marginTop: 8, color: Theme.colors.primary },
-  statLabel: { ...Theme.typography.label, fontSize: 12, color: Theme.colors.onSurfaceVariant, marginTop: 4 },
-  section: { marginBottom: Theme.spacing.xl },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Theme.spacing.md },
-  sectionTitle: { ...Theme.typography.headline, fontSize: 18, color: Theme.colors.onSurface },
-  activityList: { gap: Theme.spacing.sm },
-  activityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Theme.colors.surfaceContainerLow, padding: Theme.spacing.md, borderRadius: Theme.roundness.lg, ...Theme.shadows.ambient },
-  activityIcon: { width: 40, height: 40, borderRadius: Theme.roundness.md, backgroundColor: Theme.colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  activityContent: { flex: 1 },
-  activityTitle: { ...Theme.typography.body, fontWeight: '700', fontSize: 14, color: Theme.colors.onSurface },
-  activityMeta: { ...Theme.typography.label, fontSize: 11, color: Theme.colors.outline, marginTop: 2 },
-  inspirationCard: { backgroundColor: Theme.colors.primary, padding: 32, borderRadius: Theme.roundness.xxl, alignItems: 'center', marginTop: Theme.spacing.md },
-  inspirationQuote: { ...Theme.typography.display, fontSize: 20, color: Theme.colors.onPrimary, fontStyle: 'italic', textAlign: 'center' },
-  inspirationSub: { ...Theme.typography.label, fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 16, letterSpacing: 2 }
+  container: { 
+    flex: 1, 
+    backgroundColor: Theme.colors.background 
+  },
+  scrollContent: { 
+    padding: Theme.spacing.md, 
+    paddingBottom: 40 
+  },
+  header: { 
+    marginBottom: Theme.spacing.lg,
+    paddingHorizontal: 4
+  },
+  welcomeLabel: { 
+    fontFamily: 'System',
+    fontSize: 10, 
+    fontWeight: '800',
+    letterSpacing: 1.5, 
+    color: Theme.colors.onSurfaceVariant, 
+    marginBottom: 4 
+  },
+  title: { 
+    fontFamily: 'System',
+    fontSize: 28, 
+    fontWeight: '800',
+    color: Theme.colors.primary 
+  },
+  featuredCard: {
+    height: 200,
+    borderRadius: Theme.roundness.xxl,
+    overflow: 'hidden',
+    marginBottom: Theme.spacing.xl,
+    ...Theme.shadows.ambient,
+  },
+  featuredImage: {
+    width: '100%',
+    height: '100%',
+  },
+  featuredOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: Theme.spacing.lg,
+    backgroundColor: 'rgba(68, 42, 34, 0.4)', // Overlay using primary color with alpha
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.white,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Theme.roundness.full,
+    marginBottom: 8,
+    gap: 4
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.secondary,
+    letterSpacing: 0.5
+  },
+  featuredTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Theme.colors.white,
+  },
+  featuredSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2
+  },
+  section: { 
+    marginBottom: Theme.spacing.xl 
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.md
+  },
+  sectionTitle: { 
+    fontFamily: 'System',
+    fontSize: 18, 
+    fontWeight: '700',
+    color: Theme.colors.onSurface,
+    marginBottom: Theme.spacing.md
+  },
+  statsRow: { 
+    flexDirection: 'row', 
+    gap: Theme.spacing.md 
+  },
+  statCard: { 
+    flex: 1, 
+    backgroundColor: Theme.colors.surfaceContainerLow, 
+    padding: Theme.spacing.lg, 
+    borderRadius: Theme.roundness.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    ...Theme.shadows.ambient 
+  },
+  statIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: Theme.roundness.md,
+    backgroundColor: Theme.colors.white,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  statValue: { 
+    fontSize: 22, 
+    fontWeight: '800', 
+    color: Theme.colors.onSurface 
+  },
+  statLabel: { 
+    fontSize: 11, 
+    fontWeight: '600',
+    color: Theme.colors.onSurfaceVariant 
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Theme.spacing.md
+  },
+  actionCard: {
+    width: (width - Theme.spacing.md * 3) / 2,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.roundness.xl,
+    alignItems: 'center',
+    gap: 8,
+    ...Theme.shadows.ambient
+  },
+  actionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: Theme.roundness.lg,
+    backgroundColor: Theme.colors.white,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  actionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Theme.colors.onSecondaryContainer
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.primary
+  },
+  activityList: { 
+    gap: Theme.spacing.sm 
+  },
+  activityCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: Theme.colors.surfaceContainerLow, 
+    padding: Theme.spacing.md, 
+    borderRadius: Theme.roundness.xl, 
+    ...Theme.shadows.ambient 
+  },
+  activityIcon: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: Theme.roundness.md, 
+    backgroundColor: Theme.colors.surfaceContainerHigh, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 12 
+  },
+  activityContent: { 
+    flex: 1 
+  },
+  activityTitle: { 
+    fontWeight: '700', 
+    fontSize: 14, 
+    color: Theme.colors.onSurface 
+  },
+  activityMeta: { 
+    fontSize: 11, 
+    color: Theme.colors.outline, 
+    marginTop: 2 
+  },
+  footer: {
+    paddingVertical: 24,
+    alignItems: 'center'
+  },
+  footerText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Theme.colors.outline,
+    letterSpacing: 1
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: Theme.colors.outline,
+    fontSize: 14,
+    marginVertical: 24,
+    fontStyle: 'italic'
+  }
 });
 
 export default DashboardScreen;

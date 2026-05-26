@@ -21,14 +21,18 @@ interface AlertState {
   type: AlertType;
   title: string;
   message: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 // Singleton controller
 let alertRef: any = null;
 
 export const CustomAlert = {
-  show: (type: AlertType, title: string, message: string) => {
-    alertRef?.show(type, title, message);
+  show: (type: AlertType, title: string, message: string, onConfirm?: () => void, confirmText?: string, onCancel?: () => void, cancelText?: string) => {
+    alertRef?.show(type, title, message, onConfirm, confirmText, onCancel, cancelText);
   },
 };
 
@@ -43,8 +47,8 @@ export const GlobalAlert = () => {
   const scale = React.useRef(new Animated.Value(0.9)).current;
   const opacity = React.useRef(new Animated.Value(0)).current;
 
-  const show = useCallback((type: AlertType, title: string, message: string) => {
-    setState({ visible: true, type, title, message });
+  const show = useCallback((type: AlertType, title: string, message: string, onConfirm?: () => void, confirmText?: string, onCancel?: () => void, cancelText?: string) => {
+    setState({ visible: true, type, title, message, onConfirm, confirmText, onCancel, cancelText });
 
     Animated.parallel([
       Animated.spring(scale, {
@@ -61,7 +65,7 @@ export const GlobalAlert = () => {
     ]).start();
   }, [scale, opacity]);
 
-  const hide = useCallback(() => {
+  const hide = useCallback((isConfirm: boolean = true) => {
     Animated.parallel([
       Animated.timing(scale, {
         toValue: 0.9,
@@ -74,9 +78,11 @@ export const GlobalAlert = () => {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setState(prev => ({ ...prev, visible: false }));
+      const callback = isConfirm ? state.onConfirm : state.onCancel;
+      setState(prev => ({ ...prev, visible: false, onConfirm: undefined, onCancel: undefined }));
+      if (callback) callback();
     });
-  }, [scale, opacity]);
+  }, [scale, opacity, state.onConfirm, state.onCancel]);
 
   useEffect(() => {
     alertRef = { show };
@@ -115,7 +121,7 @@ export const GlobalAlert = () => {
       transparent
       visible={state.visible}
       animationType="none"
-      onRequestClose={hide}
+      onRequestClose={() => hide(false)}
     >
       <View style={styles.overlay}>
         <Animated.View
@@ -131,7 +137,7 @@ export const GlobalAlert = () => {
             <View style={[styles.iconBadge, { backgroundColor: color + '15' }]}>
               <Icon size={28} color={color} />
             </View>
-            <TouchableOpacity onPress={hide} style={styles.closeBtn}>
+            <TouchableOpacity onPress={() => hide(false)} style={styles.closeBtn}>
               <X size={20} color={Theme.colors.outline} />
             </TouchableOpacity>
           </View>
@@ -141,14 +147,30 @@ export const GlobalAlert = () => {
             <Text style={styles.message}>{state.message}</Text>
           </View>
 
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: color }]} 
-            onPress={hide}
-          >
-            <Text style={styles.actionButtonText}>
-              {state.type === 'SUCCESS' ? 'ENTENDIDO' : 'ACEPTAR'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.actionContainer}>
+            {state.onCancel && (
+              <TouchableOpacity 
+                style={[styles.cancelButton]} 
+                onPress={() => hide(false)}
+              >
+                <Text style={styles.cancelButtonText}>
+                  {state.cancelText || 'CANCELAR'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={[
+                styles.actionButton, 
+                { backgroundColor: color },
+                state.onCancel ? { flex: 1.5 } : { width: '100%' }
+              ]} 
+              onPress={() => hide(true)}
+            >
+              <Text style={styles.actionButtonText}>
+                {state.confirmText || (state.type === 'SUCCESS' ? 'ENTENDIDO' : 'ACEPTAR')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -203,6 +225,10 @@ const styles = StyleSheet.create({
     color: Theme.colors.onSurfaceVariant,
     lineHeight: 22,
   },
+  actionContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   actionButton: {
     paddingVertical: 14,
     borderRadius: 16,
@@ -213,6 +239,20 @@ const styles = StyleSheet.create({
     ...Theme.typography.label,
     color: Theme.colors.white,
     fontWeight: '800',
+    letterSpacing: 1,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+  },
+  cancelButtonText: {
+    ...Theme.typography.label,
+    color: Theme.colors.onSurfaceVariant,
+    fontWeight: '700',
     letterSpacing: 1,
   },
 });

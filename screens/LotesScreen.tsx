@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   View, 
   Text, 
-  FlatList, 
+  SectionList, 
   StyleSheet, 
   StatusBar,
   TouchableOpacity,
-  Alert,
   Image,
   TextInput,
   ScrollView,
@@ -16,10 +15,11 @@ import {
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
 import { Theme } from '../theme';
-import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin } from 'lucide-react-native';
-import { parcelasService } from '../services';
+import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers } from 'lucide-react-native';
+import { lotesService, parcelasService } from '../services';
 import { useNavigation } from '@react-navigation/native';
 import { CustomAlert } from '../components/GlobalAlert';
+import { red } from 'react-native-reanimated/lib/typescript/Colors';
 
 const { width } = Dimensions.get('window');
 
@@ -53,11 +53,12 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
   };
 
   const statusStyle = getStatusStyle(item.estado_lote);
+  const isProduccion = item.estado_lote === 'En_Produccion';
 
   return (
     <View style={styles.premiumCard}>
       <View style={styles.cardFlex}>
-        {/* Left: Image Placeholder/Thumbnail */}
+        {/* Left: Image Placeholder/Thumbnail - More compact */}
         <View style={styles.cardImageContainer}>
           <Image 
             source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBcfuG7uzT2CHmYiUp7XJSeemG84u-VwAPvB4Abwe8FW6a68cQ3Lv6SWkZeDt6cuUCqgyJpKQKLaPBfmLlk3kHwTjyBjjaroxRHjZR2dTvPNsCERxZ6uwyTG8m9lZNqJAUTpcREAO4apD6RsRjXbO6tWOWJJLAJgvFvXdajoi-wyb7gcOc8VMx2wChz2lO3MU3E2ZimeUUPTbdUloNqk9r961v-MGdCdE4t_q2N5KIYPclHdf1uU-q_zYUjyrtIq82sSNmEjuI2t0Wv' }} 
@@ -70,19 +71,20 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <View>
+              {/* Status above code */}
+              <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, alignSelf: 'flex-start', marginBottom: 4 }]}>
+                <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                  {item.estado_lote.replace('_', ' ').toUpperCase()}
+                </Text>
+              </View>
               <Text style={styles.lotCode}>{item.codigo}</Text>
-              <Text style={styles.lotVariety}>{item.semilla?.variedadNombre || 'Sin Variedad'}</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-              <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                {item.estado_lote.replace('_', ' ').toUpperCase()}
-              </Text>
+              <Text style={styles.lotVariety}>{item.semilla?.variedadNombre }</Text>
             </View>
           </View>
 
           <View style={styles.cardMeta}>
             <Text style={styles.metaText}>
-              {item.hectareas_lote} Hectáreas • {item.parcela?.nombre || 'General'}
+              {item.hectareas_lote} Hectáreas
             </Text>
           </View>
 
@@ -91,12 +93,22 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
               <Eye size={16} color={Theme.colors.primary} />
               <Text style={styles.actionBtnText}>VISUALIZAR</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => onEdit(item.id, item.parcela_id)} style={styles.actionBtn}>
-              <Edit size={16} color={Theme.colors.onSurfaceVariant} />
-              <Text style={[styles.actionBtnText, { color: Theme.colors.onSurfaceVariant }]}>MODIFICAR</Text>
+            
+            <TouchableOpacity 
+              onPress={() => onEdit(item.id, item.parcela_id, isProduccion)} 
+              style={[styles.actionBtn, isProduccion && { opacity: 0.5 }]}
+            >
+              <Edit size={16} color={isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant} />
+              <Text style={[styles.actionBtnText, { color: isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant }]}>
+                {isProduccion ? 'BLOQUEADO' : 'MODIFICAR'}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => onDelete(item.id, item.codigo)} style={styles.archiveBtn}>
-              <Archive size={16} color={Theme.colors.outline} />
+
+            <TouchableOpacity 
+              onPress={() => onDelete(item.id, item.codigo, isProduccion)} 
+              style={[styles.archiveBtn, isProduccion && { opacity: 0.5 }]}
+            >
+              <Archive size={14} color={isProduccion ? Theme.colors.outline : Theme.colors.outline} />
             </TouchableOpacity>
           </View>
         </View>
@@ -113,10 +125,25 @@ const LotesScreen = () => {
     with: { parcela: true, semilla: true }
   }));
 
-  const filteredLotes = lotes.filter(l => 
-    l.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    l.semilla?.variedadNombre?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const sections = useMemo(() => {
+    const filtered = lotes.filter(l => 
+      l.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (l.semilla as any)?.variedadNombre?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const grouped = filtered.reduce((acc: any[], lot: any) => {
+      const parcelaNombre = lot.parcela?.nombre || 'General';
+      const section = acc.find(s => s.title === parcelaNombre);
+      if (section) {
+        section.data.push(lot);
+      } else {
+        acc.push({ title: parcelaNombre, data: [lot] });
+      }
+      return acc;
+    }, []);
+
+    return grouped.sort((a, b) => a.title.localeCompare(b.title));
+  }, [lotes, searchQuery]);
 
   const stats = {
     total: lotes.length,
@@ -124,29 +151,35 @@ const LotesScreen = () => {
     hectareas: lotes.reduce((sum, l) => sum + (l.hectareas_lote || 0), 0).toFixed(1)
   };
 
-  const handleDelete = (id: string, codigo: string) => {
-    Alert.alert(
+  const handleDelete = (id: string, codigo: string, isProduccion: boolean) => {
+    if (isProduccion) {
+      CustomAlert.show('ALERTA', 'Acción Denegada', 'No se puede dar de baja un lote que está en producción.');
+      return;
+    }
+
+    CustomAlert.show(
+      'ALERTA',
       'Archivar Lote',
       `¿Desea archivar el lote técnico ${codigo} del libro mayor?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Archivar', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await parcelasService.deleteLote(id);
-              CustomAlert.show('SUCCESS', 'Registro Archivado', 'El lote ha sido movido al histórico.');
-            } catch (error) {
-              CustomAlert.show('ERROR', 'Error', 'No se pudo procesar la solicitud.');
-            }
-          }
+      async () => {
+        try {
+          await lotesService.delete(id);
+          CustomAlert.show('SUCCESS', 'Registro Archivado', 'El lote ha sido movido al histórico.');
+        } catch (error: any) {
+          CustomAlert.show('ERROR', 'Error', error.message || 'No se pudo procesar la solicitud.');
         }
-      ]
+      },
+      'ARCHIVAR',
+      () => {},
+      'CANCELAR'
     );
   };
 
-  const handleEdit = (id: string, parcelaId: string) => {
+  const handleEdit = (id: string, parcelaId: string, isProduccion: boolean) => {
+    if (isProduccion) {
+      CustomAlert.show('ALERTA', 'Lote en Producción', 'Los lotes en producción no pueden ser modificados para garantizar la integridad de la trazabilidad.');
+      return;
+    }
     navigation.navigate('GestionLote', { id, parcelaId });
   };
 
@@ -158,8 +191,8 @@ const LotesScreen = () => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       
-      <FlatList
-        data={filteredLotes}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <LoteCard 
@@ -169,10 +202,16 @@ const LotesScreen = () => {
             onView={handleView}
           />
         )}
+        renderSectionHeader={({ section: { title } }) => (
+          <View style={styles.sectionHeader}>
+            <MapPin size={14} color={Theme.colors.primary} />
+            <Text style={styles.sectionTitle}>{title}</Text>
+          </View>
+        )}
         contentContainerStyle={styles.listContent}
+        stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.topLabel}>ARCHIVO DE FINCAS</Text>
             <Text style={styles.title}>Inventario de Lotes</Text>
 
             {/* Search Bar */}
@@ -207,14 +246,6 @@ const LotesScreen = () => {
           </View>
         }
       />
-
-      {/* Floating Action Button */}
-      <TouchableOpacity 
-        style={styles.fab}
-        onPress={() => CustomAlert.show('ALERTA', 'Nueva Creación', 'Inicie desde la pantalla de Parcela para vincular el lote.')}
-      >
-        <Plus size={28} color={Theme.colors.white} />
-      </TouchableOpacity>
     </View>
   );
 };
@@ -225,16 +256,34 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.background 
   },
   listContent: { 
-    padding: 24,
+    padding: 16,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   header: {
-    marginBottom: 32,
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginBottom: 8,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+    letterSpacing: 0.5,
   },
   topLabel: {
     fontFamily: 'System',
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '800',
     color: Theme.colors.onSurfaceVariant,
     letterSpacing: 2,
@@ -242,72 +291,74 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: 'System',
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '900',
     color: Theme.colors.primary,
     letterSpacing: -1,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Theme.colors.surfaceContainerHigh,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 56,
-    marginBottom: 24,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 16,
   },
   searchIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
     fontFamily: 'System',
-    fontSize: 16,
+    fontSize: 13,
     color: Theme.colors.onSurface,
   },
   statsScroll: {
-    marginHorizontal: -24,
-    marginBottom: 8,
+    marginHorizontal: -16,
+    marginBottom: 4,
   },
   statsContent: {
-    paddingHorizontal: 24,
-    gap: 12,
+    paddingHorizontal: 12,
+    gap: 8,
   },
   statCard: {
     backgroundColor: Theme.colors.surfaceContainerLow,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 16,
-    minWidth: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 15,
+    minWidth: 100,
   },
   statLabel: {
     fontSize: 10,
     fontWeight: '700',
     color: Theme.colors.onSurfaceVariant,
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '900',
     color: Theme.colors.primary,
   },
   premiumCard: {
     backgroundColor: Theme.colors.surfaceContainerLowest,
-    borderRadius: 20,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 195, 190, 0.1)',
     ...Theme.shadows.ambient,
-    shadowOpacity: 0.03,
-    elevation: 2,
+    shadowOpacity: 0.02,
+    elevation: 1,
   },
   cardFlex: {
     flexDirection: 'row',
   },
   cardImageContainer: {
-    width: 100,
-    height: '100%',
+    width: 60,
+    height: 120,
     backgroundColor: Theme.colors.surfaceContainerHighest,
   },
   cardImage: {
@@ -317,90 +368,76 @@ const styles = StyleSheet.create({
   },
   cardImageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(68, 42, 34, 0.1)',
+    backgroundColor: 'rgba(68, 42, 34, 0.05)',
   },
   cardContent: {
     flex: 1,
-    padding: 16,
+    padding: 8,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 2,
   },
   lotCode: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '900',
     color: Theme.colors.primary,
   },
   lotVariety: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: Theme.colors.onSurface,
-    marginTop: 2,
+    marginTop: 0,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 99,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
   },
   statusText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   cardMeta: {
-    marginBottom: 16,
+    marginBottom: 6,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 10,
     color: Theme.colors.onSurfaceVariant,
     fontWeight: '500',
   },
   cardActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    paddingTop: 12,
+    gap: 10,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(212, 195, 190, 0.2)',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   actionBtnText: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: '800',
     color: Theme.colors.primary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   archiveBtn: {
     marginLeft: 'auto',
   },
-  fab: {
-    position: 'absolute',
-    bottom: 32,
-    right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: Theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Theme.shadows.ambient,
-    elevation: 8,
-    shadowOpacity: 0.3,
-  },
   emptyContainer: {
     alignItems: 'center',
     marginTop: 60,
-    gap: 16,
+    gap: 12,
   },
   empty: {
-    fontSize: 14,
+    fontSize: 13,
     color: Theme.colors.outline,
     fontStyle: 'italic',
   }

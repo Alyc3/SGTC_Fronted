@@ -25,6 +25,7 @@ import { Theme } from '../theme';
 import { parcelasService } from '../services';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
+import { CustomAlert } from '../components/GlobalAlert';
 
 const ListarParcelaScreen = ({ navigation }: any) => {
   const { data: parcelasRaw } = useLiveQuery(db.query.parcelas.findMany({
@@ -36,23 +37,20 @@ const ListarParcelaScreen = ({ navigation }: any) => {
   const loading = !parcelasRaw;
 
   const handleDelete = (id: string, nombre: string) => {
-    Alert.alert(
+    CustomAlert.show(
+      'ALERTA',
       'Eliminar Parcela',
       `¿Está seguro que desea eliminar la parcela "${nombre}"? Esta acción no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Eliminar', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await parcelasService.delete(id);
-            } catch (error) {
-              Alert.alert('Error', 'No se pudo eliminar la parcela.');
-            }
-          }
+      async () => {
+        try {
+          await parcelasService.delete(id);
+        } catch (error) {
+          CustomAlert.show('ERROR', 'Error', 'No se pudo eliminar la parcela.');
         }
-      ]
+      },
+      'ELIMINAR',
+      () => {},
+      'CANCELAR'
     );
   };
 
@@ -66,7 +64,7 @@ const ListarParcelaScreen = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Theme.colors.background} />
-      
+
       {/* Header & Search Section */}
       <View style={styles.headerContainer}>
         <Text style={styles.screenTitle}>Listado de Parcelas</Text>
@@ -114,14 +112,30 @@ const ListarParcelaScreen = ({ navigation }: any) => {
                 <View style={styles.cardAccent} />
                 <View style={styles.cardMain}>
                   <View style={styles.cardHeader}>
-                    <Text style={styles.parcelCode}>{item.nombre}</Text>
-                    <View style={[styles.badge, { backgroundColor: Theme.colors.secondaryContainer }]}>
-                      <Text style={[styles.badgeText, { color: Theme.colors.onSecondaryContainer }]}>
-                        {item.tipoTerreno.toUpperCase()}
-                      </Text>
+                    <View style={styles.cardHeaderInfo}>
+                      <Text style={styles.parcelCode}>{item.nombre}</Text>
+                      <View style={[styles.badge, { backgroundColor: Theme.colors.secondaryContainer }]}>
+                        <Text style={[styles.badgeText, { color: Theme.colors.onSecondaryContainer }]}>
+                          {item.tipoTerreno.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('GestionParcela', { id: item.id })}
+                        style={styles.actionButton}
+                      >
+                        <Edit size={20} color={Theme.colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDelete(item.id, item.nombre)}
+                        style={styles.actionButton}
+                      >
+                        <Trash2 size={20} color={Theme.colors.error} />
+                      </TouchableOpacity>
                     </View>
                   </View>
-                  
+
                   <View style={styles.cardMeta}>
                     <View style={styles.metaItem}>
                       <Maximize2 size={14} color={Theme.colors.outline} />
@@ -143,18 +157,6 @@ const ListarParcelaScreen = ({ navigation }: any) => {
                     </Text>
                   ) : null}
                 </View>
-                <TouchableOpacity 
-                  onPress={() => navigation.navigate('GestionParcela', { id: item.id })}
-                  style={{ padding: 8, marginRight: 4 }}
-                >
-                  <Edit size={20} color={Theme.colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => handleDelete(item.id, item.nombre)}
-                  style={{ padding: 8, marginRight: 8 }}
-                >
-                  <Trash2 size={20} color={Theme.colors.error} />
-                </TouchableOpacity>
                 <ChevronRight size={20} color={Theme.colors.outline} />
               </TouchableOpacity>
             ))}
@@ -262,9 +264,18 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
     marginBottom: 8,
+  },
+  cardHeaderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    flex: 1,
+    marginRight: 8,
   },
   parcelCode: {
     ...Theme.typography.headline,
@@ -281,6 +292,17 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+  },
+  actionButton: {
+    padding: 6,
   },
   cardMeta: {
     flexDirection: 'row',

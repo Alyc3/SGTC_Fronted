@@ -11,6 +11,7 @@ import LoginAuthScreen from './screens/LoginAuthScreen';
 import { Theme } from './theme';
 import { seedService } from './services';
 import { GlobalAlert } from './components/GlobalAlert';
+import { useAuthStore } from './store/authStore';
 
 // Import mandatory for gesture handler
 import 'react-native-gesture-handler';
@@ -20,7 +21,11 @@ export default function App() {
   useDrizzleStudio(expoDb);
 
   const { success, error } = useMigrations(db, migrations);
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const { isAuthenticated, isLoading, restoreSession } = useAuthStore();
+
+  React.useEffect(() => {
+    restoreSession();
+  }, []);
 
   React.useEffect(() => {
     if (success) {
@@ -30,7 +35,7 @@ export default function App() {
 
   if (error) console.error('Migration error:', error);
 
-  if (!success) {
+  if (!success || isLoading) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={Theme.colors.primary} />
@@ -44,7 +49,7 @@ export default function App() {
         {isAuthenticated ? (
           <DrawerNavigator />
         ) : (
-          <LoginAuthScreen onLogin={() => setIsAuthenticated(true)} />
+          <LoginAuthScreen />
         )}
       </NavigationContainer>
       <GlobalAlert />

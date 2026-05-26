@@ -6,24 +6,18 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
-  StatusBar,
-  ImageBackground
+  StatusBar
 } from 'react-native';
 import {
   MapPin,
   Mountain,
-  Menu,
-  User,
-  ChevronDown,
-  Info,
-  Boxes,
   Leaf,
   Trash2,
   Edit,
   Plus,
+  Boxes
 } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { Theme } from '../theme';
@@ -35,6 +29,7 @@ import {
   TipoZona
 } from '../db/schema';
 import { Image } from 'react-native';
+import { CustomAlert } from '../components/GlobalAlert';
 
 const InputField = ({ label, value, onChangeText, placeholder, keyboardType, suffix, error, styles, editable = true }: any) => (
   <View style={styles.inputContainer}>
@@ -153,7 +148,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'No se pudo cargar la información de la parcela.');
+      CustomAlert.show('ERROR', 'Error', 'No se pudo cargar la información de la parcela.');
     } finally {
       setLoading(false);
     }
@@ -168,24 +163,21 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
   };
 
   const handleDeleteLote = (id: string, codigo: string) => {
-    Alert.alert(
+    CustomAlert.show(
+      'ALERTA',
       'Eliminar Lote',
       `¿Está seguro que desea eliminar el lote LOT-${codigo}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Eliminar', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await parcelasService.deleteLote(id);
-              loadParcelData(); // Refresh associated lotes
-            } catch (error) {
-              Alert.alert('Error', 'No se pudo eliminar el lote.');
-            }
-          }
+      async () => {
+        try {
+          await parcelasService.deleteLote(id);
+          loadParcelData(); // Refresh associated lotes
+        } catch (error) {
+          CustomAlert.show('ERROR', 'Error', 'No se pudo eliminar el lote.');
         }
-      ]
+      },
+      'ELIMINAR',
+      () => {}, // Cancel callback to show cancel button
+      'CANCELAR'
     );
   };
 
@@ -201,9 +193,9 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
       setLatitude(coords.latitude);
       setLongitude(coords.longitude);
       setGpsLocation('Calibración exitosa');
-      Alert.alert('GPS Calibrado', `Ubicación: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}\nAltitud: ${coords.altitude.toFixed(2)} msnm`);
+      CustomAlert.show('SUCCESS', 'GPS Calibrado', `Ubicación: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}\nAltitud: ${coords.altitude.toFixed(2)} msnm`);
     } catch (error: any) {
-      Alert.alert('Error GPS', error.message || 'No se pudo obtener la ubicación.');
+      CustomAlert.show('ERROR', 'Error GPS', error.message || 'No se pudo obtener la ubicación.');
     } finally {
       setLoading(false);
     }
@@ -214,7 +206,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     setErrorHectareas('');
     
     if (!nombre || !hectareas || !altitud) {
-      Alert.alert('Campos Incompletos', 'Por favor, complete el nombre, extensión y altitud.');
+      CustomAlert.show('ALERTA', 'Campos Incompletos', 'Por favor, complete el nombre, extensión y altitud.');
       return;
     }
 
@@ -229,7 +221,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     if (validationErrors) {
       if (validationErrors.nombre) setErrorNombre(validationErrors.nombre);
       if (validationErrors.hectareas) setErrorHectareas(validationErrors.hectareas);
-      if (validationErrors.altitud) Alert.alert('Error', validationErrors.altitud);
+      if (validationErrors.altitud) CustomAlert.show('ERROR', 'Error', validationErrors.altitud);
       return;
     }
 
@@ -262,25 +254,19 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
 
       if (isEditing) {
         await parcelasService.update(parcelId, data);
-        Alert.alert('Éxito', 'Parcela actualizada.', [{ 
-          text: 'OK', 
-          onPress: () => {
-            resetForm();
-            navigation.goBack();
-          } 
-        }]);
+        CustomAlert.show('SUCCESS', 'Éxito', 'Parcela actualizada.', () => {
+          resetForm();
+          navigation.goBack();
+        });
       } else {
         await parcelasService.create(data);
-        Alert.alert('Éxito', 'Parcela registrada.', [{ 
-          text: 'OK', 
-          onPress: () => {
-            resetForm();
-            navigation.goBack();
-          } 
-        }]);
+        CustomAlert.show('SUCCESS', 'Éxito', 'Parcela registrada.', () => {
+          resetForm();
+          navigation.goBack();
+        });
       }
     } catch (error) {
-      Alert.alert('Error', isEditing ? 'Fallo al actualizar.' : 'Fallo al guardar.');
+      CustomAlert.show('ERROR', 'Error', isEditing ? 'Fallo al actualizar.' : 'Fallo al guardar.');
     } finally {
       setLoading(false);
     }

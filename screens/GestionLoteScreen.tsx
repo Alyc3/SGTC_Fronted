@@ -44,8 +44,17 @@ const LotCard = ({ index, lot, updateLot, semillas, styles }: any) => {
   return (
     <View style={styles.lotCard}>
       <View style={styles.lotCardHeader}>
-        <View style={styles.lotNumberBadge}>
-          <Text style={styles.lotNumberText}>#{index + 1}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={styles.lotNumberBadge}>
+            <Text style={styles.lotNumberText}>#{index + 1}</Text>
+          </View>
+          {lot.zona_seleccionada && (
+            <View style={{ backgroundColor: Theme.colors.secondaryContainer, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: Theme.colors.onSecondaryContainer }}>
+                {lot.zona_seleccionada}
+              </Text>
+            </View>
+          )}
         </View>
         <Sprout size={20} color={Theme.colors.outline} />
       </View>
@@ -127,6 +136,16 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
         if (p?.tipoTerreno) {
           setTipoParcela(p.tipoTerreno as any);
         }
+        
+        if (!isEditing && p?.tipoTerreno === 'Irregular') {
+          const zonas = p.tipoZona ? JSON.parse(p.tipoZona) : [];
+          if (zonas.length > 0) {
+            setNumLotes(zonas.length);
+            setLotesData(zonas.map((z: string) => ({
+              codigo: '', semilla_id: '', variedadCafe: '', hectareas: '', zona_seleccionada: z
+            })));
+          }
+        }
       }
 
       if (isEditing) {
@@ -136,7 +155,8 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
             codigo: lote.codigo,
             semilla_id: lote.semilla_id,
             variedadCafe: lote.variedadCafe,
-            hectareas: lote.hectareas_lote?.toString() || ''
+            hectareas: lote.hectareas_lote?.toString() || '',
+            zona_seleccionada: lote.zona_seleccionada || ''
           }]);
         }
       }
@@ -217,7 +237,7 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
         const generatedCode = lotesService.generateLotCode(parcela.nombre, lot.variedadCafe);
         const finalCode = lotesData.length > 1 ? `${generatedCode}-${(i+1).toString().padStart(2, '0')}` : generatedCode;
 
-        const data = {
+        const data: any = {
           id: isEditing ? loteId : `lote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           codigo: finalCode,
           parcela_id: parcelaId,
@@ -226,6 +246,10 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
           variedadCafe: lot.variedadCafe,
           estado_lote: 'Reservado' as any, // Estado por defecto solicitado
         };
+
+        if (lot.zona_seleccionada) {
+          data.zona_seleccionada = lot.zona_seleccionada;
+        }
 
         if (isEditing) {
           await parcelasService.updateLote(loteId, data);
@@ -297,57 +321,45 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
           </View>
 
           <View style={styles.mainArea}>
-            {tipoParcela === 'Regular' ? (
-              <View style={styles.regularSection}>
-                <View style={styles.configHeader}>
-                  <Text style={styles.sectionTitle}>Configuración de Lotes</Text>
-                  <Text style={styles.sectionSubtitle}>Define las especificaciones técnicas para cada unidad.</Text>
-                  
-                  {!isEditing && (
-                    <View style={styles.unitCounterContainer}>
-                      <Text style={styles.unitLabel}>Número de Lotes (1-10):</Text>
-                      <View style={styles.unitCounter}>
-                        <TouchableOpacity onPress={() => handleNumLotesChange((numLotes - 1).toString())}>
-                           <Text style={styles.counterBtn}>-</Text>
-                        </TouchableOpacity>
-                        <TextInput
-                          style={styles.unitInput}
-                          value={numLotes.toString()}
-                          onChangeText={handleNumLotesChange}
-                          keyboardType="numeric"
-                        />
-                        <TouchableOpacity onPress={() => handleNumLotesChange((numLotes + 1).toString())}>
-                           <Text style={styles.counterBtn}>+</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
+            <View style={styles.configHeader}>
+              <Text style={styles.sectionTitle}>Configuración de Lotes</Text>
+              <Text style={styles.sectionSubtitle}>
+                {tipoParcela === 'Regular' 
+                  ? 'Define las especificaciones técnicas para cada unidad.' 
+                  : 'Complete la información para cada zona topográfica de la parcela.'}
+              </Text>
+              
+              {!isEditing && tipoParcela === 'Regular' && (
+                <View style={styles.unitCounterContainer}>
+                  <Text style={styles.unitLabel}>Número de Lotes (1-10):</Text>
+                  <View style={styles.unitCounter}>
+                    <TouchableOpacity onPress={() => handleNumLotesChange((numLotes - 1).toString())}>
+                       <Text style={styles.counterBtn}>-</Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.unitInput}
+                      value={numLotes.toString()}
+                      onChangeText={handleNumLotesChange}
+                      keyboardType="numeric"
+                    />
+                    <TouchableOpacity onPress={() => handleNumLotesChange((numLotes + 1).toString())}>
+                       <Text style={styles.counterBtn}>+</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
+              )}
+            </View>
 
-                {lotesData.map((lot, idx) => (
-                  <LotCard
-                    key={idx}
-                    index={idx}
-                    lot={lot}
-                    updateLot={updateLot}
-                    semillas={semillas}
-                    styles={styles}
-                  />
-                ))}
-              </View>
-            ) : (
-              <View style={styles.irregularSection}>
-                <Text style={styles.sectionTitle}>Zonificación de Terreno</Text>
-                <Text style={styles.sectionSubtitle}>Seleccione las zonas topográficas para mapeo asimétrico.</Text>
-                
-                <View style={styles.zonesGrid}>
-                  <ZoneCard icon={<Mountain size={24} color={Theme.colors.secondary} />} title="Zona Alta" subtitle="Suelo volcánico, 1,800 msnm" />
-                  <ZoneCard icon={<UtilityPole size={24} color={Theme.colors.secondary} />} title="Zona Plana" subtitle="Suelo franco-arenoso" />
-                  <ZoneCard icon={<ArrowDownRight size={24} color={Theme.colors.secondary} />} title="Zona Inclinada" subtitle="Drenaje natural optimizado" />
-                  <ZoneCard icon={<Droplets size={24} color={Theme.colors.secondary} />} title="Zona Baja" subtitle="Alta humedad relativa" />
-                </View>
-              </View>
-            )}
+            {lotesData.map((lot, idx) => (
+              <LotCard
+                key={idx}
+                index={idx}
+                lot={lot}
+                updateLot={updateLot}
+                semillas={semillas}
+                styles={styles}
+              />
+            ))}
           </View>
         </View>
 
@@ -371,16 +383,6 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
     </View>
   );
 };
-
-const ZoneCard = ({ icon, title, subtitle }: any) => (
-  <TouchableOpacity style={styles.zoneCard}>
-    <View style={styles.zoneIconContainer}>
-      {icon}
-    </View>
-    <Text style={styles.zoneTitle}>{title}</Text>
-    <Text style={styles.zoneSubtitle}>{subtitle}</Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -649,38 +651,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: Theme.colors.outline,
-  },
-  zonesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  zoneCard: {
-    width: (width - 48 - 12) / 2,
-    backgroundColor: Theme.colors.surfaceContainerLowest,
-    padding: 20,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  zoneIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: Theme.colors.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  zoneTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Theme.colors.onSurface,
-  },
-  zoneSubtitle: {
-    fontSize: 10,
-    color: Theme.colors.onSurfaceVariant,
-    marginTop: 4,
   },
   fabContainer: {
     position: 'absolute',

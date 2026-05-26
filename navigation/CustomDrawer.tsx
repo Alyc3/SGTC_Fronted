@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { 
   DrawerContentScrollView, 
   DrawerItemList,
@@ -9,8 +9,22 @@ import { Theme } from '../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SyncButton } from '../components/SyncButton';
 import { LogOut } from 'lucide-react-native';
+import { useAuthStore } from '../store/authStore';
+import { CustomAlert } from '../components/GlobalAlert';
 
 export const CustomDrawer = (props: DrawerContentComponentProps) => {
+  const logout = useAuthStore((state) => state.logout);
+
+  const handleLogout = () => {
+    CustomAlert.show(
+      'ALERTA',
+      'Cerrar Sesión',
+      '¿Estás seguro de que deseas salir del sistema?',
+      async () => await logout(),
+      'SALIR'
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header Premium - Ajustado para ser más esbelto */}
@@ -41,7 +55,7 @@ export const CustomDrawer = (props: DrawerContentComponentProps) => {
             <Text style={styles.legalText}>STGC Modulo de Trazabilidad ©</Text>
           </View>
           
-          <TouchableOpacity style={styles.logoutButton}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <LogOut size={16} color={Theme.colors.error} />
             <Text style={styles.logoutText}>Salir</Text>
           </TouchableOpacity>

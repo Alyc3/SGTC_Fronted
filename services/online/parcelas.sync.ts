@@ -8,6 +8,16 @@ const sql = neon(EXPO_PUBLIC_DATABASE_URL);
 
 export const parcelasSync = {
   async sync() {
+    await this.pushParcelas();
+    await this.pullParcelas();
+  },
+
+  async syncLotes() {
+    await this.pushLotes();
+    await this.pullLotes();
+  },
+
+  async pushParcelas() {
     const pending = await db.select().from(parcelas).where(eq(parcelas.is_synced, false));
     if (pending.length === 0) return;
 
@@ -21,8 +31,8 @@ export const parcelasSync = {
           )
           VALUES (
             ${record.id}, ${record.nombre}, ${record.hectareas}, ${record.latitud}, ${record.longitud}, ${record.phSuelo}, ${record.textura}, 
-            ${record.altitudMsnm}, ${record.cortinasRompevientos}, ${record.orientacionLadera}, 
-            ${record.tipoTerreno}, ${record.tipoZona}, ${record.estado}, ${record.fecha_creacion}, ${record.fecha_modificacion}, true
+            ${record.altitudMsnm}, ${record.cortinasRompevientos ? true : false}, ${record.orientacionLadera}, 
+            ${record.tipoTerreno}, ${record.tipoZona || null}, ${record.estado}, ${record.fecha_creacion}, ${record.fecha_modificacion}, true
           )
           ON CONFLICT (id) DO UPDATE SET 
             nombre = EXCLUDED.nombre,
@@ -48,7 +58,55 @@ export const parcelasSync = {
     }
   },
 
-  async syncLotes() {
+  async pullParcelas() {
+    try {
+      const remoteData = await sql`SELECT * FROM parcelas`;
+      for (const record of remoteData) {
+        await db.insert(parcelas).values({
+          id: record.id,
+          nombre: record.nombre,
+          hectareas: record.hectareas,
+          latitud: record.latitud,
+          longitud: record.longitud,
+          phSuelo: record.ph_suelo,
+          textura: record.textura,
+          altitudMsnm: record.altitud_msnm,
+          cortinasRompevientos: record.cortinas_rompevientos,
+          orientacionLadera: record.orientacion_ladera,
+          tipoTerreno: record.tipo_terreno,
+          tipoZona: record.tipo_zona,
+          estado: record.estado,
+          fecha_creacion: record.fecha_creacion?.toISOString ? record.fecha_creacion.toISOString() : record.fecha_creacion,
+          fecha_modificacion: record.fecha_modificacion?.toISOString ? record.fecha_modificacion.toISOString() : record.fecha_modificacion,
+          activo: record.activo,
+          is_synced: true
+        }).onConflictDoUpdate({
+          target: parcelas.id,
+          set: {
+            nombre: record.nombre,
+            hectareas: record.hectareas,
+            latitud: record.latitud,
+            longitud: record.longitud,
+            ph_suelo: record.ph_suelo,
+            textura: record.textura,
+            altitud_msnm: record.altitud_msnm,
+            cortinas_rompevientos: record.cortinas_rompevientos,
+            orientacion_ladera: record.orientacion_ladera,
+            tipo_terreno: record.tipo_terreno,
+            tipo_zona: record.tipo_zona,
+            estado: record.estado,
+            fecha_modificacion: record.fecha_modificacion?.toISOString ? record.fecha_modificacion.toISOString() : record.fecha_modificacion,
+            activo: record.activo,
+            is_synced: true
+          }
+        });
+      }
+    } catch (err) {
+      console.error(`Pull error parcelas:`, err);
+    }
+  },
+
+  async pushLotes() {
     const pending = await db.select().from(lotes).where(eq(lotes.is_synced, false));
     if (pending.length === 0) return;
 
@@ -61,9 +119,9 @@ export const parcelasSync = {
             estado_lote, calidad_final, fecha_creacion, fecha_modificacion, is_synced
           )
           VALUES (
-            ${record.id}, ${record.codigo}, ${record.parcela_id}, ${record.semilla_id}, ${record.zona_seleccionada}, ${record.hectareas_lote}, 
+            ${record.id}, ${record.codigo}, ${record.parcela_id}, ${record.semilla_id}, ${record.zona_seleccionada || null}, ${record.hectareas_lote}, 
             ${record.variedadCafe}, ${record.porcentajeProgreso}, ${record.costoTotalManoObra}, 
-            ${record.estado_lote}, ${record.calidadFinal}, ${record.fecha_creacion}, ${record.fecha_modificacion}, true
+            ${record.estado_lote}, ${record.calidadFinal || null}, ${record.fecha_creacion}, ${record.fecha_modificacion}, true
           )
           ON CONFLICT (id) DO UPDATE SET 
             codigo = EXCLUDED.codigo,
@@ -84,6 +142,48 @@ export const parcelasSync = {
       } catch (err) {
         console.error(`Sync error lotes ${record.id}:`, err);
       }
+    }
+  },
+
+  async pullLotes() {
+    try {
+      const remoteData = await sql`SELECT * FROM lotes`;
+      for (const record of remoteData) {
+        await db.insert(lotes).values({
+          id: record.id,
+          codigo: record.codigo,
+          parcela_id: record.parcela_id,
+          semilla_id: record.semilla_id,
+          zona_seleccionada: record.zona_seleccionada,
+          hectareas_lote: record.hectareas_lote,
+          variedadCafe: record.variedad_cafe,
+          porcentajeProgreso: record.porcentaje_progreso,
+          costoTotalManoObra: record.costo_total_mano_obra,
+          estado_lote: record.estado_lote,
+          calidadFinal: record.calidad_final,
+          fecha_creacion: record.fecha_creacion?.toISOString ? record.fecha_creacion.toISOString() : record.fecha_creacion,
+          fecha_modificacion: record.fecha_modificacion?.toISOString ? record.fecha_modificacion.toISOString() : record.fecha_modificacion,
+          is_synced: true
+        }).onConflictDoUpdate({
+          target: lotes.id,
+          set: {
+            codigo: record.codigo,
+            parcela_id: record.parcela_id,
+            semilla_id: record.semilla_id,
+            zona_seleccionada: record.zona_seleccionada,
+            hectareas_lote: record.hectareas_lote,
+            variedad_cafe: record.variedad_cafe,
+            porcentaje_progreso: record.porcentaje_progreso,
+            costo_total_mano_obra: record.costo_total_mano_obra,
+            estado_lote: record.estado_lote,
+            calidad_final: record.calidad_final,
+            fecha_modificacion: record.fecha_modificacion?.toISOString ? record.fecha_modificacion.toISOString() : record.fecha_modificacion,
+            is_synced: true
+          }
+        });
+      }
+    } catch (err) {
+      console.error(`Pull error lotes:`, err);
     }
   }
 };

@@ -8,6 +8,11 @@ const sql = neon(EXPO_PUBLIC_DATABASE_URL);
 
 export const semillasSync = {
   async sync() {
+    await this.push();
+    await this.pull();
+  },
+
+  async push() {
     const pending = await db.select().from(semillas).where(eq(semillas.is_synced, false));
     if (pending.length === 0) return;
 
@@ -21,10 +26,21 @@ export const semillasSync = {
             fecha_creacion, fecha_modificacion, is_synced
           )
           VALUES (
-            ${record.id}, ${record.variedad_id}, ${record.pais_origen_id}, ${record.distribuidor_id},
-            ${record.metodo_secado_id}, ${record.seleccion_id}, ${record.olor_id}, ${record.color_id},
-            ${record.integridad_id}, ${record.anexo_ruta}, ${record.anexo_tamano}, ${record.anexo_creacion},
-            ${record.fecha_creacion}, ${record.fecha_modificacion}, true
+            ${record.id}, 
+            ${record.variedad_id}, 
+            ${record.pais_origen_id || null}, 
+            ${record.distribuidor_id || null},
+            ${record.metodo_secado_id || null}, 
+            ${record.seleccion_id || null}, 
+            ${record.olor_id || null}, 
+            ${record.color_id || null},
+            ${record.integridad_id || null}, 
+            ${record.anexo_ruta}, 
+            ${record.anexo_tamano}, 
+            ${record.anexo_creacion},
+            ${record.fecha_creacion}, 
+            ${record.fecha_modificacion}, 
+            true
           )
           ON CONFLICT (id) DO UPDATE SET 
             variedad_id = EXCLUDED.variedad_id,
@@ -35,8 +51,6 @@ export const semillasSync = {
             olor_id = EXCLUDED.olor_id,
             color_id = EXCLUDED.color_id,
             integridad_id = EXCLUDED.integridad_id,
-            anexo_ruta = EXCLUDED.anexo_ruta,
-            anexo_tamano = EXCLUDED.anexo_tamano,
             fecha_modificacion = EXCLUDED.fecha_modificacion,
             is_synced = true
         `;
@@ -45,6 +59,51 @@ export const semillasSync = {
       } catch (err) {
         console.error(`Sync error semillas ${record.id}:`, err);
       }
+    }
+  },
+
+  async pull() {
+    try {
+      const remoteData = await sql`SELECT * FROM semillas`;
+      for (const record of remoteData) {
+        await db.insert(semillas).values({
+          id: record.id,
+          variedad_id: record.variedad_id,
+          pais_origen_id: record.pais_origen_id,
+          distribuidor_id: record.distribuidor_id,
+          metodo_secado_id: record.metodo_secado_id,
+          seleccion_id: record.seleccion_id,
+          olor_id: record.olor_id,
+          color_id: record.color_id,
+          integridad_id: record.integridad_id,
+          anexo_ruta: record.anexo_ruta,
+          anexo_tamano: record.anexo_tamano,
+          anexo_creacion: record.anexo_creacion,
+          fecha_creacion: record.fecha_creacion?.toISOString ? record.fecha_creacion.toISOString() : record.fecha_creacion,
+          fecha_modificacion: record.fecha_modificacion?.toISOString ? record.fecha_modificacion.toISOString() : record.fecha_modificacion,
+          activo: record.activo,
+          is_synced: true
+        }).onConflictDoUpdate({
+          target: semillas.id,
+          set: {
+            variedad_id: record.variedad_id,
+            pais_origen_id: record.pais_origen_id,
+            distribuidor_id: record.distribuidor_id,
+            metodo_secado_id: record.metodo_secado_id,
+            seleccion_id: record.seleccion_id,
+            olor_id: record.olor_id,
+            color_id: record.color_id,
+            integridad_id: record.integridad_id,
+            anexo_ruta: record.anexo_ruta,
+            anexo_tamano: record.anexo_tamano,
+            fecha_modificacion: record.fecha_modificacion?.toISOString ? record.fecha_modificacion.toISOString() : record.fecha_modificacion,
+            activo: record.activo,
+            is_synced: true
+          }
+        });
+      }
+    } catch (err) {
+      console.error(`Pull error semillas:`, err);
     }
   }
 };

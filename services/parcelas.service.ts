@@ -50,9 +50,28 @@ export const parcelasService = {
     }).where(eq(parcelas.id, id)).returning();
   },
   async delete(id: string) {
+    const productionLots = await db.query.lotes.findMany({
+      where: (lotes, { eq, and }) => and(
+        eq(lotes.parcela_id, id),
+        eq(lotes.estado_lote, 'En_Produccion')
+      )
+    });
+
+    if (productionLots.length > 0) {
+      throw new Error('No se puede dar de baja una parcela con lotes en producción.');
+    }
+
     return await db.delete(parcelas).where(eq(parcelas.id, id)).returning();
   },
   async deleteLote(id: string) {
+    const lot = await db.query.lotes.findFirst({
+      where: eq(lotes.id, id)
+    });
+
+    if (lot?.estado_lote === 'En_Produccion') {
+      throw new Error('No se puede dar de baja un lote que está en producción.');
+    }
+
     return await db.delete(lotes).where(eq(lotes.id, id)).returning();
   },
   async getLoteById(id: string) {

@@ -64,6 +64,7 @@ export const Theme = {
     lg: 12,
     xl: 16,
     xxl: 24,
+    xxxl: 36,
     full: 9999,
   },
   typography: {

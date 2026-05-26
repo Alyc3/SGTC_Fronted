@@ -5,6 +5,7 @@ import {
   personalSync,
   catalogoSync 
 } from './online';
+import { networkService } from './network.service';
 
 /**
  * Orchestrator Sync Service
@@ -16,6 +17,11 @@ export const syncService = {
     
     if (!EXPO_PUBLIC_DATABASE_URL) {
       console.error('Error: EXPO_PUBLIC_DATABASE_URL no definida');
+      return;
+    }
+
+    if (!(await networkService.isOnline())) {
+      console.log('--- Sincronización Cancelada: Sin conexión a internet ---');
       return;
     }
 

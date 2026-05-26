@@ -10,22 +10,41 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { Theme } from '../theme';
+import { useAuthStore } from '../store/authStore';
+import { CustomAlert } from '../components/GlobalAlert';
 
-interface LoginAuthScreenProps {
-  onLogin: () => void;
-}
-
-const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
+const LoginAuthScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  
+  const { login, isLoading, error, clearError } = useAuthStore();
 
-  const handleLogin = () => {
-    if (email.trim() && password.trim()) {
-      onLogin();
+  const handleLogin = async () => {
+    clearError();
+    if (!email.trim() || !password.trim()) {
+      CustomAlert.show('ALERTA', 'Campos Incompletos', 'Por favor ingresa tu correo y contraseña.');
+      return;
+    }
+
+    try {
+      await login(email, password);
+    } catch (err: any) {
+      // Obtenemos el error ya formateado (string) desde el store
+      const formattedError = useAuthStore.getState().error || '';
+      const status = err.response?.status;
+
+      if (status === 404 || formattedError.toLowerCase().includes('no existe')) {
+        CustomAlert.show('ERROR', 'Cuenta no encontrada', 'No existe una cuenta asociada a este correo electrónico.');
+      } else if (status === 401 || formattedError.toLowerCase().includes('incorrecto') || formattedError.toLowerCase().includes('invalid')) {
+        CustomAlert.show('ERROR', 'Credenciales Incorrectas', 'El correo o la contraseña son incorrectos.');
+      } else {
+        CustomAlert.show('ERROR', 'Error de Autenticación', formattedError || 'Ocurrió un error inesperado.');
+      }
     }
   };
 
@@ -58,6 +77,13 @@ const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
               <Text style={styles.subText}>Ingresa tus credenciales para tener acceso al sistema.</Text>
             </View>
 
+            {/* Mensaje de Error Visual */}
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
             {/* Inputs */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Correo Electronico</Text>
@@ -67,7 +93,10 @@ const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
                   placeholder="mail@example.com"
                   placeholderTextColor={Theme.colors.outline}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (error) clearError();
+                  }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
@@ -87,7 +116,10 @@ const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
                   placeholder="••••••••"
                   placeholderTextColor={Theme.colors.outline}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (error) clearError();
+                  }}
                   secureTextEntry={!isPasswordVisible}
                 />
                 <TouchableOpacity 
@@ -100,8 +132,17 @@ const LoginAuthScreen = ({ onLogin }: LoginAuthScreenProps) => {
             </View>
 
             {/* Action Button */}
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8}>
-              <Text style={styles.loginButtonText}>Iniciar Sesion</Text>
+            <TouchableOpacity 
+              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
+              onPress={handleLogin} 
+              activeOpacity={0.8}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={Theme.colors.onPrimary} />
+              ) : (
+                <Text style={styles.loginButtonText}>Iniciar Sesion</Text>
+              )}
             </TouchableOpacity>
 
             {/* Footer */}
@@ -172,6 +213,20 @@ const styles = StyleSheet.create({
     color: Theme.colors.onSurfaceVariant,
     marginTop: 4,
   },
+  errorContainer: {
+    backgroundColor: 'rgba(186, 26, 26, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(186, 26, 26, 0.3)',
+  },
+  errorText: {
+    color: Theme.colors.error,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   inputGroup: {
     marginBottom: 20,
   },
@@ -226,6 +281,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
   },
   loginButtonText: {
     color: Theme.colors.onPrimary,

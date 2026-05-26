@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { neon } from '@neondatabase/serverless';
 import { EXPO_PUBLIC_DATABASE_URL } from '@env';
+import { networkService } from './network.service';
 
 const sql = neon(EXPO_PUBLIC_DATABASE_URL);
 
@@ -15,7 +16,7 @@ export const catalogoService = {
     });
 
     let onlineItems: any[] = [];
-    if (EXPO_PUBLIC_DATABASE_URL) {
+    if (EXPO_PUBLIC_DATABASE_URL && await networkService.isOnline()) {
       try {
         onlineItems = await sql`SELECT * FROM catalogo WHERE activo = true ORDER BY valor ASC`;
       } catch (err) {

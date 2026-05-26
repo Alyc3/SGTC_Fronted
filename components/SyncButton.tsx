@@ -10,7 +10,7 @@ import {
 import { RefreshCw, CloudOff, CloudSync } from 'lucide-react-native';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
-import { semillas, parcelas, lotes } from '../db/schema';
+import { semillas, parcelas, lotes, catalogo } from '../db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { syncService } from '../services/sync.service';
 import { Theme } from '../theme';
@@ -29,10 +29,14 @@ export const SyncButton = () => {
   const { data: pendingLotes } = useLiveQuery(
     db.select({ count: sql<number>`count(*)` }).from(lotes).where(eq(lotes.is_synced, false))
   );
+  const { data: pendingCatalogo } = useLiveQuery(
+    db.select({ count: sql<number>`count(*)` }).from(catalogo).where(eq(catalogo.is_synced, false))
+  );
 
   const totalPending = (pendingSemillas?.[0]?.count || 0) + 
                        (pendingParcelas?.[0]?.count || 0) + 
-                       (pendingLotes?.[0]?.count || 0);
+                       (pendingLotes?.[0]?.count || 0) +
+                       (pendingCatalogo?.[0]?.count || 0);
 
   const handleSync = async () => {
     if (totalPending === 0) {

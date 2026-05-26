@@ -49,24 +49,21 @@ const InventarioSemillasScreen = ({ navigation }: any) => {
   const semillas = semillasService.search(rawSemillas || [], searchQuery);
 
   const handleDelete = (id: string, nombre: string) => {
-    Alert.alert(
+    CustomAlert.show(
+      'ALERTA',
       'Dar de baja',
       `¿Está seguro que desea dar de baja la semilla "${nombre}"? Esta acción no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Confirmar', 
-          style: 'destructive', 
-          onPress: async () => {
-            try {
-              await semillasService.delete(id);
-              CustomAlert.show('SUCCESS', 'Éxito', 'Semilla dada de baja correctamente.');
-            } catch (error) {
-              CustomAlert.show('ERROR', 'Error', 'No se pudo procesar la baja.');
-            }
-          } 
+      async () => {
+        try {
+          await semillasService.delete(id);
+          CustomAlert.show('SUCCESS', 'Éxito', 'Semilla dada de baja correctamente.');
+        } catch (error) {
+          CustomAlert.show('ERROR', 'Error', 'No se pudo procesar la baja.');
         }
-      ]
+      },
+      'CONFIRMAR',
+      () => {},
+      'CANCELAR'
     );
   };
 
