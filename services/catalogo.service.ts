@@ -60,9 +60,9 @@ export const catalogoService = {
 
     // Validación de caracteres (solo letras, espacios y el slash para el origen)
     if (categoria === 'PAIS_ORIGEN') {
-      const regexOrigen = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+\/[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+      const regexOrigen = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+,[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
       if (!regexOrigen.test(cleanValue)) {
-        return { isValid: false, error: 'Formato inválido. Debe ser exactamente CIUDAD/PAIS (solo letras).' };
+        return { isValid: false, error: 'Formato inválido. Debe ser exactamente CIUDAD,CIUDAD (solo letras).' };
       }
     } else {
       const regexGeneral = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;

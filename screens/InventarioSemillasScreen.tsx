@@ -130,7 +130,7 @@ const InventarioSemillasScreen = ({ navigation }: any) => {
             <View style={styles.gridItem}>
               <View style={styles.detailLabelRow}>
                 <Truck size={16} color={iconColor} />
-                <Text style={styles.detailLabel}>PROVEEDOR</Text>
+                <Text style={styles.detailLabel}>DISTRIBUIDOR</Text>
               </View>
               <Text style={styles.detailValue} numberOfLines={1}>{item.distribuidor?.valor || 'N/A'}</Text>
             </View>

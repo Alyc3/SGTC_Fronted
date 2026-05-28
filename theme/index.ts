@@ -4,10 +4,10 @@ export const Theme = {
     primaryContainer: '#5d4037',
     onPrimary: '#ffffff',
     onPrimaryContainer: '#d4ada1',
+    onPrimaryFixed: '#2c160e',
     onPrimaryFixedVariant: '#5d4037',
     primaryFixed: '#ffdbd0',
     primaryFixedDim: '#e7bdb1',
-    onPrimaryFixed: '#2c160e',
     secondary: '#3a6843', // Plantation Green
     secondaryContainer: '#b9ecbd',
     onSecondary: '#ffffff',
@@ -47,8 +47,8 @@ export const Theme = {
     inverseSurface: '#353028',
     inverseOnSurface: '#f9efe4',
     inversePrimary: '#e7bdb1',
-    white: '#ffffff', // Restaurado
-    success: '#3a6843', // Mapeado a secondary
+    white: '#ffffff',
+    success: '#3a6843',
   },
   spacing: {
     xs: 4,
@@ -69,39 +69,39 @@ export const Theme = {
   },
   typography: {
     display: {
-      fontFamily: 'System',
+      fontFamily: 'Manrope', // Updated
       fontSize: 32,
       fontWeight: '700' as const,
       lineHeight: 40,
-      color: '#1f1b14', // Restaurado
+      color: '#1f1b14',
     },
     headline: {
-      fontFamily: 'System',
+      fontFamily: 'Manrope', // Updated
       fontSize: 24,
       fontWeight: '600' as const,
       lineHeight: 32,
-      color: '#1f1b14', // Restaurado
+      color: '#1f1b14',
     },
     body: {
-      fontFamily: 'System',
+      fontFamily: 'Public Sans', // Updated
       fontSize: 16,
       fontWeight: '400' as const,
       lineHeight: 24,
-      color: '#1f1b14', // Restaurado
+      color: '#1f1b14',
     },
     label: {
-      fontFamily: 'System',
+      fontFamily: 'Public Sans', // Updated
       fontSize: 14,
       fontWeight: '600' as const,
       lineHeight: 20,
-      color: '#504441', // Restaurado (onSurfaceVariant)
+      color: '#504441',
     },
     labelSm: {
-      fontFamily: 'System',
+      fontFamily: 'Public Sans', // Updated
       fontSize: 12,
       fontWeight: '600' as const,
       lineHeight: 16,
-      color: '#504441', // Restaurado (onSurfaceVariant)
+      color: '#504441',
     }
   },
   shadows: {
@@ -114,3 +114,4 @@ export const Theme = {
     }
   }
 };
+

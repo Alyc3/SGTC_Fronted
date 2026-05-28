@@ -19,7 +19,6 @@ import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers } from '
 import { lotesService, parcelasService } from '../services';
 import { useNavigation } from '@react-navigation/native';
 import { CustomAlert } from '../components/GlobalAlert';
-import { red } from 'react-native-reanimated/lib/typescript/Colors';
 
 const { width } = Dimensions.get('window');
 
@@ -56,7 +55,11 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
   const isProduccion = item.estado_lote === 'En_Produccion';
 
   return (
-    <View style={styles.premiumCard}>
+    <TouchableOpacity 
+      activeOpacity={0.9} 
+      onPress={() => onView(item)}
+      style={styles.premiumCard}
+    >
       <View style={styles.cardFlex}>
         {/* Left: Image Placeholder/Thumbnail - More compact */}
         <View style={styles.cardImageContainer}>
@@ -78,7 +81,7 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
                 </Text>
               </View>
               <Text style={styles.lotCode}>{item.codigo}</Text>
-              <Text style={styles.lotVariety}>{item.semilla?.variedadNombre }</Text>
+              <Text style={styles.lotVariety}>{item.semilla?.variedad?.valor || 'Sin variedad'}</Text>
             </View>
           </View>
 
@@ -89,13 +92,11 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
           </View>
 
           <View style={styles.cardActions}>
-            <TouchableOpacity onPress={() => onView(item)} style={styles.actionBtn}>
-              <Eye size={16} color={Theme.colors.primary} />
-              <Text style={styles.actionBtnText}>VISUALIZAR</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity 
-              onPress={() => onEdit(item.id, item.parcela_id, isProduccion)} 
+              onPress={(e) => {
+                e.stopPropagation();
+                onEdit(item.id, item.parcela_id, isProduccion);
+              }} 
               style={[styles.actionBtn, isProduccion && { opacity: 0.5 }]}
             >
               <Edit size={16} color={isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant} />
@@ -105,7 +106,10 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              onPress={() => onDelete(item.id, item.codigo, isProduccion)} 
+              onPress={(e) => {
+                e.stopPropagation();
+                onDelete(item.id, item.codigo, isProduccion);
+              }} 
               style={[styles.archiveBtn, isProduccion && { opacity: 0.5 }]}
             >
               <Archive size={14} color={isProduccion ? Theme.colors.outline : Theme.colors.outline} />
@@ -113,7 +117,7 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -122,13 +126,18 @@ const LotesScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   
   const { data: lotes = [] } = useLiveQuery(db.query.lotes.findMany({
-    with: { parcela: true, semilla: true }
+    with: { 
+      parcela: true, 
+      semilla: {
+        with: { variedad: true }
+      } 
+    }
   }));
 
   const sections = useMemo(() => {
     const filtered = lotes.filter(l => 
       l.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (l.semilla as any)?.variedadNombre?.toLowerCase().includes(searchQuery.toLowerCase())
+      (l.semilla as any)?.variedad?.valor?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const grouped = filtered.reduce((acc: any[], lot: any) => {
@@ -184,7 +193,7 @@ const LotesScreen = () => {
   };
 
   const handleView = (item: any) => {
-    // Logic for visualization
+    navigation.navigate('ViewLote', { lote: item });
   };
 
   return (

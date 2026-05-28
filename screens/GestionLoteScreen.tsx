@@ -122,11 +122,17 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
     navigation.setOptions({
       headerShown: false,
     });
-  }, [loteId]);
+  }, [loteId, parcelaId]);
 
   const loadInitialData = async () => {
     try {
       setLoading(true);
+      // Reset state for new parcel/lote context
+      setNumLotes(1);
+      setLotesData([{ codigo: '', semilla_id: '', variedadCafe: '', hectareas: '' }]);
+      setTipoParcela('Regular');
+      setParcela(null);
+
       const seeds = await lotesService.getSeeds();
       setSemillas(seeds);
 
@@ -321,6 +327,44 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
           </View>
 
           <View style={styles.mainArea}>
+            {/* Existing Lots Section */}
+            {parcela?.lotes && parcela.lotes.length > 0 && !isEditing && (
+              <View style={styles.existingLotsContainer}>
+                <Text style={styles.sectionTitle}>Lotes Existentes</Text>
+                <Text style={styles.sectionSubtitle}>Unidades de producción actualmente registradas en esta parcela.</Text>
+                
+                <View style={styles.existingLotsList}>
+                  {parcela.lotes.map((lote: any, idx: number) => (
+                    <TouchableOpacity 
+                      key={lote.id || idx} 
+                      style={styles.existingLotCard}
+                      onPress={() => navigation.navigate('GestionLote', { parcelaId: parcela.id, id: lote.id })}
+                    >
+                      <View style={styles.existingLotHeader}>
+                        <Text style={styles.existingLotCode}>{lote.codigo}</Text>
+                        <View style={[styles.statusBadgeSmall, lote.estado_lote === 'En_Produccion' && { backgroundColor: Theme.colors.secondaryContainer }]}>
+                          <Text style={[styles.statusTextSmall, lote.estado_lote === 'En_Produccion' && { color: Theme.colors.secondary }]}>
+                            {lote.estado_lote.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.existingLotDetails}>
+                        <View style={styles.detailItem}>
+                          <Sprout size={14} color={Theme.colors.outline} />
+                          <Text style={styles.detailText}>{lote.variedadCafe || 'No especificada'}</Text>
+                        </View>
+                        <View style={styles.detailItem}>
+                          <LayoutGrid size={14} color={Theme.colors.outline} />
+                          <Text style={styles.detailText}>{lote.hectareas_lote} ha</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.divider} />
+              </View>
+            )}
+
             <View style={styles.configHeader}>
               <Text style={styles.sectionTitle}>Configuración de Lotes</Text>
               <Text style={styles.sectionSubtitle}>
@@ -675,6 +719,66 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     fontSize: 18,
     fontWeight: '800',
+  },
+  existingLotsContainer: {
+    marginBottom: 32,
+  },
+  existingLotsList: {
+    marginTop: 16,
+    gap: 12,
+  },
+  existingLotCard: {
+    backgroundColor: Theme.colors.surfaceContainerLowest,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.outlineVariant,
+  },
+  existingLotHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  existingLotCode: {
+    fontFamily: 'System',
+    fontSize: 16,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+  },
+  statusBadgeSmall: {
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusTextSmall: {
+    fontFamily: 'System',
+    fontSize: 10,
+    fontWeight: '800',
+    color: Theme.colors.onSurfaceVariant,
+    letterSpacing: 0.5,
+  },
+  existingLotDetails: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    fontFamily: 'System',
+    fontSize: 12,
+    color: Theme.colors.onSurfaceVariant,
+    fontWeight: '600',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Theme.colors.outlineVariant,
+    marginTop: 24,
+    opacity: 0.5,
   },
 });
 

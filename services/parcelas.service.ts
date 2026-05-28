@@ -107,12 +107,10 @@ export const parcelasService = {
         errors.nombre = 'El nombre de la parcela es obligatorio.';
       } else if (data.nombre.length < 3) {
         errors.nombre = 'El nombre debe tener al menos 3 caracteres.';
-      } else if (data.nombre.length > 20) {
-        errors.nombre = 'El nombre no puede exceder los 20 caracteres.';
-      } else if (/\s/.test(data.nombre)) {
-        errors.nombre = 'El nombre no debe contener espacios.';
-      } else if (/[^a-zA-Z0-9]/.test(data.nombre)) {
-        errors.nombre = 'No se permiten caracteres especiales.';
+      } else if (data.nombre.length > 15) {
+        errors.nombre = 'El nombre no puede exceder los 15 caracteres.';
+      } else if (/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/.test(data.nombre)) {
+        errors.nombre = 'Solo se permiten letras y espacios.';
       }
     }
 
@@ -126,8 +124,10 @@ export const parcelasService = {
         const val = parseFloat(strVal);
         if (isNaN(val)) {
           errors.hectareas = 'Debe ser un número válido.';
-        } else if (val < 0.1) {
-          errors.hectareas = 'El mínimo es 0.1 hectárea.';
+        } else if (val < 1) {
+          errors.hectareas = 'El mínimo es 1 hectárea.';
+        } else if (val > 100) {
+          errors.hectareas = 'El máximo permitido es 100 hectáreas.';
         }
       }
     }

@@ -21,6 +21,7 @@
     "expo-constants": "~18.0.13",
     "expo-document-picker": "~14.0.8",
     "expo-drizzle-studio-plugin": "^0.2.1",
+    "expo-linear-gradient": "~15.0.8",
     "expo-location": "~19.0.8",
     "expo-network": "~8.0.8",
     "expo-secure-store": "~15.0.8",

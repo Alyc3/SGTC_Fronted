@@ -58,8 +58,6 @@ const SelectInput = ({ label, value, options, onSelect, onAddNew, placeholder, s
         <View style={styles.selectIcons}>
           {!readOnly && showActions && (
             <View style={styles.actionIcons}>
-              <Plus size={14} color={Theme.colors.onSurfaceVariant} style={styles.iconSpacing} />
-              <Edit2 size={12} color={Theme.colors.onSurfaceVariant} style={styles.iconSpacing} />
             </View>
           )}
           <ChevronDown size={20} color={Theme.colors.onSurfaceVariant} />
@@ -253,6 +251,32 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
   const saveNewCatalogItem = async () => {
     if (!newVal.trim()) return;
     
+    if (newVal.trim().length > 30) {
+      CustomAlert.show('ALERTA', 'Límite excedido', 'El nombre no puede superar los 30 caracteres.');
+      return;
+    }
+
+    const keyMap: any = {
+      'VARIEDAD_CAFE': 'variedades',
+      'PAIS_ORIGEN': 'paises',
+      'DISTRIBUIDOR': 'distribuidores',
+      'METODO_SECADO': 'metodosSecado',
+      'SELECCION': 'selecciones',
+      'OLOR': 'olores',
+      'COLOR': 'colores',
+      'INTEGRIDAD': 'integridades'
+    };
+
+    const currentCategoryOptions = (options as any)[keyMap[activeCategory.key]] || [];
+    const isDuplicate = currentCategoryOptions.some(
+      (opt: any) => opt.valor.toLowerCase().trim() === newVal.toLowerCase().trim()
+    );
+
+    if (isDuplicate) {
+      CustomAlert.show('ALERTA', 'Elemento Duplicado', `El/la ${activeCategory.label.toLowerCase()} "${newVal.trim()}" ya existe.`);
+      return;
+    }
+
     try {
       setLoadingOptions(true);
       
@@ -300,32 +324,43 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
   };
 
   const handleSave = async () => {
-    if (!variedadId) {
-      CustomAlert.show('ALERTA', 'Campo Requerido', 'La identificación botánica es necesaria.');
+    const data = {
+      variedad_id: variedadId,
+      pais_origen_id: paisOrigenId,
+      distribuidor_id: distribuidorId,
+      metodo_secado_id: metodoSecadoId,
+      seleccion_id: seleccionId,
+      olor_id: olorId,
+      color_id: colorId,
+      integridad_id: integridadId,
+    };
+
+    if (!semillasService.validate(data)) {
+      CustomAlert.show('ALERTA', 'Campos Requeridos', 'Todos los campos marcados con * son obligatorios.');
       return;
     }
 
     const processSave = async () => {
       try {
         setLoading(true);
-        const data = {
-          variedad_id: variedadId,
-          pais_origen_id: paisOrigenId || null,
-          distribuidor_id: distribuidorId || null,
-          metodo_secado_id: metodoSecadoId || null,
-          seleccion_id: seleccionId || null,
-          olor_id: olorId || null,
-          color_id: colorId || null,
-          integridad_id: integridadId || null,
+        const finalData = {
+          ...data,
+          pais_origen_id: data.pais_origen_id || null,
+          distribuidor_id: data.distribuidor_id || null,
+          metodo_secado_id: data.metodo_secado_id || null,
+          seleccion_id: data.seleccion_id || null,
+          olor_id: data.olor_id || null,
+          color_id: data.color_id || null,
+          integridad_id: data.integridad_id || null,
         };
 
         if (isEditing) {
-          await semillasService.update(seedId, { ...data, fecha_modificacion: new Date().toISOString() });
+          await semillasService.update(seedId, { ...finalData, fecha_modificacion: new Date().toISOString() });
           CustomAlert.show('SUCCESS', 'Éxito', 'Semilla actualizada correctamente.');
         } else {
           const now = new Date().toISOString();
           await semillasService.create({ 
-            ...data, 
+            ...finalData, 
             id: uuidv4(), 
             fecha_creacion: now,
             fecha_modificacion: now,
@@ -391,7 +426,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
               </View>
               
               <SelectInput 
-                label="Variedad / Tipo de café" 
+                label="Variedad / Tipo de café *" 
                 value={variedadId} 
                 options={options.variedades}
                 onSelect={setVariedadId}
@@ -402,7 +437,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                 readOnly={readOnly}
               />
               <SelectInput 
-                label="Origen" 
+                label="Origen *" 
                 value={paisOrigenId} 
                 options={options.paises}
                 onSelect={setPaisOrigenId}
@@ -413,7 +448,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                 readOnly={readOnly}
               />
               <SelectInput 
-                label="Distribuidor" 
+                label="Distribuidor *" 
                 value={distribuidorId} 
                 options={options.distribuidores}
                 onSelect={setDistribuidorId}
@@ -433,7 +468,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
               </View>
 
               <SelectInput 
-                label="Método de secado" 
+                label="Método de secado *" 
                 value={metodoSecadoId} 
                 options={options.metodosSecado}
                 onSelect={setMetodoSecadoId}
@@ -443,7 +478,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                 readOnly={readOnly}
               />
               <SelectInput 
-                label="Selección" 
+                label="Selección *" 
                 value={seleccionId} 
                 options={options.selecciones}
                 onSelect={setSeleccionId}
@@ -453,7 +488,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                 readOnly={readOnly}
               />
               <SelectInput 
-                label="Olor" 
+                label="Olor *" 
                 value={olorId} 
                 options={options.olores}
                 onSelect={setOlorId}
@@ -463,7 +498,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                 readOnly={readOnly}
               />
               <SelectInput 
-                label="Color" 
+                label="Color *" 
                 value={colorId} 
                 options={options.colores}
                 onSelect={setColorId}
@@ -473,7 +508,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                 readOnly={readOnly}
               />
               <SelectInput 
-                label="Integridad" 
+                label="Integridad *" 
                 value={integridadId} 
                 options={options.integridades}
                 onSelect={setIntegridadId}
@@ -516,7 +551,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                   disabled={loading}
                 >
                   <Text style={styles.primaryButtonText}>
-                    {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios' : 'Confirm Registration'}
+                    {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios' : 'Crear Semilla'}
                   </Text>
                   <ArrowRight size={20} color={Theme.colors.onSecondary} />
                 </TouchableOpacity>
@@ -550,6 +585,7 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
               placeholder={`Nombre de ${activeCategory.label.toLowerCase()}...`}
               value={newVal}
               onChangeText={setNewVal}
+              maxLength={30}
               autoFocus
             />
             <View style={styles.addModalActions}>

@@ -10,6 +10,8 @@ import InventarioSemillasScreen from '../screens/InventarioSemillasScreen';
 import GestionParcelaScreen from '../screens/GestionParcelaScreen';
 import ListarParcelaScreen from '../screens/ListarParcelaScreen';
 import GestionLoteScreen from '../screens/GestionLoteScreen';
+import ViewLoteScreen from '../screens/ViewLoteScreen';
+import AssignPersonalScreen from '../screens/AssignPersonalScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -118,6 +120,26 @@ export const DrawerNavigator = () => {
         options={{ 
           title: 'Gestionar Lote',
           drawerItemStyle: { display: 'none' }
+        }}
+      />
+
+      <Drawer.Screen 
+        name="ViewLote" 
+        component={ViewLoteScreen} 
+        options={{ 
+          title: 'Detalle de Lote',
+          drawerItemStyle: { display: 'none' },
+          headerShown: false
+        }}
+      />
+
+      <Drawer.Screen 
+        name="AssignPersonal" 
+        component={AssignPersonalScreen} 
+        options={{ 
+          title: 'Asignación de Personal',
+          drawerItemStyle: { display: 'none' },
+          headerShown: false
         }}
       />
 

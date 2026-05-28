@@ -94,6 +94,19 @@ export const semillasService = {
       .where(eq(semillas.id, id))
       .returning();
   },
+  validate(data: any) {
+    const fields = [
+      'variedad_id', 
+      'pais_origen_id', 
+      'distribuidor_id', 
+      'metodo_secado_id', 
+      'seleccion_id', 
+      'olor_id', 
+      'color_id', 
+      'integridad_id'
+    ];
+    return fields.every(field => !!data[field]);
+  },
   search(data: any[], query: string) {
     if (!query || query.trim() === '') return data;
     const s = query.toLowerCase().trim();

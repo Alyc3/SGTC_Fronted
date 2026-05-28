@@ -31,7 +31,7 @@ import {
 import { Image } from 'react-native';
 import { CustomAlert } from '../components/GlobalAlert';
 
-const InputField = ({ label, value, onChangeText, placeholder, keyboardType, suffix, error, styles, editable = true }: any) => (
+const InputField = ({ label, value, onChangeText, placeholder, keyboardType, suffix, error, styles, editable = true, maxLength }: any) => (
   <View style={styles.inputContainer}>
     <Text style={styles.inputLabel}>{label}</Text>
     <View style={[styles.inputWrapper, error ? styles.inputWrapperError : null, !editable && { backgroundColor: Theme.colors.surfaceContainerLow }]}>
@@ -43,6 +43,7 @@ const InputField = ({ label, value, onChangeText, placeholder, keyboardType, suf
         placeholderTextColor={Theme.colors.outline}
         keyboardType={keyboardType}
         editable={editable}
+        maxLength={maxLength}
       />
       {suffix && <Text style={styles.inputSuffix}>{suffix}</Text>}
     </View>
@@ -201,12 +202,34 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const handleUpdateConfirm = () => {
+    CustomAlert.show(
+      'ALERTA',
+      'Confirmar Actualización',
+      '¿Está seguro de que desea guardar los cambios en esta parcela?',
+      handleSave,
+      'ACTUALIZAR',
+      () => {},
+      'CANCELAR'
+    );
+  };
+
   const handleSave = async () => {
     setErrorNombre('');
     setErrorHectareas('');
     
-    if (!nombre || !hectareas || !altitud) {
-      CustomAlert.show('ALERTA', 'Campos Incompletos', 'Por favor, complete el nombre, extensión y altitud.');
+    const missingFields = [];
+    if (!nombre) missingFields.push('Nombre de Parcela');
+    if (!hectareas) missingFields.push('Hectáreas');
+    if (!altitud) missingFields.push('Altitud (Calibre GPS)');
+    if (tipoTerreno === 'Irregular' && selectedZonas.length === 0) missingFields.push('Clasificación de Zonas');
+
+    if (missingFields.length > 0) {
+      CustomAlert.show(
+        'ALERTA', 
+        'Campos Requeridos', 
+        `Por favor, complete los siguientes campos obligatorios:\n\n${missingFields.map(f => `• ${f}`).join('\n')}`
+      );
       return;
     }
 
@@ -300,20 +323,22 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
 
             <View style={styles.cardBody}>
               <InputField
-                label="Nombre de Parcela"
+                label="Nombre de Parcela *"
                 value={nombre}
                 onChangeText={(text: string) => {
-                  setNombre(text);
+                  const sanitized = text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+                  setNombre(sanitized);
                   if (errorNombre) setErrorNombre('');
                 }}
                 placeholder="Nombre de la Parcela"
                 error={errorNombre}
                 styles={styles}
                 editable={!readOnly}
+                maxLength={15}
               />
 
               <InputField
-                label="Hectáreas"
+                label="Hectáreas *"
                 value={hectareas}
                 onChangeText={(text: string) => {
                   const sanitized = text.replace(/[^0-9]/g, '').slice(0, 3);
@@ -330,7 +355,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
 
               {/* Terrain Geometry (Segmented Control) */}
               <View style={styles.section}>
-                <Text style={styles.inputLabel}>Tipo de Terreno</Text>
+                <Text style={styles.inputLabel}>Tipo de Terreno *</Text>
                 <View style={styles.segmentedControl}>
                   {TipoTerrenoValues.map((tipo) => (
                     <TouchableOpacity
@@ -354,7 +379,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
               {/* TIPO ZONA (Visible only if Irregular) */}
               {tipoTerreno === 'Irregular' && (
                 <View style={styles.section}>
-                  <Text style={styles.inputLabel}>Clasificación de Zonas</Text>
+                  <Text style={styles.inputLabel}>Clasificación de Zonas *</Text>
                   <View style={styles.chipGroup}>
                     {TipoZona.map((zona) => {
                       const isSelected = selectedZonas.includes(zona);
@@ -405,7 +430,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
 
               {/* Slope Orientation (Directional Buttons) */}
               <View style={styles.section}>
-                <Text style={styles.inputLabel}>Orientacion de Ladera</Text>
+                <Text style={styles.inputLabel}>Orientacion de Ladera *</Text>
                 <View style={styles.directionalGroup}>
                   {OrientacionLaderaValues.map((opt) => (
                     <TouchableOpacity
@@ -428,7 +453,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
 
               {/* Soil Texture (Segmented Control) */}
               <View style={styles.section}>
-                <Text style={styles.inputLabel}>Textura del Suelo</Text>
+                <Text style={styles.inputLabel}>Textura del Suelo *</Text>
                 <View style={styles.segmentedControl}>
                   {TexturaSueloValues.map((val) => (
                     <TouchableOpacity
@@ -473,7 +498,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
               {/* Altitud (Moved here and made read-only) */}
               <View style={styles.section}>
                 <InputField
-                  label="Altitud"
+                  label="Altitud *"
                   value={altitud}
                   placeholder="1800"
                   suffix="meters"
@@ -540,8 +565,21 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
                 </View>
                 </View>
 
-                {/* Secondary Action Button - Agregar Lote */}
-                {isEditing && !readOnly && (
+                {/* Primary Action Button */}
+                {!readOnly && (
+                <TouchableOpacity
+                  style={[styles.primaryButton, loading && { opacity: 0.4 }]}
+                  onPress={isEditing ? handleUpdateConfirm : handleSave}
+                  disabled={loading}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {loading ? 'GUARDANDO...' : isEditing ? 'Actualizar Parcela' : 'Crear Nueva Parcela'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+                {/* Secondary Action Button - Agregar Lote (Visible in Edit and Visualization) */}
+                {isEditing && (
                   <TouchableOpacity
                     style={styles.secondaryButton}
                     onPress={() => navigation.navigate('GestionLote', { parcelaId: parcelId })}
@@ -550,19 +588,6 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
                     <Text style={styles.secondaryButtonText}>Agregar Lote</Text>
                   </TouchableOpacity>
                 )}
-
-                {/* Primary Action Button */}
-                {!readOnly && (
-                <TouchableOpacity
-                  style={[styles.primaryButton, loading && { opacity: 0.4 }]}
-                  onPress={handleSave}
-                  disabled={loading}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {loading ? 'GUARDANDO...' : isEditing ? 'Actualizar Parcela' : 'Crear Nueva Parcela'}
-                  </Text>
-                </TouchableOpacity>
-              )}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

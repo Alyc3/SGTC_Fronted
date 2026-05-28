@@ -55,10 +55,7 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
           <ArrowLeft size={24} color={Theme.colors.onSurface} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Personnel Ledger</Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <MoreVertical size={24} color={Theme.colors.onSurface} />
-        </TouchableOpacity>
+        
       </View>
 
       <KeyboardAvoidingView
