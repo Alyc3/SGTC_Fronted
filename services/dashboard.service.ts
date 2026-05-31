@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { lotes, personal, parcelas, estado_etapa } from '../db/schema';
+import { lotes, users, parcelas, estado_etapa } from '../db/schema';
 import { eq, desc, ne, sql, and } from 'drizzle-orm';
 
 export interface DashboardStats {
@@ -24,8 +24,8 @@ export const dashboardService = {
       .where(ne(lotes.estado_lote, 'Completada'));
     
     const activePersonal = await db.select({ count: sql<number>`count(*)` })
-      .from(personal)
-      .where(eq(personal.activo, true));
+      .from(users)
+      .where(eq(users.status, 'ACTIVO'));
 
     return {
       activeLotsCount: activeLots[0]?.count || 0,
@@ -53,19 +53,19 @@ export const dashboardService = {
       });
     });
 
-    // 2. Fetch recent personal additions
-    const recentPersonal = await db.query.personal.findMany({
-      orderBy: [desc(personal.fecha_creacion)],
+    // 2. Fetch recent user additions
+    const recentUsers = await db.query.users.findMany({
+      orderBy: [desc(users.fecha_modificacion)], // Using modification date as proxy for creation if not available
       limit: limit,
     });
 
-    recentPersonal.forEach(person => {
+    recentUsers.forEach(person => {
       activities.push({
         id: `person-${person.id}`,
         type: 'NEW_PERSONAL',
-        title: `Nuevo Personal: ${person.nombres} ${person.apellidos.charAt(0)}.`,
-        subtitle: `Rol: ${person.rol}`,
-        timestamp: person.fecha_creacion,
+        title: `Nuevo Personal: ${person.first_name} ${person.last_name?.charAt(0)}.`,
+        subtitle: `Rol ID: ${person.role_id}`,
+        timestamp: person.fecha_modificacion,
         isSynced: !!person.is_synced,
       });
     });

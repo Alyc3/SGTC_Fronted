@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const API_URL = 'https://auth-service-w3lo.onrender.com';
 
-const authApi = axios.create({
+export const authApi = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -20,6 +20,37 @@ authApi.interceptors.request.use(
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Interceptor para manejar errores 401 (No autorizado / Sesión expirada)
+authApi.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      // No cerrar sesión si el error viene del propio login
+      if (error.config.url.includes('/api/auth/login')) {
+        return Promise.reject(error);
+      }
+
+      try {
+        // Importación dinámica para evitar dependencia circular
+        const { useAuthStore } = require('../store/authStore');
+        const { CustomAlert } = require('../components/GlobalAlert');
+
+        const { logout } = useAuthStore.getState();
+        await logout();
+
+        CustomAlert.show(
+          'ERROR',
+          'Sesión Caducada',
+          'Tu sesión ha expirado por seguridad. Por favor, inicia sesión nuevamente.'
+        );
+      } catch (logoutError) {
+        console.error('Error al manejar el cierre de sesión por 401:', logoutError);
+      }
+    }
     return Promise.reject(error);
   }
 );

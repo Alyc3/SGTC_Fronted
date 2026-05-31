@@ -13,6 +13,7 @@ import GestionLoteScreen from '../screens/GestionLoteScreen';
 import ViewLoteScreen from '../screens/ViewLoteScreen';
 import AssignPersonalScreen from '../screens/AssignPersonalScreen';
 import DashboardScreen from '../screens/DashboardScreen';
+import GestionRolesScreen from '../screens/GestionRolesScreen';
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { 
@@ -21,7 +22,8 @@ import {
   Map, 
   Sprout, 
   Users, 
-  Settings 
+  Settings,
+  ShieldCheck
 } from 'lucide-react-native';
 
 const Drawer = createDrawerNavigator();
@@ -34,6 +36,7 @@ export const DrawerNavigator = () => {
   const canAccessParcelas = ['ADMIN', 'CAPATAZ'].includes(role || '');
   const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO'].includes(role || '');
   const canAccessPersonal = ['ADMIN', 'CAPATAZ'].includes(role || '');
+  const canAccessRoles = ['ADMIN'].includes(role || '');
 
   return (
     <Drawer.Navigator
@@ -169,6 +172,16 @@ export const DrawerNavigator = () => {
           title: 'Personal',
           drawerIcon: ({ color }) => <Users size={20} color={color} />,
           drawerItemStyle: canAccessPersonal ? {} : { display: 'none' }
+        }}
+      />
+
+      <Drawer.Screen 
+        name="GestionRoles" 
+        component={GestionRolesScreen} 
+        options={{ 
+          title: 'Gestión de Roles',
+          drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />,
+          drawerItemStyle: canAccessRoles ? {} : { display: 'none' }
         }}
       />
 

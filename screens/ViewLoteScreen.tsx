@@ -52,13 +52,6 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
           <Text style={styles.headerTitle}>Detalle de Lote</Text>
         </View>
         <View style={styles.headerRight}>
-          
-          <View style={styles.profileImageContainer}>
-            <Image
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAelyaGPFqgo6iuixC76-00IAp9mxQf8xTYz1-v24kppIzTL4OQYI99su0wwxP6weZschuRe422yrd9Vv6e2_kxTQwMubPXcOqrFayQfBEtVC1JEnmH0U6fFN9stSUk4FUfN1LytuszG1TJdorjF8sS3dJ2Kb24fdZZJ_jKxztprMXB53r5IecWIscj8GtSbTTM3VghCxaeeWDkNVnq0nogvTWJOTIOGglvtCDIIT02a2BMBi5a4aSTvpapGJDruilqUVIoZ1FuJaQv' }}
-              style={styles.profileImage}
-            />
-          </View>
         </View>
       </View>
 
@@ -93,7 +86,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
             <Coffee size={40} color={Theme.colors.secondary} />
             <View style={styles.bentoCardContent}>
               <Text style={styles.bentoCardLabel}>Variedad de Café</Text>
-              <Text style={styles.bentoCardTitle}>{lote?.semilla?.variedad?.valor || 'Geisha Premium'}</Text>
+              <Text style={styles.bentoCardTitle}>{lote?.semilla?.variedad?.valor }</Text>
             </View>
             <TouchableOpacity 
               style={styles.asignacionButton}

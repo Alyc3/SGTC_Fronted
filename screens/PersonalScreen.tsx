@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   TouchableOpacity, 
   FlatList,
-  StatusBar
+  StatusBar,
+  ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   Plus, 
   UserPlus, 
@@ -16,13 +18,29 @@ import {
   BadgeCheck
 } from 'lucide-react-native';
 import { Theme } from '../theme';
+import { personalService } from '../services/personal.service';
 
 const PersonalScreen = ({ navigation }: any) => {
-  // Mock data for the list
-  const workers = [
-    { id: '1', name: 'Antonio García', role: 'CAPATAZ', active: true },
-    { id: '2', name: 'María Rodríguez', role: 'GESTOR_INVENTARIO', active: true },
-  ];
+  const [workers, setWorkers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchWorkers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await personalService.getAll();
+      setWorkers(data);
+    } catch (error) {
+      console.error('Error fetching workers:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchWorkers();
+    }, [fetchWorkers])
+  );
 
   const renderWorker = ({ item }: any) => (
     <TouchableOpacity 
@@ -33,10 +51,10 @@ const PersonalScreen = ({ navigation }: any) => {
         <User size={20} color={Theme.colors.primary} />
       </View>
       <View style={styles.workerInfo}>
-        <Text style={styles.workerName}>{item.name}</Text>
+        <Text style={styles.workerName}>{`${item.first_name} ${item.last_name}`}</Text>
         <View style={styles.roleBadge}>
           <ShieldCheck size={12} color={Theme.colors.secondary} />
-          <Text style={styles.roleText}>{item.role}</Text>
+          <Text style={styles.roleText}>{item.role_id || 'TRABAJADOR'}</Text>
         </View>
       </View>
       <ChevronRight size={20} color={Theme.colors.outline} />
@@ -56,18 +74,22 @@ const PersonalScreen = ({ navigation }: any) => {
         <View style={styles.accentBar} />
       </View>
 
-      <FlatList
-        data={workers}
-        keyExtractor={(item) => item.id}
-        renderItem={renderWorker}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <UserPlus size={48} color={Theme.colors.surfaceVariant} />
-            <Text style={styles.emptyText}>No hay colaboradores registrados</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <ActivityIndicator size="large" color={Theme.colors.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={workers}
+          keyExtractor={(item) => item.id}
+          renderItem={renderWorker}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <UserPlus size={48} color={Theme.colors.surfaceVariant} />
+              <Text style={styles.emptyText}>No hay colaboradores registrados</Text>
+            </View>
+          }
+        />
+      )}
 
       {/* Floating Action Button */}
       <TouchableOpacity 

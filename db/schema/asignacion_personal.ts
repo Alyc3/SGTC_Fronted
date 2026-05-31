@@ -1,14 +1,14 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { lotes } from './lotes';
-import { personal } from './personal';
+import { users } from './users';
 import { EtapaProcesoValues } from './enums';
 
 export const asignacion_personal = sqliteTable('asignacion_personal', {
   id: text('id').primaryKey(),
   lote_id: text('lote_id').references(() => lotes.id).notNull(),
   etapa: text('etapa', { enum: EtapaProcesoValues }).notNull(),
-  trabajador_id: text('trabajador_id').references(() => personal.id).notNull(),
+  trabajador_id: text('trabajador_id').references(() => users.id).notNull(),
   tipo_grano: text('tipo_grano'),
   pago_calculado: real('pago_calculado'),
   fechaAsignacion: text('fecha_asignacion').default(sql`CURRENT_TIMESTAMP`),

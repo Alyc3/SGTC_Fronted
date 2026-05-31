@@ -3,7 +3,7 @@ export * from './catalogo';
 export * from './semillas';
 export * from './parcelas';
 export * from './lotes';
-export * from './personal';
+export * from './users';
 export * from './asignacion_personal';
 export * from './estado_etapa';
 export * from './relations';

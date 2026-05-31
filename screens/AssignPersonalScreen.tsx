@@ -119,10 +119,10 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           <User size={20} color={Theme.colors.primary} />
         </View>
         <View style={styles.personnelInfo}>
-          <Text style={styles.personnelName}>{`${item.nombres} ${item.apellidos}`}</Text>
+          <Text style={styles.personnelName}>{`${item.first_name} ${item.last_name}`}</Text>
           <View style={styles.roleRow}>
             <ShieldCheck size={12} color={Theme.colors.secondary} />
-            <Text style={styles.roleText}>{item.rol || 'TRABAJADOR'}</Text>
+            <Text style={styles.roleText}>{item.role_id || 'TRABAJADOR'}</Text>
           </View>
         </View>
         {isSelected ? (

@@ -22,6 +22,4 @@ export const CalidadFinalValues = ['Alta', 'Media', 'Baja'] as const;
 //Enum para Etapa
 export const EtapaActualValues = ['Pendiente', 'En_Proceso', 'Completada'] as const;
 //Enum para Trabajador
-export const RolTrabajadorValues = ['Capataz', 'Sembrador', 'Recolector', 'Clasificador'] as const;
 export const EtapaProcesoValues = ['Sembrado', 'Cosechado', 'Despulpado', 'Secado', 'Tostado', 'Molido', 'Empaquetado', 'Transporte'] as const;
-

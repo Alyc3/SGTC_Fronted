@@ -7,3 +7,4 @@ export * from './seed.service';
 export * from './sync.service';
 export * from './dashboard.service';
 export * from './network.service';
+export * from './roles.service';
