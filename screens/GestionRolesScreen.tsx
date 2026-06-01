@@ -42,9 +42,12 @@ const GestionRolesScreen = ({ navigation }: any) => {
       setLoading(true);
       const data = await rolesService.getAll();
       setRoles(data);
-    } catch (error) {
-      console.error('Error fetching roles:', error);
-      CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los roles.');
+    } catch (error: any) {
+      const isSessionError = error.message === 'SESSION_EXPIRED' || error.response?.status === 401;
+      if (!isSessionError) {
+        console.error('Error fetching roles:', error);
+        CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los roles.');
+      }
     } finally {
       setLoading(false);
     }

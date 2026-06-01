@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { jwtDecode } from 'jwt-decode';
 
 const API_URL = 'https://auth-service-w3lo.onrender.com';
 
@@ -15,6 +16,33 @@ authApi.interceptors.request.use(
   async (config) => {
     const token = await SecureStore.getItemAsync('userToken');
     if (token) {
+      try {
+        const decoded: any = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        
+        // Si el token ya expiró localmente, ni siquiera enviamos la petición
+        if (decoded.exp && decoded.exp < currentTime) {
+          const { CustomAlert } = require('../components/GlobalAlert');
+          const { useAuthStore } = require('../store/authStore');
+          
+          // Mostramos la alerta PRIMERO, y el logout ocurre solo cuando el usuario acepta
+          CustomAlert.show(
+            'ERROR',
+            'Sesión Caducada',
+            'Tu sesión ha expirado por seguridad. Por favor, inicia sesión nuevamente.',
+            async () => {
+              await useAuthStore.getState().logout();
+              console.warn('Sesión caducada aceptada. Usuario redirigido a login.');
+            }
+          );
+          
+          // Cancelamos la petición devolviendo un error controlado
+          return Promise.reject(new Error('SESSION_EXPIRED'));
+        }
+      } catch (e) {
+        console.error('Error decodificando token en interceptor:', e);
+      }
+      
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -28,27 +56,31 @@ authApi.interceptors.request.use(
 authApi.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Si la respuesta es 401
     if (error.response?.status === 401) {
+      const originalRequest = error.config;
+
       // No cerrar sesión si el error viene del propio login
-      if (error.config.url.includes('/api/auth/login')) {
+      if (originalRequest.url.includes('/api/auth/login')) {
         return Promise.reject(error);
       }
 
       try {
-        // Importación dinámica para evitar dependencia circular
         const { useAuthStore } = require('../store/authStore');
         const { CustomAlert } = require('../components/GlobalAlert');
 
-        const { logout } = useAuthStore.getState();
-        await logout();
-
+        // Solo lanzamos la alerta si no hay una ya visible (para evitar duplicados)
         CustomAlert.show(
           'ERROR',
           'Sesión Caducada',
-          'Tu sesión ha expirado por seguridad. Por favor, inicia sesión nuevamente.'
+          'Tu sesión ha expirado o es inválida. Por favor, inicia sesión nuevamente.',
+          async () => {
+            await useAuthStore.getState().logout();
+            console.log('401 detectado y aceptado. Usuario redirigido a login.');
+          }
         );
       } catch (logoutError) {
-        console.error('Error al manejar el cierre de sesión por 401:', logoutError);
+        console.error('Error crítico en interceptor 401:', logoutError);
       }
     }
     return Promise.reject(error);
@@ -93,6 +125,14 @@ export const authService = {
    */
   async resetPassword(data: any) {
     const response = await authApi.post('/api/auth/reset-password', data);
+    return response.data;
+  },
+
+  /**
+   * Listar todos los usuarios
+   */
+  async getAllUsers() {
+    const response = await authApi.get('/api/users/');
     return response.data;
   },
 };

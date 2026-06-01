@@ -12,10 +12,12 @@ import ListarParcelaScreen from '../screens/ListarParcelaScreen';
 import GestionLoteScreen from '../screens/GestionLoteScreen';
 import ViewLoteScreen from '../screens/ViewLoteScreen';
 import AssignPersonalScreen from '../screens/AssignPersonalScreen';
+import AssignCapatazScreen from '../screens/AssignCapatazScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import GestionRolesScreen from '../screens/GestionRolesScreen';
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { SyncStatusIcon } from '../components/SyncStatusIcon';
 import { 
   LayoutDashboard, 
   Boxes, 
@@ -44,6 +46,7 @@ export const DrawerNavigator = () => {
       initialRouteName="Dashboard"
       screenOptions={{
         headerShown: true,
+        headerRight: () => <SyncStatusIcon />,
         headerStyle: {
           backgroundColor: Theme.colors.primaryContainer,
           elevation: 0,
@@ -200,6 +203,15 @@ export const DrawerNavigator = () => {
         options={{ 
           title: 'Configuración',
           drawerIcon: ({ color }) => <Settings size={20} color={color} />
+        }}
+      />
+
+      <Drawer.Screen 
+        name="AssignCapataz" 
+        component={AssignCapatazScreen} 
+        options={{ 
+          title: 'Asignar Capataz',
+          drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />
         }}
       />
     </Drawer.Navigator>

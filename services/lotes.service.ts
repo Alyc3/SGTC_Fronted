@@ -155,5 +155,54 @@ export const lotesService = {
         estado: estado,
       }).returning();
     }
+  },
+
+  async getStages(loteId: string) {
+    return await db.query.estado_etapa.findMany({
+      where: eq(estado_etapa.lote_id, loteId)
+    });
+  },
+
+  async updateStageStatus(loteId: string, etapa: typeof EtapaProcesoValues[number], estado: typeof EtapaActualValues[number]) {
+    const existing = await db.query.estado_etapa.findFirst({
+      where: and(
+        eq(estado_etapa.lote_id, loteId),
+        eq(estado_etapa.etapa, etapa)
+      )
+    });
+
+    if (existing) {
+      return await db.update(estado_etapa)
+        .set({ 
+          estado, 
+          fecha_inicio: estado === 'En_Proceso' ? new Date().toISOString() : undefined,
+          fecha_final: estado === 'Completada' ? new Date().toISOString() : undefined,
+          is_synced: false 
+        })
+        .where(eq(estado_etapa.id, existing.id))
+        .returning();
+    } else {
+      return await db.insert(estado_etapa).values({
+        id: uuidv4(),
+        lote_id: loteId,
+        etapa,
+        estado,
+        fecha_inicio: estado === 'En_Proceso' ? new Date().toISOString() : undefined,
+        fecha_final: estado === 'Completada' ? new Date().toISOString() : undefined,
+      }).returning();
+    }
+  },
+
+  async getCapataz(loteId: string) {
+    const assignment = await db.query.asignacion_personal.findFirst({
+      where: and(
+        eq(asignacion_personal.lote_id, loteId),
+        eq(asignacion_personal.etapa, 'Administración' as any)
+      ),
+      with: {
+        trabajador: true
+      }
+    });
+    return assignment?.trabajador || null;
   }
 };

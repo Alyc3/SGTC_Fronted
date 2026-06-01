@@ -1,18 +1,18 @@
 import React, { useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   StatusBar,
   Image,
   Dimensions,
   ActivityIndicator
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { 
-  Boxes, 
+import {
+  Boxes,
   ChevronRight,
   History,
   Activity,
@@ -27,9 +27,33 @@ import {
   FileText
 } from 'lucide-react-native';
 import { Theme } from '../theme';
-import { dashboardService, ActivityItemData } from '../services';
+import { dashboardService, ActivityItemData, personalService, rolesService } from '../services';
 
 const { width } = Dimensions.get('window');
+
+const ALLOWED_ROLES = [
+  'ADMIN',
+  'Gerente_General',
+  'Capataz',
+  'Sembrador',
+  'Recolector',
+  'Clasificador',
+  'Técnico_Despulpado',
+  'Encargado_Secado',
+  'Tostador',
+  'Gestor_Calidad',
+  'Gestor_Calidad',
+  'Controlador_Despacho',
+  'Tecnico_Almacenamiento',
+  'TECNICO_SEMBRADO'
+];
+
+// Normalizamos los roles para comparar sin problemas de mayúsculas, espacios o guiones bajos
+const ALLOWED_ROLES_NORMALIZED = [
+  ...ALLOWED_ROLES.map(r => r.trim().toLowerCase()),
+  ...ALLOWED_ROLES.map(r => r.trim().toLowerCase().replace(/\s+/g, '_')),
+  ...ALLOWED_ROLES.map(r => r.trim().toLowerCase().replace(/_/g, ' ')),
+];
 
 const DashboardScreen = ({ navigation }: any) => {
   const [stats, setStats] = useState({ activeLotsCount: 0, personalCount: 0 });
@@ -39,14 +63,32 @@ const DashboardScreen = ({ navigation }: any) => {
   const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const [s, a] = await Promise.all([
+      const [s, a, workersData, rolesData] = await Promise.all([
         dashboardService.getStats(),
-        dashboardService.getRecentActivity()
+        dashboardService.getRecentActivity(),
+        personalService.getAll(),
+        rolesService.getAll()
       ]);
-      setStats(s);
+
+      // Calcular el conteo de personal filtrado por los roles permitidos
+      const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.roles || rolesData.data || []);
+      const rolesMap: Record<string, string> = {};
+      rolesArray.forEach((r: any) => {
+        rolesMap[r.id] = (r.name || r.nombre || r.role_name || '').trim().toLowerCase();
+      });
+
+      const filteredCount = workersData.filter((w: any) => {
+        const roleName = rolesMap[w.role_id];
+        return roleName && ALLOWED_ROLES_NORMALIZED.includes(roleName);
+      }).length;
+
+      setStats({ ...s, personalCount: filteredCount });
       setActivities(a);
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
+    } catch (error: any) {
+      const isSessionError = error.message === 'SESSION_EXPIRED' || error.response?.status === 401;
+      if (!isSessionError) {
+        console.error('Error loading dashboard data:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -63,7 +105,7 @@ const DashboardScreen = ({ navigation }: any) => {
     const then = new Date(timestamp);
     const diffInMs = now.getTime() - then.getTime();
     const diffInMin = Math.floor(diffInMs / (1000 * 60));
-    
+
     if (diffInMin < 1) return 'Ahora mismo';
     if (diffInMin < 60) return `Hace ${diffInMin} min`;
     const diffInHrs = Math.floor(diffInMin / 60);
@@ -74,8 +116,8 @@ const DashboardScreen = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Theme.colors.background} />
-      
-      <ScrollView 
+
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -87,7 +129,7 @@ const DashboardScreen = ({ navigation }: any) => {
 
         {/* Terrain Status Card (Featured) */}
         <TouchableOpacity style={styles.featuredCard} activeOpacity={0.9}>
-          <Image 
+          <Image
             source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBQF9N3etNOAjoGtBpCr-pDBS4ikWlmv8J96T4VisN8df5y93m7e0YRNmedXWEtsUN4GloGrijWvEd2RHVNnM_GYeyHfeIG8pIwfOp0Dk3F8jsfWTxbfl8sgckchbRElDtNvqkjVrxE16TUfBV1QtrIsOqnOSpFUi6BNxwKHDe0KwnaKcHF2BH-rtGj7G4XUYsBKOvU8VEmUjwfKL56sYyPUGQNIvL9egFSXvEjt4gqbZeByXXgM4pQ5DzsgqqElh2JllJzME5VU74' }}
             style={styles.featuredImage}
           />
@@ -105,13 +147,13 @@ const DashboardScreen = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Vista General</Text>
           <View style={styles.statsRow}>
-            <StatCard 
+            <StatCard
               label="Lotes Activos"
               value={loading ? '...' : stats.activeLotsCount.toString()}
               icon={<Boxes size={20} color={Theme.colors.primary} />}
               onPress={() => navigation.navigate('Lotes')}
             />
-            <StatCard 
+            <StatCard
               label="Personal"
               value={loading ? '...' : stats.personalCount.toString()}
               icon={<Users size={20} color={Theme.colors.primary} />}
@@ -124,28 +166,28 @@ const DashboardScreen = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
           <View style={styles.actionsGrid}>
-            <ActionCard 
+            <ActionCard
               label="Semillas"
               icon={<Sprout size={24} color={Theme.colors.onSecondaryContainer} />}
               color={Theme.colors.secondary}
               labelColor={Theme.colors.onPrimary}
               onPress={() => navigation.navigate('InventarioSemillas')}
             />
-            <ActionCard 
+            <ActionCard
               label="Parcelas"
               icon={<MapIcon size={24} color={Theme.colors.onSecondaryContainer} />}
               color={Theme.colors.secondary}
               labelColor={Theme.colors.onPrimary}
               onPress={() => navigation.navigate('ListarParcela')}
             />
-            <ActionCard 
+            <ActionCard
               label="Lotes"
               icon={<Boxes size={24} color={Theme.colors.onSecondaryContainer} />}
               color={Theme.colors.secondary}
               labelColor={Theme.colors.onPrimary}
               onPress={() => navigation.navigate('Lotes')}
             />
-            <ActionCard 
+            <ActionCard
               label="Personal"
               icon={<Users size={24} color={Theme.colors.onSecondaryContainer} />}
               color={Theme.colors.secondary}
@@ -169,13 +211,13 @@ const DashboardScreen = ({ navigation }: any) => {
               <ActivityIndicator color={Theme.colors.primary} style={{ marginVertical: 20 }} />
             ) : activities.length > 0 ? (
               activities.map((item) => (
-                <ActivityItem 
+                <ActivityItem
                   key={item.id}
                   icon={
                     item.type === 'LOT_UPDATE' ? <FileText size={18} color={Theme.colors.primary} /> :
-                    item.type === 'NEW_PERSONAL' ? <UserPlus size={18} color={Theme.colors.primary} /> :
-                    item.type === 'INCIDENT' ? <AlertTriangle size={18} color={Theme.colors.error} /> :
-                    <RefreshCw size={18} color={Theme.colors.primary} />
+                      item.type === 'NEW_PERSONAL' ? <UserPlus size={18} color={Theme.colors.primary} /> :
+                        item.type === 'INCIDENT' ? <AlertTriangle size={18} color={Theme.colors.error} /> :
+                          <RefreshCw size={18} color={Theme.colors.primary} />
                   }
                   title={item.title}
                   meta={`${getTimeAgo(item.timestamp)} • ${item.isSynced ? 'Sincronizado' : 'Local'}`}
@@ -207,8 +249,8 @@ const StatCard = ({ label, value, icon, onPress }: any) => (
 );
 
 const ActionCard = ({ label, icon, color, labelColor, onPress }: any) => (
-  <TouchableOpacity 
-    style={[styles.actionCard, { backgroundColor: color }]} 
+  <TouchableOpacity
+    style={[styles.actionCard, { backgroundColor: color }]}
     onPress={onPress}
   >
     <View style={styles.actionIconContainer}>{icon}</View>
@@ -230,31 +272,31 @@ const ActivityItem = ({ icon, title, meta, isError }: any) => (
 );
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: Theme.colors.background 
+  container: {
+    flex: 1,
+    backgroundColor: Theme.colors.background
   },
-  scrollContent: { 
-    padding: Theme.spacing.md, 
-    paddingBottom: 40 
+  scrollContent: {
+    padding: Theme.spacing.md,
+    paddingBottom: 40
   },
-  header: { 
+  header: {
     marginBottom: Theme.spacing.lg,
     paddingHorizontal: 4
   },
-  welcomeLabel: { 
+  welcomeLabel: {
     fontFamily: 'System',
-    fontSize: 10, 
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1.5, 
-    color: Theme.colors.onSurfaceVariant, 
-    marginBottom: 4 
+    letterSpacing: 1.5,
+    color: Theme.colors.onSurfaceVariant,
+    marginBottom: 4
   },
-  title: { 
+  title: {
     fontFamily: 'System',
-    fontSize: 28, 
+    fontSize: 28,
     fontWeight: '800',
-    color: Theme.colors.primary 
+    color: Theme.colors.primary
   },
   featuredCard: {
     height: 200,
@@ -302,8 +344,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 2
   },
-  section: { 
-    marginBottom: Theme.spacing.xl 
+  section: {
+    marginBottom: Theme.spacing.xl
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -311,26 +353,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Theme.spacing.md
   },
-  sectionTitle: { 
+  sectionTitle: {
     fontFamily: 'System',
-    fontSize: 18, 
+    fontSize: 18,
     fontWeight: '700',
     color: Theme.colors.onSurface,
     marginBottom: Theme.spacing.md
   },
-  statsRow: { 
-    flexDirection: 'row', 
-    gap: Theme.spacing.md 
+  statsRow: {
+    flexDirection: 'row',
+    gap: Theme.spacing.md
   },
-  statCard: { 
-    flex: 1, 
-    backgroundColor: Theme.colors.surfaceContainerLow, 
-    padding: Theme.spacing.lg, 
+  statCard: {
+    flex: 1,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    padding: Theme.spacing.lg,
     borderRadius: Theme.roundness.xl,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    ...Theme.shadows.ambient 
+    ...Theme.shadows.ambient
   },
   statIconContainer: {
     width: 40,
@@ -340,15 +382,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
-  statValue: { 
-    fontSize: 22, 
-    fontWeight: '800', 
-    color: Theme.colors.onSurface 
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Theme.colors.onSurface
   },
-  statLabel: { 
-    fontSize: 11, 
+  statLabel: {
+    fontSize: 11,
     fontWeight: '600',
-    color: Theme.colors.onSurfaceVariant 
+    color: Theme.colors.onSurfaceVariant
   },
   actionsGrid: {
     flexDirection: 'row',
@@ -381,38 +423,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Theme.colors.primary
   },
-  activityList: { 
-    gap: Theme.spacing.sm 
+  activityList: {
+    gap: Theme.spacing.sm
   },
-  activityCard: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: Theme.colors.surfaceContainerLow, 
-    padding: Theme.spacing.md, 
-    borderRadius: Theme.roundness.xl, 
-    ...Theme.shadows.ambient 
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    padding: Theme.spacing.md,
+    borderRadius: Theme.roundness.xl,
+    ...Theme.shadows.ambient
   },
-  activityIcon: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: Theme.roundness.md, 
-    backgroundColor: Theme.colors.surfaceContainerHigh, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: 12 
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Theme.roundness.md,
+    backgroundColor: Theme.colors.surfaceContainerHigh,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12
   },
-  activityContent: { 
-    flex: 1 
+  activityContent: {
+    flex: 1
   },
-  activityTitle: { 
-    fontWeight: '700', 
-    fontSize: 14, 
-    color: Theme.colors.onSurface 
+  activityTitle: {
+    fontWeight: '700',
+    fontSize: 14,
+    color: Theme.colors.onSurface
   },
-  activityMeta: { 
-    fontSize: 11, 
-    color: Theme.colors.outline, 
-    marginTop: 2 
+  activityMeta: {
+    fontSize: 11,
+    color: Theme.colors.outline,
+    marginTop: 2
   },
   footer: {
     paddingVertical: 24,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,538 +8,685 @@ import {
   Image,
   StatusBar,
   Dimensions,
-  type ImageStyle,
+  Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
-  Coffee,
-  Ruler,
-  UserPlus,
+  ChevronRight,
+  ShieldCheck,
+  User,
+  Layout,
+  Sprout,
+  Calendar,
+  Layers,
+  Activity,
   PlayCircle,
   PauseCircle,
-  Leaf,
-  Sprout,
-  TreeDeciduous,
-  Flower,
-  Tractor,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  Map,
+  Users,
+  UserPlus,
   Droplets,
   Thermometer,
+  Sun,
+  Wind,
+  History,
+  Info,
+  FlaskConical,
+  Mountain,
+  Ruler,
+  Rocket,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Theme } from '../theme';
+import { lotesService } from '../services/lotes.service';
+import { syncWorker } from '../services/sync.worker';
+import { CustomAlert } from '../components/GlobalAlert';
+import { EtapaProcesoValues } from '../db/schema/enums';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
 const ViewLoteScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
   const [isProcessing, setIsProcessing] = useState(lote?.estado_lote === 'En_Produccion');
+  const [capataz, setCapataz] = useState<any>(null);
+  const [stages, setStages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 120],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const fetchData = useCallback(async () => {
+    if (!lote?.id) return;
+    try {
+      setLoading(true);
+      const [capatazData, stagesData] = await Promise.all([
+        lotesService.getCapataz(lote.id),
+        lotesService.getStages(lote.id)
+      ]);
+      setCapataz(capatazData);
+      setStages(stagesData);
+    } catch (error) {
+      console.error('Error fetching lote details:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [lote?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   const toggleProcess = () => {
     setIsProcessing(!isProcessing);
+    // Opcional: Actualizar en DB
+  };
+
+  const handleStartStage = async (etapa: string) => {
+    try {
+      await lotesService.updateStageStatus(lote.id, etapa as any, 'En_Proceso');
+      syncWorker.syncPendingData();
+      fetchData();
+      CustomAlert.show('SUCCESS', 'Etapa Iniciada', `Se ha marcado la etapa ${etapa} como En Proceso.`);
+    } catch (error) {
+      console.error('Error starting stage:', error);
+      CustomAlert.show('ERROR', 'Error', 'No se pudo iniciar la etapa.');
+    }
+  };
+
+  const renderSensor = (icon: any, label: string, value: string, color: string) => (
+    <View style={styles.sensorCard}>
+      <View style={[styles.sensorIconContainer, { backgroundColor: color + '15' }]}>
+        {React.cloneElement(icon, { color: color, size: 18 })}
+      </View>
+      <View>
+        <Text style={styles.sensorLabel}>{label}</Text>
+        <Text style={styles.sensorValue}>{value}</Text>
+      </View>
+    </View>
+  );
+
+  const renderStageCard = (title: string, index: number) => {
+    const stageInfo = stages.find(s => s.etapa === title);
+    const status = stageInfo?.estado || 'Pendiente';
+    
+    // Lógica de habilitación: La primera siempre, las demás si la anterior está Completada
+    let isEnabled = index === 0;
+    if (index > 0) {
+      const prevStage = stages.find(s => s.etapa === EtapaProcesoValues[index - 1]);
+      isEnabled = prevStage?.estado === 'Completada';
+    }
+
+    const isActive = status === 'En_Proceso';
+    const isCompleted = status === 'Completada';
+
+    return (
+      <View key={title} style={[
+        styles.stageCard, 
+        isActive && styles.stageCardActive,
+        !isEnabled && { opacity: 0.5 }
+      ]}>
+        <View style={styles.stageHeader}>
+          <View style={styles.stageTitleRow}>
+            <Text style={[styles.stageTitle, isActive && { color: Theme.colors.primary }]}>{title}</Text>
+            {isCompleted && <CheckCircle2 size={16} color={Theme.colors.secondary} />}
+            {isActive && <Activity size={16} color={Theme.colors.primary} />}
+          </View>
+          {stageInfo?.fecha_inicio && (
+            <Text style={styles.stageDate}>
+              {isCompleted ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}` : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
+            </Text>
+          )}
+        </View>
+
+        <Text style={styles.stageDescription}>
+          {isCompleted ? 'Etapa finalizada exitosamente.' : isActive ? 'Etapa en ejecución actual.' : 'Esperando inicio de fase.'}
+        </Text>
+        
+        <View style={styles.stageFooter}>
+          {isEnabled && status === 'Pendiente' && (
+            <TouchableOpacity 
+              style={styles.startStageButton}
+              onPress={() => handleStartStage(title)}
+            >
+              <Rocket size={14} color={Theme.colors.white} />
+              <Text style={styles.startStageText}>Iniciar {title}</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity 
+            style={[styles.addPersonnelMiniButton, !isEnabled && { backgroundColor: Theme.colors.surfaceVariant }]}
+            onPress={() => isEnabled && navigation.navigate('AssignPersonal', { lote, etapa: title })}
+            disabled={!isEnabled}
+          >
+            <UserPlus size={14} color={isEnabled ? Theme.colors.onSecondaryContainer : Theme.colors.outline} />
+            <Text style={[styles.addPersonnelMiniText, !isEnabled && { color: Theme.colors.outline }]}>Agregar Personal</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <Animated.View style={[styles.stickyHeader, { opacity: headerOpacity }]}>
+        <View style={styles.stickyContent}>
+          <Text style={styles.stickyCode}>{lote?.codigo || 'LOTE-C01'}</Text>
+          <View style={styles.stickyStatus}>
+            <View style={[styles.statusDot, isProcessing ? { backgroundColor: Theme.colors.secondary } : { backgroundColor: Theme.colors.outline }]} />
+            <Text style={styles.stickyStatusText}>{isProcessing ? 'PROCESANDO' : 'DETENIDO'}</Text>
+          </View>
+        </View>
+      </Animated.View>
+
+      <Animated.ScrollView
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+      >
+        <View style={styles.topSection}>
+          <TouchableOpacity 
+            style={styles.circleBackButton}
+            onPress={() => navigation.goBack()}
+          >
             <ArrowLeft size={24} color={Theme.colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Detalle de Lote</Text>
+          <Text style={styles.displayTitle}>Información de Lote</Text>
+          <View style={styles.accentLine} />
         </View>
-        <View style={styles.headerRight}>
-        </View>
-      </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <Image
-            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBLeT97l2perQsk7Nk1LKPjsi4uqe9Owj0ERazr1D4SyFLe-2Nfh8nGvheBQjVG5qf5y54ZfaJgKlFad83ajjRFZZJY_1dfXa1B9ty27z5-rKjp7QzwdJfgeH-M0B7A6bG09zio7lK0mMQQI_M99OjcRnfDBj_pWkenrHySkF5MlSIvrFflqgtJmXZFN5xiCLFAOSXJVkVDT5EnV--UmPs0z5LRJhvEQR_9NSB_hgcEXLIFpfm5a4yNPspQ-BPAkOZs5oZgsbOkHElY' }}
-            style={styles.heroImage}
-          />
+        <View style={styles.heroWrapper}>
           <LinearGradient
-            colors={['transparent', 'rgba(68, 42, 34, 0.9)']}
+            colors={['rgba(109, 209, 196, 0)', 'rgba(31, 27, 20, 0.4)', 'rgba(31, 27, 20, 0.95)']}
             style={styles.heroGradient}
           >
-            <View style={styles.heroContent}>
-              <View>
-                <Text style={styles.heroLabel}>Ubicación Actual</Text>
-                <Text style={styles.heroTitle}>{lote?.parcela?.nombre || 'Ladera Norte'}</Text>
-                <View style={[styles.statusBadge, { marginTop: 8, alignSelf: 'flex-start' }]}>
-                  <View style={[styles.statusDot, isProcessing && { backgroundColor: Theme.colors.secondary }]} />
-                  <Text style={styles.statusText}>{isProcessing ? 'EN PRODUCCIÓN' : 'RESERVADO'}</Text>
-                </View>
+            <View style={styles.heroBadgeRow}>
+              <View style={[styles.heroStatusBadge, isProcessing ? styles.bgSuccess : styles.bgTertiary]}>
+                <Text style={styles.heroStatusText}>{isProcessing ? 'EN PRODUCCIÓN' : 'RESERVADO'}</Text>
               </View>
+              <View style={styles.heroGlassBadge}>
+                <Calendar size={12} color={Theme.colors.white} />
+                <Text style={styles.heroDateText}>Ciclo: May-Ago 2026</Text>
+              </View>
+            </View>
+            <Text style={styles.heroCodeText}>{lote?.codigo || 'LT-COFFEE-092'}</Text>
+            <View style={styles.heroMetaRow}>
+              <Map size={16} color={Theme.colors.white} />
+              <Text style={styles.heroLocationText}>{lote?.parcela?.nombre || 'Ubicación Desconocida'}</Text>
             </View>
           </LinearGradient>
         </View>
 
-        {/* Bento Grid */}
-        <View style={styles.bentoGrid}>
-          {/* Variety Card */}
-          <View style={styles.bentoCardLarge}>
-            <Coffee size={40} color={Theme.colors.secondary} />
-            <View style={styles.bentoCardContent}>
-              <Text style={styles.bentoCardLabel}>Variedad de Café</Text>
-              <Text style={styles.bentoCardTitle}>{lote?.semilla?.variedad?.valor }</Text>
+        <View style={styles.sectionPadding}>
+          <Text style={styles.sectionLabel}>TELEMETRÍA TÉCNICA</Text>
+          <View style={styles.sensorsGrid}>
+            <View style={styles.sensorRow}>
+              {renderSensor(<Ruler />, 'Extensión', `${lote?.hectareas_lote || '0'} Ha`, Theme.colors.primary)}
+              {renderSensor(
+                <Mountain />, 
+                'Terreno', 
+                lote?.parcela?.tipo_terreno === 'Irregular' 
+                  ? `Irr. (${lote?.zona_seleccionada || 'S/Z'})` 
+                  : (lote?.parcela?.tipo_terreno || 'Regular'), 
+                Theme.colors.secondary
+              )}
             </View>
-            <TouchableOpacity 
-              style={styles.asignacionButton}
-              onPress={() => navigation.navigate('AssignPersonal', { lote })}
-            >
-              <UserPlus size={20} color={Theme.colors.onPrimary} />
-              <Text style={styles.asignacionButtonText}>Asignación de Personal</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.bentoRow}>
-            {/* Extension Card */}
-            <View style={styles.bentoCardSmall}>
-              <Ruler size={40} color={Theme.colors.tertiary} />
-              <View>
-                <Text style={styles.bentoCardLabel}>Extensión</Text>
-                <Text style={styles.bentoCardTitle}>{lote?.hectareas_lote || '2.5'} Hectáreas</Text>
-              </View>
-            </View>
-
-            {/* Responsible Card */}
-            <View style={styles.bentoCardSmall}>
-              <Text style={styles.bentoCardLabel}>Capataz Asignado</Text>
-              <View style={styles.foremanContainer}>
-                <Image
-                  source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDv2g-xrsu21YGt2y2-OAntwQyVC01-BYnvYtEhc8aonoF3XK8RdlZ2ECIOADH4FfEksAdMh1KvW3HQmDZ_ILARuVZhrODNqlnP1yY2Bye4xf8NdQScmMxB0rdSM7Fu0LYt4NSeS08Xv2ASIR3yJDFH4U7FXFj3EKluPOtwLQZi7QVRMHYDmGyzAs36Y7pp6fPXO33WqrTGsXnoSyMrG29qeyUnCxfOgt8ui863EuvqQd7_WoFZxY2eOCYdszVRc0gLUBJvSi7AA1Y9' }}
-                  style={styles.foremanImage as ImageStyle}
-                />
-                <View>
-                  <Text style={styles.foremanName}>Mateo Rivera</Text>
-                  <Text style={styles.foremanRole}>Especialista Senior</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Process Control Section */}
-        <View style={styles.processSection}>
-          <View style={styles.processHeader}>
-            <Text style={styles.processTitle}>Control de Proceso</Text>
-          </View>
-
-          {/* Timeline Stepper */}
-          <View style={styles.timelineContainer}>
-            <View style={styles.timelineTrack}>
-              <View 
-                style={[
-                  styles.timelineFill, 
-                  { width: isProcessing ? '50%' : '25%' }
-                ]} 
-              />
-            </View>
-            <View style={styles.timelineNodes}>
-              <TimelineStep 
-                icon={<Leaf size={14} color={Theme.colors.onSecondary} />} 
-                label="Germinación" 
-                active={true} 
-              />
-              <TimelineStep 
-                icon={<Sprout size={14} color={Theme.colors.onSecondary} />} 
-                label="Vivero" 
-                active={true} 
-              />
-              <TimelineStep 
-                icon={<TreeDeciduous size={14} color={isProcessing ? Theme.colors.onSecondary : Theme.colors.onSurfaceVariant} />} 
-                label="Crecimiento" 
-                active={isProcessing} 
-              />
-              <TimelineStep 
-                icon={<Flower size={14} color={Theme.colors.onSurfaceVariant} />} 
-                label="Floración" 
-                active={false} 
-              />
-              <TimelineStep 
-                icon={<Tractor size={14} color={Theme.colors.onSurfaceVariant} />} 
-                label="Maduración" 
-                active={false} 
-              />
+            <View style={styles.sensorRow}>
+              {renderSensor(<FlaskConical />, 'PH Suelo', '6.5 pH', Theme.colors.tertiary)}
+              {renderSensor(<Sprout />, 'Semilla', lote?.semilla?.variedad?.valor || lote?.variedadCafe || 'S/S', Theme.colors.secondary)}
             </View>
           </View>
 
           <TouchableOpacity 
-            style={[styles.processButton, isProcessing && { backgroundColor: Theme.colors.tertiary }, { marginTop: 24, width: '100%', justifyContent: 'center' }]} 
-            onPress={toggleProcess}
+            style={styles.assignTechnicalButton}
+            onPress={() => navigation.navigate('AssignCapataz', { lote })}
           >
-            {isProcessing ? (
-              <PauseCircle size={24} color={Theme.colors.onPrimary} />
-            ) : (
-              <PlayCircle size={24} color={Theme.colors.onPrimary} />
-            )}
-            <Text style={styles.processButtonText}>
-              {isProcessing ? 'Detener Proceso' : 'Iniciar Proceso'}
-            </Text>
+            <LinearGradient
+              colors={[Theme.colors.secondary, '#22502d']}
+              style={styles.assignTechnicalGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <ShieldCheck size={18} color={Theme.colors.white} />
+              <Text style={styles.assignTechnicalText}>Asignar Responsable Técnico</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+
+        <View style={styles.sectionPadding}>
+          <Text style={styles.sectionLabel}>RESPONSABLE TÉCNICO</Text>
+          <View style={styles.foremanCard}>
+            <View style={styles.foremanAvatar}>
+              <User size={28} color={Theme.colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.foremanName}>{capataz ? `${capataz.first_name} ${capataz.last_name}` : 'Sin Asignar'}</Text>
+              <Text style={styles.foremanRole}>{capataz ? 'Capataz Responsable' : 'Pendiente de vinculación'}</Text>
+            </View>
+            {capataz && (
+              <View style={styles.verifiedIcon}>
+                <ShieldCheck size={18} color={Theme.colors.secondary} />
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.sectionPadding}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionLabel}>CONTROL DE ETAPAS</Text>
+            <Text style={styles.progressPct}>GESTIÓN SECUENCIAL</Text>
+          </View>
+          
+          <View style={styles.stagesList}>
+            {EtapaProcesoValues.map((etapa, index) => renderStageCard(etapa, index))}
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerBranding}>STGC DIGITAL ARCHIVE SERIES</Text>
+          <Text style={styles.footerLegal}>VERIFICACIÓN CIENTÍFICA DE ORIGEN • 2026</Text>
+        </View>
+      </Animated.ScrollView>
+
+      <TouchableOpacity 
+        style={[styles.mainFab, isProcessing ? styles.fabPause : styles.fabPlay]}
+        onPress={toggleProcess}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={isProcessing ? [Theme.colors.primary, '#2c160e'] : [Theme.colors.secondary, '#22502d']}
+          style={styles.fabGradient}
+        >
+          {isProcessing ? (
+            <PauseCircle size={32} color={Theme.colors.white} />
+          ) : (
+            <PlayCircle size={32} color={Theme.colors.white} />
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
   );
 };
-
-const TimelineStep = ({ icon, label, active }: any) => (
-  <View style={styles.stepContainer}>
-    <View style={[
-      styles.stepNode, 
-      active ? styles.stepNodeActive : styles.stepNodeInactive,
-      active && label === "Crecimiento" && styles.stepNodeScale
-    ]}>
-      {icon}
-    </View>
-    <Text style={[
-      styles.stepLabel, 
-      active ? { color: Theme.colors.secondary } : { color: Theme.colors.onSurfaceVariant }
-    ]}>
-      {label}
-    </Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Theme.colors.background,
   },
-  header: {
+  stickyHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    backgroundColor: 'rgba(255, 248, 243, 0.95)',
+    zIndex: 1000,
+    justifyContent: 'flex-end',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.surfaceContainerHigh,
+  },
+  stickyContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: Theme.colors.background,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontFamily: 'System',
-    fontSize: 20,
-    fontWeight: '700',
-    color: Theme.colors.primary,
-  },
-  headerRight: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
   },
-  loteId: {
-    fontFamily: 'System',
-    fontSize: 18,
-    fontWeight: '800',
-    color: Theme.colors.primary,
+  stickyCode: {
+    ...Theme.typography.label,
+    fontSize: 14,
     letterSpacing: 2,
+    color: Theme.colors.primary,
+    fontWeight: '800',
   },
-  profileImageContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Theme.colors.primaryFixed,
-    overflow: 'hidden',
+  stickyStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Theme.colors.surfaceContainer,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 99,
   },
-  profileImage: {
-    width: '100%',
-    height: '100%',
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  stickyStatusText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.onSurfaceVariant,
   },
   scrollContent: {
+    paddingBottom: 120,
+  },
+  topSection: {
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 48,
+    paddingTop: 60,
+    paddingBottom: 10,
   },
-  heroSection: {
-    height: 400,
+  circleBackButton: {
+    width: 48,
+    height: 48,
     borderRadius: 24,
-    overflow: 'hidden',
-    marginBottom: 24,
+    backgroundColor: Theme.colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 32,
+    ...Theme.shadows.ambient,
   },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
+  displayTitle: {
+    ...Theme.typography.display,
+    fontSize: 25,
+    color: Theme.colors.primary,
+    marginTop: 1,
+  },
+  accentLine: {
+    width: 80,
+    height: 5,
+    backgroundColor: Theme.colors.primary,
+    marginTop: 15,
+    borderRadius: 4,
+  },
+  heroWrapper: {
+    marginHorizontal: 24,
+    height: 150,
+    borderRadius: 36,
+    overflow: 'hidden',
+    backgroundColor: Theme.colors.primary,
+    ...Theme.shadows.ambient,
   },
   heroGradient: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: 24,
+    padding: 32,
   },
-  heroContent: {
+  heroBadgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    gap: 12,
+    marginBottom: 16,
   },
-  heroLabel: {
-    fontFamily: 'System',
-    fontSize: 12,
-    fontWeight: '600',
-    color: Theme.colors.onPrimaryContainer,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
+  heroStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99,
   },
-  heroTitle: {
-    fontFamily: 'System',
-    fontSize: 32,
-    fontWeight: '800',
+  bgSuccess: { backgroundColor: Theme.colors.secondary },
+  bgTertiary: { backgroundColor: Theme.colors.tertiary },
+  heroStatusText: {
+    fontSize: 10,
+    fontWeight: '900',
     color: Theme.colors.white,
-    marginTop: 4,
   },
-  heroSubtitle: {
-    fontFamily: 'System',
-    fontSize: 14,
-    color: Theme.colors.surfaceContainerHigh,
-    opacity: 0.9,
+  heroGlassBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99,
   },
-  statusBadge: {
-    backgroundColor: Theme.colors.secondaryContainer,
+  heroDateText: {
+    fontSize: 10,
+    color: Theme.colors.white,
+    fontWeight: '600',
+  },
+  heroCodeText: {
+    ...Theme.typography.display,
+    fontSize: 22,
+    color: Theme.colors.white,
+    lineHeight: 42,
+  },
+  heroMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
+    marginTop: 8,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Theme.colors.secondary,
+  heroLocationText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
   },
-  statusText: {
-    fontFamily: 'System',
-    fontSize: 10,
+  sectionPadding: {
+    paddingHorizontal: 24,
+    marginTop: 40,
+  },
+  sectionLabel: {
+    ...Theme.typography.labelSm,
+    letterSpacing: 2,
+    color: Theme.colors.outline,
     fontWeight: '700',
-    color: Theme.colors.onSecondaryContainer,
-    letterSpacing: 1,
+    marginBottom: 20,
   },
-  bentoGrid: {
-    gap: 16,
-    marginBottom: 24,
+  sensorsGrid: {
+    gap: 12,
   },
-  bentoCardLarge: {
+  sensorRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sensorCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Theme.colors.surfaceContainerLowest,
-    padding: 32,
+    padding: 20,
     borderRadius: 24,
-    minHeight: 160,
-    justifyContent: 'space-between',
+    gap: 12,
     ...Theme.shadows.ambient,
   },
-  bentoCardContent: {
-    marginTop: 16,
+  sensorIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  bentoCardLabel: {
-    fontFamily: 'System',
+  sensorLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    color: Theme.colors.onSurfaceVariant,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  bentoCardTitle: {
-    fontFamily: 'System',
-    fontSize: 24,
     fontWeight: '700',
-    color: Theme.colors.onSurface,
-    marginTop: 4,
+    color: Theme.colors.outline,
+    textTransform: 'uppercase',
   },
-  asignacionButton: {
-    backgroundColor: Theme.colors.primary,
+  sensorValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Theme.colors.onSurface,
+  },
+  assignTechnicalButton: {
+    marginTop: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Theme.shadows.ambient,
+  },
+  assignTechnicalGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     paddingVertical: 16,
-    borderRadius: 12,
-    marginTop: 24,
+    gap: 10,
   },
-  asignacionButtonText: {
-    fontFamily: 'System',
+  assignTechnicalText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: Theme.colors.onPrimary,
+    fontWeight: '800',
+    color: Theme.colors.white,
   },
-  bentoRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  bentoCardSmall: {
-    flex: 1,
-    backgroundColor: Theme.colors.surfaceContainerLowest,
-    padding: 24,
-    borderRadius: 24,
-    minHeight: 160,
-    justifyContent: 'space-between',
-    ...Theme.shadows.ambient,
-  },
-  foremanContainer: {
+  foremanCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 12,
+    backgroundColor: Theme.colors.surfaceContainerLowest,
+    padding: 20,
+    borderRadius: 28,
+    gap: 16,
+    ...Theme.shadows.ambient,
   },
-  foremanImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  } as ImageStyle,
+  foremanAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   foremanName: {
-    fontFamily: 'System',
-    fontSize: 16,
-    fontWeight: '700',
+    ...Theme.typography.headline,
+    fontSize: 18,
     color: Theme.colors.onSurface,
   },
   foremanRole: {
-    fontFamily: 'System',
     fontSize: 12,
     color: Theme.colors.onSurfaceVariant,
+    marginTop: 2,
   },
-  processSection: {
-    backgroundColor: Theme.colors.surfaceContainerLow,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 24,
-  },
-  processHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  processTitle: {
-    fontFamily: 'System',
-    fontSize: 20,
-    fontWeight: '700',
-    color: Theme.colors.primary,
-  },
-  processButton: {
-    backgroundColor: Theme.colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  processButtonText: {
-    fontFamily: 'System',
-    fontSize: 14,
-    fontWeight: '700',
-    color: Theme.colors.onPrimary,
-  },
-  timelineContainer: {
-    paddingVertical: 16,
-  },
-  timelineTrack: {
-    position: 'absolute',
-    top: '35%',
-    left: 0,
-    right: 0,
-    height: 6,
+  verifiedIcon: {
     backgroundColor: Theme.colors.secondaryContainer,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  timelineFill: {
-    height: '100%',
-    backgroundColor: Theme.colors.secondary,
-  },
-  timelineNodes: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  stepContainer: {
-    alignItems: 'center',
-    gap: 12,
-    width: (width - 48 - 48) / 5, // Approximate width for 5 steps
-  },
-  stepNode: {
     width: 32,
     height: 32,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1,
   },
-  stepNodeActive: {
-    backgroundColor: Theme.colors.secondary,
-  },
-  stepNodeInactive: {
-    backgroundColor: Theme.colors.surfaceContainerHighest,
-  },
-  stepNodeScale: {
-    transform: [{ scale: 1.25 }],
-  },
-  stepLabel: {
-    fontFamily: 'System',
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    letterSpacing: -0.5,
-  },
-  analyticsGrid: {
+  sectionHeaderRow: {
     flexDirection: 'row',
-    gap: 16,
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
   },
-  analyticsCard: {
-    flex: 1,
-    backgroundColor: Theme.colors.surfaceContainerLowest,
+  progressPct: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Theme.colors.secondary,
+    letterSpacing: 1,
+  },
+  stagesList: {
+    gap: 12,
+  },
+  stageCard: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
     padding: 24,
-    borderRadius: 16,
-    borderLeftWidth: 4,
+    borderRadius: 28,
+  },
+  stageCardActive: {
+    backgroundColor: Theme.colors.surfaceContainerLowest,
+    borderLeftWidth: 6,
+    borderLeftColor: Theme.colors.primary,
     ...Theme.shadows.ambient,
   },
-  analyticsHeader: {
+  stageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  stageTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
   },
-  analyticsLabel: {
-    fontFamily: 'System',
+  stageTitle: {
+    ...Theme.typography.headline,
+    fontSize: 18,
+    color: Theme.colors.outline,
+  },
+  stageDate: {
     fontSize: 10,
     fontWeight: '700',
+    color: Theme.colors.outline,
+  },
+  stageDescription: {
+    fontSize: 13,
     color: Theme.colors.onSurfaceVariant,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    lineHeight: 18,
   },
-  analyticsValueContainer: {
+  stageFooter: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 12,
   },
-  analyticsValue: {
-    fontFamily: 'System',
-    fontSize: 24,
+  startStageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  startStageText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Theme.colors.white,
+  },
+  addPersonnelMiniButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.secondaryContainer,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  addPersonnelMiniText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: Theme.colors.onSurface,
+    color: Theme.colors.onSecondaryContainer,
   },
-  analyticsTrend: {
-    fontFamily: 'System',
-    fontSize: 12,
-    fontWeight: '600',
-    color: Theme.colors.secondary,
+  footer: {
+    paddingTop: 80,
+    paddingBottom: 40,
+    alignItems: 'center',
+    gap: 12,
   },
-  analyticsStatus: {
-    fontFamily: 'System',
-    fontSize: 12,
+  footerBranding: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 5,
+    color: Theme.colors.outline,
+  },
+  footerLegal: {
+    fontSize: 8,
     fontWeight: '600',
-    color: Theme.colors.tertiary,
+    color: Theme.colors.outlineVariant,
+  },
+  mainFab: {
+    position: 'absolute',
+    bottom: 32,
+    right: 32,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: 'hidden',
+    ...Theme.shadows.ambient,
+    elevation: 10,
+    zIndex: 2000,
+  },
+  fabPause: {},
+  fabPlay: {},
+  fabGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

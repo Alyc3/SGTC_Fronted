@@ -19,6 +19,10 @@ export const catalogoSync = {
     for (const record of pending) {
       if (!record.categoria || !record.valor) continue;
       try {
+        // Asegurar formato ISO para las fechas de PostgreSQL (Neon)
+        const fechaCreacion = record.fecha_creacion ? new Date(record.fecha_creacion).toISOString() : new Date().toISOString();
+        const fechaModificacion = record.fecha_modificacion ? new Date(record.fecha_modificacion).toISOString() : new Date().toISOString();
+
         await sql`
           INSERT INTO catalogo (
             id, categoria, valor, activo, origen_local, 
@@ -26,7 +30,7 @@ export const catalogoSync = {
           )
           VALUES (
             ${record.id}, ${record.categoria}, ${record.valor}, ${record.activo ? true : false}, 
-            ${record.origen_local ? true : false}, ${record.fecha_creacion}, ${record.fecha_modificacion}, true
+            ${record.origen_local ? true : false}, ${fechaCreacion}, ${fechaModificacion}, true
           )
           ON CONFLICT (id) DO UPDATE SET 
             categoria = EXCLUDED.categoria,

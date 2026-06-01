@@ -32,6 +32,9 @@ let alertRef: any = null;
 
 export const CustomAlert = {
   show: (type: AlertType, title: string, message: string, onConfirm?: () => void, confirmText?: string, onCancel?: () => void, cancelText?: string) => {
+    // Si ya hay una alerta de error de sesión, no la sobreescribimos para evitar parpadeos o cierres
+    if (alertRef?.isVisible() && title === 'Sesión Caducada') return;
+    
     alertRef?.show(type, title, message, onConfirm, confirmText, onCancel, cancelText);
   },
 };
@@ -46,6 +49,8 @@ export const GlobalAlert = () => {
 
   const scale = React.useRef(new Animated.Value(0.9)).current;
   const opacity = React.useRef(new Animated.Value(0)).current;
+
+  const isVisible = useCallback(() => state.visible, [state.visible]);
 
   const show = useCallback((type: AlertType, title: string, message: string, onConfirm?: () => void, confirmText?: string, onCancel?: () => void, cancelText?: string) => {
     setState({ visible: true, type, title, message, onConfirm, confirmText, onCancel, cancelText });
@@ -85,11 +90,11 @@ export const GlobalAlert = () => {
   }, [scale, opacity, state.onConfirm, state.onCancel]);
 
   useEffect(() => {
-    alertRef = { show };
+    alertRef = { show, isVisible };
     return () => {
       alertRef = null;
     };
-  }, [show]);
+  }, [show, isVisible]);
 
   if (!state.visible) return null;
 

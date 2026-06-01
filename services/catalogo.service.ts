@@ -83,7 +83,12 @@ export const catalogoService = {
   },
 
   async create(data: typeof catalogo.$inferInsert) {
-    const id = data.id || uuidv4();
+    let id = data.id;
+    if (!id) {
+      // Generar ID determinista basado en categoria y valor para evitar duplicados en la nube
+      const combined = `${data.categoria}_${data.valor}`.toLowerCase().replace(/\s+/g, '_');
+      id = combined.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9_]/g, '');
+    }
     return await db.insert(catalogo).values({ ...data, id }).returning();
   },
 

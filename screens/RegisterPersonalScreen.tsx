@@ -63,10 +63,17 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
     try {
       setIsRolesLoading(true);
       const data = await rolesService.getAll();
-      setAvailableRoles(data);
-    } catch (error) {
-      console.error('Error fetching roles:', error);
-      CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los roles.');
+      
+      // Extraemos el array real, sin importar cómo lo envuelva la API
+      const rolesArray = Array.isArray(data) ? data : (data.roles || data.data || []);
+      
+      setAvailableRoles(rolesArray);
+    } catch (error: any) {
+      const isSessionError = error.message === 'SESSION_EXPIRED' || error.response?.status === 401;
+      if (!isSessionError) {
+        console.error('Error fetching roles:', error);
+        CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los roles.');
+      }
     } finally {
       setIsRolesLoading(false);
     }

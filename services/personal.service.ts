@@ -19,5 +19,27 @@ export const personalService = {
   },
   async delete(id: string) {
     return await db.delete(users).where(eq(users.id, id)).returning();
+  },
+  
+  /**
+   * Filtra una lista de trabajadores basándose en un término de búsqueda
+   * Busca en: Nombre, Apellido, Identificación y Nombre de Rol
+   */
+  filterWorkers(workers: any[], rolesMap: Record<string, string>, term: string) {
+    if (!term.trim()) return workers;
+    
+    const search = term.toLowerCase().trim();
+    
+    return workers.filter(w => {
+      const firstName = (w.first_name || '').toLowerCase();
+      const lastName = (w.last_name || '').toLowerCase();
+      const identifier = (w.identifier || '').toLowerCase();
+      const roleName = (rolesMap[w.role_id] || '').toLowerCase();
+      
+      return firstName.includes(search) || 
+             lastName.includes(search) || 
+             identifier.includes(search) || 
+             roleName.includes(search);
+    });
   }
 };

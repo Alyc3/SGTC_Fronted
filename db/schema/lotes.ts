@@ -19,4 +19,5 @@ export const lotes = sqliteTable('lotes', {
   fecha_creacion: text('fecha_creacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
+  sync_status: text('sync_status', { enum: ['synced', 'pending', 'error'] }).default('pending').notNull(),
 });

@@ -12,6 +12,8 @@ import { Theme } from './theme';
 import { seedService } from './services';
 import { GlobalAlert } from './components/GlobalAlert';
 import { useAuthStore } from './store/authStore';
+import { AppState, AppStateStatus } from 'react-native';
+import { syncWorker } from './services/sync.worker';
 
 // Import mandatory for gesture handler
 import 'react-native-gesture-handler';
@@ -25,7 +27,23 @@ export default function App() {
 
   React.useEffect(() => {
     restoreSession();
-  }, []);
+
+    // Disparador: Sincronización al iniciar o volver del segundo plano
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        syncWorker.syncPendingData();
+      }
+    });
+
+    // Sincronización inmediata al montar si está autenticado
+    if (isAuthenticated) {
+      syncWorker.syncPendingData();
+    }
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isAuthenticated]);
 
   React.useEffect(() => {
     if (success) {

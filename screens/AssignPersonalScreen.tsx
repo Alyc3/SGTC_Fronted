@@ -27,14 +27,43 @@ import {
 import { Theme } from '../theme';
 import { lotesService } from '../services/lotes.service';
 import { personalService } from '../services/personal.service';
+import { rolesService } from '../services/roles.service';
+import { parcelasService } from '../services/parcelas.service';
+import { syncWorker } from '../services/sync.worker';
 import { EtapaProcesoValues } from '../db/schema/enums';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CustomAlert } from '../components/GlobalAlert';
 
 const { width } = Dimensions.get('window');
+
+const ALLOWED_ROLES = [
+  'ADMIN',
+  'Gerente General',
+  'Capataz',
+  'Sembrador',
+  'Recolector',
+  'Clasificador',
+  'Técnico de Despulpado',
+  'Encargado de Secado',
+  'Tostador',
+  'Gestor de Calidad',
+  'Gestores de Calidad',
+  'Controlador Despacho',
+  'Técnico de Almacenamiento',
+  'Técnicos de Almacenamiento',
+  'TECNICO_SEMBRADO' // Aseguramos que esté en la lista para el conteo
+];
+
+const ALLOWED_ROLES_NORMALIZED = [
+  ...ALLOWED_ROLES.map(r => r.trim().toLowerCase()),
+  ...ALLOWED_ROLES.map(r => r.trim().toLowerCase().replace(/\s+/g, '_')),
+  ...ALLOWED_ROLES.map(r => r.trim().toLowerCase().replace(/_/g, ' ')),
+];
 
 const AssignPersonalScreen = ({ navigation, route }: any) => {
   const [lotes, setLotes] = useState<any[]>([]);
   const [personnel, setPersonnel] = useState<any[]>([]);
+  const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [selectedLote, setSelectedLote] = useState<any>(route.params?.lote || null);
   const [selectedEtapa, setSelectedEtapa] = useState<string>(EtapaProcesoValues[0]);
   const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>([]);
@@ -45,12 +74,30 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [lotesData, personnelData] = await Promise.all([
+      const [lotesData, personnelData, rolesData] = await Promise.all([
         lotesService.getAll(),
-        personalService.getAll()
+        personalService.getAll(),
+        rolesService.getAll().catch(() => []) // Catch silent error if API fails
       ]);
+
+      // Mapeo de roles
+      const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.roles || rolesData.data || []);
+      const newRolesMap: Record<string, string> = {};
+      rolesArray.forEach((r: any) => {
+        newRolesMap[r.id] = r.name || r.nombre || r.role_name || r.id;
+      });
+      setRolesMap(newRolesMap);
+
+      // Filtrar personal igual que en la pantalla principal para consistencia
+      const filteredPersonnel = personnelData.filter((w: any) => {
+        const roleName = newRolesMap[w.role_id] || w.role_id;
+        if (!roleName) return false;
+        const cleanName = roleName.trim().toLowerCase();
+        return ALLOWED_ROLES_NORMALIZED.includes(cleanName);
+      });
+
       setLotes(lotesData);
-      setPersonnel(personnelData);
+      setPersonnel(filteredPersonnel);
       
       // If we don't have a lote from params, pick the first one from DB
       if (!selectedLote && lotesData.length > 0) {
@@ -58,7 +105,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       }
     } catch (error) {
       console.error('Error fetching data:', error);
-      Alert.alert('Error', 'No se pudieron cargar los datos.');
+      CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los datos.');
     } finally {
       setLoading(false);
     }
@@ -69,6 +116,26 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   }, [fetchData]);
 
   const togglePersonnelSelection = (id: string) => {
+    const worker = personnel.find(p => p.id === id);
+    const roleName = (rolesMap[worker?.role_id] || '').trim().toUpperCase();
+    
+    // Validación ESTRICTA: Solo un 'TECNICO_SEMBRADO' en etapa de 'Sembrado'
+    // Permitimos múltiples 'SEMBRADOR' u otros roles sin restricción.
+    const isExactTecnicoSembrado = roleName === 'TECNICO_SEMBRADO' || roleName === 'TECNICO SEMBRADO';
+
+    if (selectedEtapa === 'Sembrado' && isExactTecnicoSembrado && !selectedPersonnel.includes(id)) {
+      const alreadyHasTecnico = selectedPersonnel.some(pId => {
+        const p = personnel.find(w => w.id === pId);
+        const rName = (rolesMap[p?.role_id] || '').trim().toUpperCase();
+        return rName === 'TECNICO_SEMBRADO' || rName === 'TECNICO SEMBRADO';
+      });
+
+      if (alreadyHasTecnico) {
+        CustomAlert.show('ALERTA', 'Límite Excedido', 'Solo se puede asignar un Técnico de Sembrado para esta etapa.');
+        return;
+      }
+    }
+
     setSelectedPersonnel(prev =>
       prev.includes(id)
         ? prev.filter(pId => pId !== id)
@@ -78,7 +145,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
 
   const handleAssign = async () => {
     if (!selectedLote || selectedPersonnel.length === 0) {
-      Alert.alert('Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
+      CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
       return;
     }
 
@@ -86,14 +153,19 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       setLoading(true);
       await Promise.all(
         selectedPersonnel.map(workerId =>
-          lotesService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any)
+          parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any)
         )
       );
-      Alert.alert('Éxito', 'Personal asignado correctamente.');
-      setSelectedPersonnel([]);
+      
+      // Disparar sincronización silenciosa en segundo plano
+      syncWorker.syncPendingData();
+      
+      CustomAlert.show('SUCCESS', 'Asignación Correcta', 'El personal ha sido asignado al lote exitosamente.', () => {
+        setSelectedPersonnel([]);
+      });
     } catch (error) {
       console.error('Error assigning personnel:', error);
-      Alert.alert('Error', 'No se pudo realizar la asignación.');
+      CustomAlert.show('ERROR', 'Error', 'No se pudo realizar la asignación.');
     } finally {
       setLoading(false);
     }
@@ -106,6 +178,8 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
 
   const renderPersonnelItem = ({ item }: { item: any }) => {
     const isSelected = selectedPersonnel.includes(item.id);
+    const roleName = rolesMap[item.role_id] || item.role_id || 'TRABAJADOR';
+
     return (
       <TouchableOpacity
         style={[
@@ -122,7 +196,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           <Text style={styles.personnelName}>{`${item.first_name} ${item.last_name}`}</Text>
           <View style={styles.roleRow}>
             <ShieldCheck size={12} color={Theme.colors.secondary} />
-            <Text style={styles.roleText}>{item.role_id || 'TRABAJADOR'}</Text>
+            <Text style={styles.roleText}>{roleName}</Text>
           </View>
         </View>
         {isSelected ? (

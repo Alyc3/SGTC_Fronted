@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { parcelas, lotes } from '../db/schema';
+import { parcelas, lotes, asignacion_personal } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as Location from 'expo-location';
@@ -8,6 +8,24 @@ export const parcelasService = {
   async getAll() {
     return await db.query.parcelas.findMany();
   },
+  
+  /**
+   * Registra la asignación de un trabajador a un lote específico para una etapa.
+   * Se guarda localmente y se marca como pendiente para sincronización.
+   */
+  async asignarPersonal(loteId: string, trabajadorId: string, etapa: any) {
+    return await db.insert(asignacion_personal).values({
+      id: uuidv4(),
+      lote_id: loteId,
+      trabajador_id: trabajadorId,
+      etapa: etapa,
+      fechaAsignacion: new Date().toISOString(),
+      is_synced: false,
+      sync_status: 'pending',
+      fecha_modificacion: new Date().toISOString()
+    }).returning();
+  },
+
   async getById(id: string) {
     return await db.query.parcelas.findFirst({
       where: eq(parcelas.id, id),
@@ -46,6 +64,7 @@ export const parcelasService = {
     return await db.update(parcelas).set({ 
       ...data, 
       is_synced: false,
+      sync_status: 'pending',
       fecha_modificacion: new Date().toISOString() 
     }).where(eq(parcelas.id, id)).returning();
   },
@@ -87,6 +106,7 @@ export const parcelasService = {
     return await db.update(lotes).set({ 
       ...data, 
       is_synced: false,
+      sync_status: 'pending',
       fecha_modificacion: new Date().toISOString() 
     }).where(eq(lotes.id, id)).returning();
   },

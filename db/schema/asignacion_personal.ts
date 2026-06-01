@@ -15,5 +15,7 @@ export const asignacion_personal = sqliteTable('asignacion_personal', {
   fecha_jornada: text('fecha_jornada'),
   horasTrabajadas: real('horas_trabajadas'),
   cantidad_cosechada: real('cantidad_cosechada'),
+  fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
+  sync_status: text('sync_status', { enum: ['synced', 'pending', 'error'] }).default('pending').notNull(),
 });
