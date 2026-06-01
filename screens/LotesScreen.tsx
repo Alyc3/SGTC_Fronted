@@ -14,11 +14,14 @@ import {
 } from 'react-native';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
+import { asignacion_personal } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { Theme } from '../theme';
-import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers } from 'lucide-react-native';
+import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck } from 'lucide-react-native';
 import { lotesService, parcelasService } from '../services';
 import { useNavigation } from '@react-navigation/native';
 import { CustomAlert } from '../components/GlobalAlert';
+import { useAuthStore } from '../store/authStore';
 
 const { width } = Dimensions.get('window');
 
@@ -39,6 +42,20 @@ const StatCard = ({ label, value, type = 'normal' }: any) => (
 );
 
 const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
+  const navigation = useNavigation<any>();
+  const role = useAuthStore((state) => state.role);
+  
+  // Normalización ultra-robusta del rol para evitar fallos si el rol es un objeto o null
+  const getCleanRole = () => {
+    if (!role) return '';
+    if (typeof role === 'string') return role;
+    if (typeof role === 'object') return (role as any).name || (role as any).role || '';
+    return String(role);
+  };
+
+  const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
+  const canAssignCapataz = userRole === 'admin' || userRole === 'gerente general';
+
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'En_Produccion':
@@ -105,6 +122,21 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
               </Text>
             </TouchableOpacity>
 
+            {canAssignCapataz && (
+              <TouchableOpacity 
+                onPress={(e) => {
+                  e.stopPropagation();
+                  navigation.navigate('AssignCapataz', { lote: item });
+                }} 
+                style={styles.actionBtn}
+              >
+                <ShieldCheck size={16} color={Theme.colors.secondary} />
+                <Text style={[styles.actionBtnText, { color: Theme.colors.secondary }]}>
+                  CAPATAZ
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity 
               onPress={(e) => {
                 e.stopPropagation();
@@ -124,6 +156,18 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
 const LotesScreen = () => {
   const navigation = useNavigation<any>();
   const [searchQuery, setSearchQuery] = useState('');
+  const userId = useAuthStore((state) => state.role === 'string' ? state.userId : (state as any).userId);
+  const role = useAuthStore((state) => state.role);
+
+  // Normalización ultra-robusta del rol
+  const getCleanRole = () => {
+    if (!role) return '';
+    if (typeof role === 'string') return role;
+    if (typeof role === 'object') return (role as any).name || (role as any).role || '';
+    return String(role);
+  };
+  const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
+  const isAdminOrManager = userRole === 'admin' || userRole === 'gerente general';
   
   const { data: lotes = [] } = useLiveQuery(db.query.lotes.findMany({
     with: { 
@@ -134,8 +178,24 @@ const LotesScreen = () => {
     }
   }));
 
+  // Obtener asignaciones para el usuario actual (solo si no es admin/manager)
+  const { data: userAssignments = [] } = useLiveQuery(
+    db.query.asignacion_personal.findMany({
+      where: userId ? eq(asignacion_personal.trabajador_id, userId) : undefined
+    }),
+    [userId]
+  );
+
   const sections = useMemo(() => {
-    const filtered = lotes.filter(l => 
+    // 1. Filtrado por Rol y Asignación
+    let filteredByAssignment = lotes;
+    if (!isAdminOrManager) {
+      const assignedLotIds = userAssignments.map(a => a.lote_id);
+      filteredByAssignment = lotes.filter(l => assignedLotIds.includes(l.id));
+    }
+
+    // 2. Filtrado por Búsqueda
+    const filtered = filteredByAssignment.filter(l => 
       l.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (l.semilla as any)?.variedad?.valor?.toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -152,7 +212,7 @@ const LotesScreen = () => {
     }, []);
 
     return grouped.sort((a, b) => a.title.localeCompare(b.title));
-  }, [lotes, searchQuery]);
+  }, [lotes, userAssignments, isAdminOrManager, searchQuery]);
 
   const stats = {
     total: lotes.length,
@@ -236,22 +296,28 @@ const LotesScreen = () => {
             </View>
 
             {/* Stats Scroll */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              style={styles.statsScroll}
-              contentContainerStyle={styles.statsContent}
-            >
-              <StatCard label="Total Lotes" value={stats.total} />
-              <StatCard label="Producción" value={stats.produccion} type="active" />
-              <StatCard label="Hectáreas" value={stats.hectareas} />
-            </ScrollView>
+            {isAdminOrManager && (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.statsScroll}
+                contentContainerStyle={styles.statsContent}
+              >
+                <StatCard label="Total Lotes" value={stats.total} />
+                <StatCard label="Producción" value={stats.produccion} type="active" />
+                <StatCard label="Hectáreas" value={stats.hectareas} />
+              </ScrollView>
+            )}
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Info size={48} color={Theme.colors.outlineVariant} />
-            <Text style={styles.empty}>No hay registros coincidentes.</Text>
+            <Text style={styles.empty}>
+              {!isAdminOrManager 
+                ? "No tiene lotes asignados bajo su responsabilidad." 
+                : "No hay registros coincidentes."}
+            </Text>
           </View>
         }
       />
@@ -449,6 +515,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Theme.colors.outline,
     fontStyle: 'italic',
+    textAlign: 'center',
   }
 });
 

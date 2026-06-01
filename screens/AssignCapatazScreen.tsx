@@ -21,7 +21,6 @@ import {
   CheckCircle2,
   Circle,
   Users,
-  Search,
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { lotesService } from '../services/lotes.service';
@@ -34,14 +33,6 @@ import { CustomAlert } from '../components/GlobalAlert';
 
 const { width } = Dimensions.get('window');
 
-/**
- * AssignCapatazScreen: Editorial Design Implementation
- * Based on Prototype 11a2c75009d44fc3b380a88eb3c5041c
- * Theme: "The Modern Agronomist" (Organic Brutalism)
- */
-
-const ALLOWED_CAPATAZ_ROLES = ['CAPATAZ', 'ADMIN'];
-
 const AssignCapatazScreen = ({ navigation, route }: any) => {
   const [lotes, setLotes] = useState<any[]>([]);
   const [capataces, setCapataces] = useState<any[]>([]);
@@ -51,7 +42,6 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(true);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  // Animations
   const headerFade = React.useRef(new Animated.Value(0)).current;
 
   const fetchData = useCallback(async () => {
@@ -63,7 +53,6 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
         rolesService.getAll().catch(() => [])
       ]);
 
-      // Role Mapping
       const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.roles || rolesData.data || []);
       const newRolesMap: Record<string, string> = {};
       rolesArray.forEach((r: any) => {
@@ -71,10 +60,10 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
       });
       setRolesMap(newRolesMap);
 
-      // Filter only Capataces and Admins
       const filteredCapataces = personnelData.filter((w: any) => {
-        const roleName = (newRolesMap[w.role_id] || w.role_id).toUpperCase();
-        return ALLOWED_CAPATAZ_ROLES.some(role => roleName.includes(role));
+        const roleName = (newRolesMap[w.role_id] || w.role_id || '').trim().toLowerCase();
+        const cleanRole = roleName.replace(/_/g, ' ');
+        return cleanRole.includes('capataz');
       });
 
       setLotes(lotesData);
@@ -84,7 +73,6 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
         setSelectedLote(lotesData[0]);
       }
 
-      // Start entrance animation
       Animated.timing(headerFade, {
         toValue: 1,
         duration: 800,
@@ -93,7 +81,7 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
 
     } catch (error) {
       console.error('Error fetching data for AssignCapataz:', error);
-      CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los datos del catálogo editorial.');
+      CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los datos.');
     } finally {
       setLoading(false);
     }
@@ -113,20 +101,14 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
 
     try {
       setIsAssigning(true);
-      
-      // En este sistema editorial, asignamos al capataz como responsable general 
-      // Usamos 'Administración' como etapa para diferenciarlo del personal de campo
       await parcelasService.asignarPersonal(selectedLote.id, selectedCapataz, 'Administración');
-      
-      // Sincronización silenciosa
       syncWorker.syncPendingData();
-
       CustomAlert.show('SUCCESS', 'Asignación Exitosa', 'El Capataz ha sido vinculado al lote correctamente.', () => {
         navigation.goBack();
       });
     } catch (error) {
       console.error('Error assigning capataz:', error);
-      CustomAlert.show('ERROR', 'Fallo de Registro', 'No se pudo procesar la vinculación en el libro de campo.');
+      CustomAlert.show('ERROR', 'Fallo de Registro', 'No se pudo procesar la vinculación.');
     } finally {
       setIsAssigning(false);
     }
@@ -134,7 +116,8 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
 
   const renderCapatazItem = ({ item }: { item: any }) => {
     const isSelected = selectedCapataz === item.id;
-    const roleName = rolesMap[item.role_id] || 'RESPONSABLE';
+    const roleName = rolesMap[item.role_id] || 'CAPATAZ';
+    const fullName = `${item.first_name || item.firstName || ''} ${item.last_name || item.lastName || ''}`.trim();
 
     return (
       <TouchableOpacity
@@ -155,7 +138,7 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
         </View>
 
         <View style={styles.infoContainer}>
-          <Text style={styles.nameText}>{`${item.first_name} ${item.last_name}`}</Text>
+          <Text style={styles.nameText}>{fullName || 'Colaborador sin nombre'}</Text>
           <View style={styles.badge}>
             <ShieldCheck size={12} color={Theme.colors.secondary} />
             <Text style={styles.badgeText}>{roleName}</Text>
@@ -171,20 +154,9 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color={Theme.colors.primary} />
-        <Text style={styles.loaderText}>Abriendo Registro Editorial...</Text>
-      </View>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      
-      <Animated.View style={[styles.header, { opacity: headerFade }]}>
+  const renderHeader = () => (
+    <Animated.View style={{ opacity: headerFade }}>
+      <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -195,18 +167,14 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
         <Text style={styles.overline}>LIBRO DE GESTIÓN</Text>
         <Text style={styles.title}>Vinculación de Capataz</Text>
         <Text style={styles.description}>
-          Asigne un responsable técnico para supervisar la calidad y trazabilidad de los procesos en este lote.
+          Asigne un responsable técnico para supervisar los procesos de este lote.
         </Text>
         <View style={styles.accentBar} />
-      </Animated.View>
+      </View>
 
-      <View style={styles.mainContent}>
-        {/* Lote Summary Card */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Lote en Operación</Text>
-        </View>
-        
-        <TouchableOpacity style={styles.loteCard} activeOpacity={0.9}>
+      <View style={styles.listHeaderSection}>
+        <Text style={styles.sectionTitle}>Lote en Operación</Text>
+        <View style={styles.loteCard}>
           <View style={styles.loteIconContainer}>
             <Layout size={24} color={Theme.colors.onPrimary} />
           </View>
@@ -214,31 +182,45 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
             <Text style={styles.loteLabel}>IDENTIFICADOR ÚNICO</Text>
             <Text style={styles.loteCode}>{selectedLote?.codigo || 'Sin Lote'}</Text>
           </View>
-          <ChevronRight size={20} color={Theme.colors.outline} />
-        </TouchableOpacity>
+        </View>
 
-        {/* Capataz Selection */}
         <View style={[styles.sectionHeader, { marginTop: 32 }]}>
           <Text style={styles.sectionTitle}>Responsables Disponibles</Text>
           <Text style={styles.listCounter}>{capataces.length} perfiles</Text>
         </View>
-
-        <FlatList
-          data={capataces}
-          renderItem={renderCapatazItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Users size={64} color={Theme.colors.surfaceVariant} />
-              <Text style={styles.emptyText}>No se encontraron capataces registrados en el sistema.</Text>
-            </View>
-          }
-        />
       </View>
+    </Animated.View>
+  );
 
-      {/* Floating Action Button */}
+  if (loading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color={Theme.colors.primary} />
+        <Text style={styles.loaderText}>Cargando Capataces...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <FlatList
+        data={capataces}
+        renderItem={renderCapatazItem}
+        keyExtractor={item => item.id}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Users size={64} color={Theme.colors.surfaceVariant} />
+            <Text style={styles.emptyText}>No se encontraron capataces registrados.</Text>
+          </View>
+        }
+      />
+
+      {/* Footer / Confirm Button */}
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.mainButton}
@@ -281,7 +263,6 @@ const styles = StyleSheet.create({
   loaderText: {
     ...Theme.typography.label,
     color: Theme.colors.primary,
-    letterSpacing: 1,
   },
   header: {
     paddingHorizontal: 24,
@@ -324,9 +305,9 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginTop: 24,
   },
-  mainContent: {
-    flex: 1,
+  listHeaderSection: {
     paddingHorizontal: 24,
+    marginBottom: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -338,6 +319,7 @@ const styles = StyleSheet.create({
     ...Theme.typography.headline,
     fontSize: 18,
     color: Theme.colors.onSurface,
+    marginBottom: 8,
   },
   listCounter: {
     ...Theme.typography.labelSm,
@@ -373,12 +355,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: 150,
+    paddingHorizontal: 24,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.surfaceContainerLowest,
+    backgroundColor: Theme.colors.white,
     padding: 16,
     borderRadius: 24,
     marginBottom: 12,
@@ -435,7 +418,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 24,
-    backgroundColor: 'rgba(255, 248, 243, 0.8)', // Glass effect base
+    backgroundColor: 'rgba(255, 248, 243, 0.95)',
   },
   mainButton: {
     height: 64,

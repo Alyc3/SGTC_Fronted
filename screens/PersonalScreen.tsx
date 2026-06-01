@@ -8,6 +8,8 @@ import {
   StatusBar,
   ActivityIndicator,
   TextInput,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { 
@@ -17,10 +19,16 @@ import {
   ShieldCheck,
   User,
   Search,
+  Edit2,
+  X,
+  Mail,
+  Phone,
+  IdCard,
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { personalService } from '../services/personal.service';
 import { rolesService } from '../services/roles.service';
+import { CustomAlert } from '../components/GlobalAlert';
 
 const ALLOWED_ROLES = [
   'ADMIN',
@@ -51,6 +59,10 @@ const PersonalScreen = ({ navigation }: any) => {
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Estados para el modal de detalle
+  const [selectedWorker, setSelectedWorker] = useState<any>(null);
+  const [isDetailVisible, setIsDetailVisible] = useState(false);
 
   const fetchWorkersAndRoles = useCallback(async () => {
     try {
@@ -105,27 +117,97 @@ const PersonalScreen = ({ navigation }: any) => {
     setFilteredWorkers(filtered);
   }, [searchTerm, workers, rolesMap]);
 
-  const renderWorker = ({ item }: any) => {
-    const roleName = rolesMap[item.role_id] || item.role_id || 'TRABAJADOR';
+  const renderDetailModal = () => {
+    if (!selectedWorker) return null;
+    const roleName = rolesMap[selectedWorker.role_id] || selectedWorker.role_id || 'TRABAJADOR';
+    const isActive = selectedWorker.status === 'ACTIVO';
 
     return (
-      <TouchableOpacity 
-        style={styles.workerCard}
-        onPress={() => {}}
+      <Modal
+        visible={isDetailVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsDetailVisible(false)}
       >
-        <View style={styles.workerAvatar}>
-          <User size={20} color={Theme.colors.primary} />
-        </View>
-        <View style={styles.workerInfo}>
-          <Text style={styles.workerName}>{`${item.first_name || ''} ${item.last_name || ''}`}</Text>
-          <View style={styles.roleBadge}>
-            <ShieldCheck size={12} color={Theme.colors.secondary} />
-            <Text style={styles.roleText}>{roleName}</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ficha del Colaborador</Text>
+              <TouchableOpacity onPress={() => setIsDetailVisible(false)}>
+                <X size={24} color={Theme.colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.detailHero}>
+                <View style={styles.detailAvatar}>
+                  <User size={40} color={Theme.colors.primary} />
+                </View>
+                <Text style={styles.detailName}>
+                  {`${selectedWorker.first_name || ''} ${selectedWorker.last_name || ''}`}
+                </Text>
+                <View style={[styles.statusBadge, isActive ? styles.statusActive : styles.statusInactive]}>
+                  <Text style={styles.statusBadgeText}>{selectedWorker.status}</Text>
+                </View>
+              </View>
+
+              <View style={styles.detailSection}>
+                <DetailItem icon={<ShieldCheck size={20} />} label="Rol de Acceso" value={roleName} />
+                <DetailItem icon={<IdCard size={20} />} label="Identificación" value={selectedWorker.identifier || 'No registrada'} />
+                <DetailItem icon={<Mail size={20} />} label="Correo Electrónico" value={selectedWorker.email} />
+                <DetailItem icon={<Phone size={20} />} label="Teléfono" value={selectedWorker.phone_number || 'No registrado'} />
+              </View>
+
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setIsDetailVisible(false)}
+              >
+                <Text style={styles.closeButtonText}>Cerrar Vista</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-          <Text style={styles.identifierText}>{item.identifier || 'Sin ID'}</Text>
         </View>
-        <ChevronRight size={20} color={Theme.colors.outline} />
-      </TouchableOpacity>
+      </Modal>
+    );
+  };
+
+  const renderWorker = ({ item }: any) => {
+    const roleName = rolesMap[item.role_id] || item.role_id || 'TRABAJADOR';
+    const isActive = item.status === 'ACTIVO';
+
+    return (
+      <View style={[styles.workerCard, !isActive && styles.workerCardInactive]}>
+        <TouchableOpacity 
+          style={styles.workerMainInfo}
+          onPress={() => {
+            setSelectedWorker(item);
+            setIsDetailVisible(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.workerAvatar}>
+            <User size={20} color={isActive ? Theme.colors.primary : Theme.colors.outline} />
+          </View>
+          <View style={styles.workerInfo}>
+            <Text style={[styles.workerName, !isActive && { color: Theme.colors.outline }]}>
+              {`${item.first_name || ''} ${item.last_name || ''}`}
+            </Text>
+            <View style={styles.roleBadge}>
+              <ShieldCheck size={12} color={isActive ? Theme.colors.secondary : Theme.colors.outline} />
+              <Text style={[styles.roleText, !isActive && { color: Theme.colors.outline }]}>{roleName}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={styles.actionIcon} 
+            onPress={() => navigation.navigate('RegisterPersonal', { worker: item })}
+          >
+            <Edit2 size={18} color={Theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   };
 
@@ -184,9 +266,23 @@ const PersonalScreen = ({ navigation }: any) => {
       >
         <Plus size={28} color={Theme.colors.onPrimary} />
       </TouchableOpacity>
+
+      {renderDetailModal()}
     </View>
   );
 };
+
+const DetailItem = ({ icon, label, value }: { icon: any, label: string, value: string }) => (
+  <View style={styles.detailItem}>
+    <View style={styles.detailIconContainer}>
+      {React.cloneElement(icon, { color: Theme.colors.primary })}
+    </View>
+    <View>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  </View>
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -256,6 +352,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...Theme.shadows.ambient,
   },
+  workerCardInactive: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    opacity: 0.8,
+  },
+  workerMainInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   workerAvatar: {
     width: 44,
     height: 44,
@@ -285,11 +390,120 @@ const styles = StyleSheet.create({
     color: Theme.colors.secondary,
     fontWeight: '700',
   },
-  identifierText: {
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  actionIcon: {
+    padding: 8,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(31, 27, 20, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: Theme.colors.background,
+    borderRadius: 32,
+    padding: 24,
+    maxHeight: '80%',
+    ...Theme.shadows.ambient,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    ...Theme.typography.headline,
+    fontSize: 18,
+    color: Theme.colors.primary,
+  },
+  detailHero: {
+    alignItems: 'center',
+    marginBottom: 32,
+    gap: 12,
+  },
+  detailAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Theme.colors.surfaceContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: Theme.colors.white,
+  },
+  detailName: {
+    ...Theme.typography.display,
+    fontSize: 24,
+    textAlign: 'center',
+    color: Theme.colors.onSurface,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 99,
+  },
+  statusActive: {
+    backgroundColor: Theme.colors.secondaryContainer,
+  },
+  statusInactive: {
+    backgroundColor: Theme.colors.errorContainer,
+  },
+  statusBadgeText: {
     ...Theme.typography.labelSm,
     fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  detailSection: {
+    gap: 20,
+    marginBottom: 32,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  detailIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    ...Theme.typography.labelSm,
     color: Theme.colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  detailValue: {
+    ...Theme.typography.body,
+    fontSize: 16,
+    color: Theme.colors.onSurface,
+    fontWeight: '600',
     marginTop: 2,
+  },
+  closeButton: {
+    backgroundColor: Theme.colors.surfaceContainerHigh,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    ...Theme.typography.label,
+    color: Theme.colors.primary,
+    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',

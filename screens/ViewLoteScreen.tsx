@@ -48,11 +48,25 @@ import { syncWorker } from '../services/sync.worker';
 import { CustomAlert } from '../components/GlobalAlert';
 import { EtapaProcesoValues } from '../db/schema/enums';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAuthStore } from '../store/authStore';
 
 const { width } = Dimensions.get('window');
 
 const ViewLoteScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
+  const role = useAuthStore((state) => state.role);
+  
+  // Normalización ultra-robusta del rol
+  const getCleanRole = () => {
+    if (!role) return '';
+    if (typeof role === 'string') return role;
+    if (typeof role === 'object') return (role as any).name || (role as any).role || '';
+    return String(role);
+  };
+
+  const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
+  const canAssignCapataz = userRole === 'admin' || userRole === 'gerente general';
+
   const [isProcessing, setIsProcessing] = useState(lote?.estado_lote === 'En_Produccion');
   const [capataz, setCapataz] = useState<any>(null);
   const [stages, setStages] = useState<any[]>([]);
@@ -90,7 +104,6 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
 
   const toggleProcess = () => {
     setIsProcessing(!isProcessing);
-    // Opcional: Actualizar en DB
   };
 
   const handleStartStage = async (etapa: string) => {
@@ -254,20 +267,22 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
-          <TouchableOpacity 
-            style={styles.assignTechnicalButton}
-            onPress={() => navigation.navigate('AssignCapataz', { lote })}
-          >
-            <LinearGradient
-              colors={[Theme.colors.secondary, '#22502d']}
-              style={styles.assignTechnicalGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+          {canAssignCapataz && (
+            <TouchableOpacity 
+              style={styles.assignTechnicalButton}
+              onPress={() => navigation.navigate('AssignCapataz', { lote })}
             >
-              <ShieldCheck size={18} color={Theme.colors.white} />
-              <Text style={styles.assignTechnicalText}>Asignar Responsable Técnico</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={[Theme.colors.secondary, '#22502d']}
+                style={styles.assignTechnicalGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <ShieldCheck size={18} color={Theme.colors.white} />
+                <Text style={styles.assignTechnicalText}>Asignar Capataz</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.sectionPadding}>

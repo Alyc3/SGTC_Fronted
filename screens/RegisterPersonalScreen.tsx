@@ -24,6 +24,7 @@ import {
   ChevronDown,
   CheckCircle2,
   ArrowRight,
+  Save,
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { CustomAlert } from '../components/GlobalAlert';
@@ -31,7 +32,10 @@ import { rolesService } from '../services/roles.service';
 import { personalService } from '../services/personal.service';
 import { v4 as uuidv4 } from 'uuid';
 
-const RegisterPersonalScreen = ({ navigation }: any) => {
+const RegisterPersonalScreen = ({ navigation, route }: any) => {
+  const editWorker = route.params?.worker;
+  const isEditMode = !!editWorker;
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -54,19 +58,39 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
     fetchRoles();
   }, []);
 
-  // Limpiar identificador si cambia el tipo de documento
+  // Cargar datos si estamos en modo edición
   useEffect(() => {
-    setIdentifier('');
+    if (editWorker) {
+      setFirstName(editWorker.first_name || '');
+      setLastName(editWorker.last_name || '');
+      setEmail(editWorker.email || '');
+      setIdentifier(editWorker.identifier || '');
+      setPhoneNumber(editWorker.phone_number || '');
+      setIsActive(editWorker.status === 'ACTIVO');
+      // Nota: No precargamos el password por seguridad
+    }
+  }, [editWorker]);
+
+  // Vincular el rol una vez que la lista de roles esté cargada
+  useEffect(() => {
+    if (editWorker && availableRoles.length > 0) {
+      const foundRole = availableRoles.find(r => r.id === editWorker.role_id);
+      if (foundRole) setRole(foundRole);
+    }
+  }, [editWorker, availableRoles]);
+
+  // Limpiar identificador si cambia el tipo de documento (solo si no estamos cargando datos iniciales)
+  useEffect(() => {
+    if (!editWorker) {
+      setIdentifier('');
+    }
   }, [documentType]);
 
   const fetchRoles = async () => {
     try {
       setIsRolesLoading(true);
       const data = await rolesService.getAll();
-      
-      // Extraemos el array real, sin importar cómo lo envuelva la API
       const rolesArray = Array.isArray(data) ? data : (data.roles || data.data || []);
-      
       setAvailableRoles(rolesArray);
     } catch (error: any) {
       const isSessionError = error.message === 'SESSION_EXPIRED' || error.response?.status === 401;
@@ -79,7 +103,6 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
     }
   };
 
-  // Manejadores con validación
   const handleFirstNameChange = (text: string) => {
     const filtered = text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
     if (filtered.length <= 30) {
@@ -108,32 +131,57 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
     }
   };
 
+  const clearFields = () => {
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setIdentifier('');
+    setPhoneNumber('');
+    setPassword('');
+    setRole(null);
+    setIsActive(true);
+  };
+
   const handleRegister = async () => {
-    if (!firstName || !lastName || !email || !password || !role || !identifier) {
+    if (!firstName || !lastName || !email || (!isEditMode && !password) || !role || !identifier) {
       CustomAlert.show('ALERTA', 'Campos Incompletos', 'Por favor, complete todos los campos obligatorios.');
       return;
     }
     
     try {
-      await personalService.create({
-        id: uuidv4(),
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        identifier,
-        phone_number: phoneNumber,
-        password_hash: password,
-        role_id: role.id,
-        status: isActive ? 'ACTIVO' : 'INACTIVO',
-        is_synced: false
-      });
+      if (isEditMode) {
+        await personalService.update(editWorker.id, {
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          identifier,
+          phone_number: phoneNumber,
+          password_hash: password || editWorker.password_hash, // Mantener anterior si no se cambia
+          role_id: role.id,
+          status: isActive ? 'ACTIVO' : 'INACTIVO',
+        });
+      } else {
+        await personalService.create({
+          id: uuidv4(),
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          identifier,
+          phone_number: phoneNumber,
+          password_hash: password,
+          role_id: role.id,
+          status: isActive ? 'ACTIVO' : 'INACTIVO',
+          is_synced: false
+        });
+      }
 
-      CustomAlert.show('SUCCESS', 'Éxito', 'Colaborador registrado correctamente.', () => {
+      CustomAlert.show('SUCCESS', 'Éxito', isEditMode ? 'Información actualizada correctamente.' : 'Colaborador registrado correctamente.', () => {
+        clearFields();
         navigation.goBack();
       });
     } catch (error) {
-      console.error('Error registering personnel:', error);
-      CustomAlert.show('ERROR', 'Error', 'No se pudo registrar el personal localmente.');
+      console.error('Error saving personnel:', error);
+      CustomAlert.show('ERROR', 'Error', 'No se pudo guardar la información.');
     }
   };
 
@@ -146,11 +194,12 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Top Header Bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
           <ArrowLeft size={24} color={Theme.colors.onSurface} />
         </TouchableOpacity>
+        <Text style={styles.topBarTitle}>{isEditMode ? 'Editar Perfil' : 'Nuevo Registro'}</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       <KeyboardAvoidingView
@@ -161,12 +210,13 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Main Title Section */}
           <View style={styles.header}>
             <Text style={styles.contextText}>ADMINISTRACIÓN DE PROPIEDAD</Text>
-            <Text style={styles.mainTitle}>Registro de Personal</Text>
+            <Text style={styles.mainTitle}>{isEditMode ? 'Actualizar Personal' : 'Registro de Personal'}</Text>
             <Text style={styles.description}>
-              Ingrese la información detallada para habilitar las credenciales de un nuevo colaborador en el sistema del predio.
+              {isEditMode 
+                ? 'Modifique los campos necesarios para actualizar la ficha técnica del colaborador.' 
+                : 'Ingrese la información detallada para habilitar las credenciales de un nuevo colaborador.'}
             </Text>
           </View>
 
@@ -181,7 +231,7 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             <View style={styles.divider} />
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>First Name</Text>
+              <Text style={styles.label}>Nombres</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -194,7 +244,7 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Last Name</Text>
+              <Text style={styles.label}>Apellidos</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -221,7 +271,7 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Identifier ({documentType === 'Cedula' ? 'Cédula' : 'Pasaporte'})</Text>
+              <Text style={styles.label}>Identificación ({documentType === 'Cedula' ? 'Cédula' : 'Pasaporte'})</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -235,11 +285,11 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone Number</Text>
+              <Text style={styles.label}>Teléfono</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
-                  placeholder="Ej. +503 1234 5678"
+                  placeholder="Ej. 0985369858"
                   placeholderTextColor={Theme.colors.outline}
                   keyboardType="phone-pad"
                   value={phoneNumber}
@@ -260,7 +310,7 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             <View style={styles.divider} />
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email Address</Text>
+              <Text style={styles.label}>Correo Electrónico</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -275,7 +325,7 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>{isEditMode ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
@@ -296,7 +346,7 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Role Name</Text>
+              <Text style={styles.label}>Rol de Acceso</Text>
               <TouchableOpacity 
                 style={styles.inputWrapper} 
                 activeOpacity={0.7}
@@ -335,9 +385,15 @@ const RegisterPersonalScreen = ({ navigation }: any) => {
             onPress={handleRegister}
             activeOpacity={0.8}
           >
-            <Text style={styles.registerButtonText}>Registrar Colaborador</Text>
+            <Text style={styles.registerButtonText}>
+              {isEditMode ? 'Guardar Cambios' : 'Registrar Colaborador'}
+            </Text>
             <View style={styles.buttonIconContainer}>
-              <ArrowRight size={20} color={Theme.colors.white} />
+              {isEditMode ? (
+                <Save size={20} color={Theme.colors.white} />
+              ) : (
+                <ArrowRight size={20} color={Theme.colors.white} />
+              )}
             </View>
           </TouchableOpacity>
 
