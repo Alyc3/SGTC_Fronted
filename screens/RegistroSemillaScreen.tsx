@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   FlatList,
   ActivityIndicator,
   TextInput,
+  BackHandler,
 } from 'react-native';
 import {
   ArrowRight,
@@ -29,6 +30,8 @@ import { Theme } from '../theme';
 import { semillasService, catalogoService } from '../services';
 import { v4 as uuidv4 } from 'uuid';
 import { CustomAlert } from '../components/GlobalAlert';
+import { useFocusEffect } from '@react-navigation/native';
+import { useAuthStore } from '../store/authStore';
 
 const SelectInput = ({ label, value, options, onSelect, onAddNew, placeholder, showActions, loading, readOnly }: any) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -111,9 +114,35 @@ const SelectInput = ({ label, value, options, onSelect, onAddNew, placeholder, s
 };
 
 const RegistroSemillaScreen = ({ navigation, route }: any) => {
+  const { userName } = useAuthStore();
   const seedId = route.params?.id;
   const readOnly = route.params?.readOnly ?? false;
   const isEditing = !!seedId;
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('InventarioSemillas');
+        return true; // Bloquea la acción por defecto
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        // Capturamos cualquier intento de volver (gesto, botón o dispatch)
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          navigation.navigate('InventarioSemillas');
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
 
   const [variedadId, setVariedadId] = useState('');
   const [paisOrigenId, setPaisOrigenId] = useState('');
@@ -536,8 +565,8 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                   <User size={14} color={Theme.colors.onPrimaryFixed} />
                 </View>
                 <View>
-                  <Text style={styles.technicianLabel}>Technician in Charge</Text>
-                  <Text style={styles.technicianName}>Federico Valdez</Text>
+                  <Text style={styles.technicianLabel}>Técnico a cargo</Text>
+                  <Text style={styles.technicianName}>{userName || 'Técnico Autenticado'}</Text>
                 </View>
               </View>
             </View>
@@ -629,7 +658,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   navLogo: {
-    fontFamily: 'System',
+    ...Theme.typography.display,
     fontSize: 18,
     fontWeight: '900',
     color: Theme.colors.primary,
@@ -652,7 +681,7 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   title: {
-    fontFamily: 'System',
+    ...Theme.typography.display,
     fontSize: 36,
     fontWeight: '800',
     color: Theme.colors.primary,
@@ -660,7 +689,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   description: {
-    fontFamily: 'System',
+    ...Theme.typography.body,
     fontSize: 16,
     color: Theme.colors.onSurfaceVariant,
     lineHeight: 24,
@@ -677,7 +706,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 10,
     fontWeight: '800',
     color: Theme.colors.primary,
@@ -694,7 +723,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   inputLabel: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 11,
     fontWeight: '700',
     color: Theme.colors.onSurfaceVariant,
@@ -717,7 +746,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   selectText: {
-    fontFamily: 'System',
+    ...Theme.typography.body,
     fontSize: 16,
     color: Theme.colors.onSurface,
   },
@@ -747,7 +776,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   metadataLabel: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 11,
     fontWeight: '700',
     color: 'rgba(68, 42, 34, 0.5)',
@@ -755,7 +784,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   metadataValue: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 14,
     fontWeight: '900',
     color: Theme.colors.onSurface,
@@ -778,14 +807,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   technicianLabel: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 9,
     fontWeight: '700',
     color: 'rgba(68, 42, 34, 0.5)',
     textTransform: 'uppercase',
   },
   technicianName: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 14,
     fontWeight: '900',
     color: Theme.colors.onSurface,
@@ -809,7 +838,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   primaryButtonText: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 16,
     fontWeight: '700',
     color: Theme.colors.onSecondary,
@@ -826,7 +855,7 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.error,
   },
   deleteButtonText: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 14,
     fontWeight: '700',
     color: Theme.colors.error,
@@ -839,7 +868,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   cancelButtonText: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 16,
     fontWeight: '700',
     color: Theme.colors.onSurface,
@@ -859,7 +888,7 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
   },
   modalTitle: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 18,
     fontWeight: '800',
     color: Theme.colors.primary,
@@ -873,7 +902,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Theme.colors.outlineVariant,
   },
   optionText: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 16,
     color: Theme.colors.onSurface,
   },
@@ -894,7 +923,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 48 : 32,
   },
   addModalTitle: {
-    fontFamily: 'System',
+    ...Theme.typography.headline,
     fontSize: 20,
     fontWeight: '800',
     color: Theme.colors.primary,

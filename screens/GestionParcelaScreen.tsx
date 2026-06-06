@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  StatusBar
+  StatusBar,
+  BackHandler
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   MapPin,
   Mountain,
@@ -78,6 +80,33 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
   const readOnly = route.params?.readOnly ?? false;
   const isEditing = !!parcelId;
 
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        resetForm();
+        navigation.navigate('ListarParcela');
+        return true; // Bloquea la acción por defecto
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        // Capturamos cualquier intento de volver (gesto, botón o dispatch)
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          resetForm();
+          navigation.navigate('ListarParcela');
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation, resetForm])
+  );
+
   const [nombre, setNombre] = useState('');
   const [hectareas, setHectareas] = useState('');
   const [altitud, setAltitud] = useState('');
@@ -95,7 +124,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
   const [gpsLocation, setGpsLocation] = useState('Pendiente calibración');
   const [loading, setLoading] = useState(false);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setNombre('');
     setHectareas('');
     setAltitud('');
@@ -111,18 +140,20 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     setSelectedZonas([]);
     setLotesAssociated([]);
     setGpsLocation('Pendiente calibración');
-  };
+  }, []);
 
-  useEffect(() => {
-    if (parcelId) {
-      loadParcelData();
-    } else {
-      resetForm();
-    }
-    navigation.setOptions({
-      title: readOnly ? 'Visualizar Parcela' : isEditing ? 'Actualizar Parcela' : 'Nueva Parcela'
-    });
-  }, [parcelId, isEditing, readOnly]);
+  useFocusEffect(
+    useCallback(() => {
+      if (parcelId) {
+        loadParcelData();
+      } else {
+        resetForm();
+      }
+      navigation.setOptions({
+        title: readOnly ? 'Visualizar Parcela' : isEditing ? 'Actualizar Parcela' : 'Nueva Parcela'
+      });
+    }, [parcelId, isEditing, readOnly, resetForm])
+  );
 
   const loadParcelData = async () => {
     try {
@@ -218,6 +249,9 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     setErrorNombre('');
     setErrorHectareas('');
     
+    let hasErrors = false;
+
+    // 1. Validar campos requeridos (Alert inicial para bloqueos críticos)
     const missingFields = [];
     if (!nombre) missingFields.push('Nombre de Parcela');
     if (!hectareas) missingFields.push('Hectáreas');
@@ -233,6 +267,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
       return;
     }
 
+    // 2. Validaciones de formato y límites vía servicio
     const validationErrors = parcelasService.validate({ 
       nombre, 
       hectareas, 
@@ -241,24 +276,34 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
       orientacionLadera: orientacion,
       textura
     } as any);
+
     if (validationErrors) {
       if (validationErrors.nombre) setErrorNombre(validationErrors.nombre);
       if (validationErrors.hectareas) setErrorHectareas(validationErrors.hectareas);
-      if (validationErrors.altitud) CustomAlert.show('ERROR', 'Error', validationErrors.altitud);
-      return;
+      if (validationErrors.altitud) {
+        CustomAlert.show('ERROR', 'Error de Altitud', validationErrors.altitud);
+        return; // Altitud es crítica por GPS
+      }
+      hasErrors = true;
     }
+
+    // 3. Validar unicidad del nombre (Incluso si hay otros errores, para mostrar todo)
+    if (nombre && !validationErrors?.nombre) {
+      try {
+        const esNombreUnico = await parcelasService.checkNombreUnico(nombre, parcelId);
+        if (!esNombreUnico) {
+          setErrorNombre('Este nombre de parcela ya existe.');
+          hasErrors = true;
+        }
+      } catch (e) {
+        console.error('Error validando unicidad:', e);
+      }
+    }
+
+    if (hasErrors) return;
 
     try {
       setLoading(true);
-
-      // Validar unicidad del nombre
-      const esNombreUnico = await parcelasService.checkNombreUnico(nombre, parcelId);
-      if (!esNombreUnico) {
-        setErrorNombre('Este nombre de parcela ya existe.');
-        setLoading(false);
-        return;
-      }
-
       const data = {
         id: parcelId,
         nombre,
@@ -279,13 +324,13 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
         await parcelasService.update(parcelId, data);
         CustomAlert.show('SUCCESS', 'Éxito', 'Parcela actualizada.', () => {
           resetForm();
-          navigation.goBack();
+          navigation.navigate('ListarParcela');
         });
       } else {
         await parcelasService.create(data);
         CustomAlert.show('SUCCESS', 'Éxito', 'Parcela registrada.', () => {
           resetForm();
-          navigation.goBack();
+          navigation.navigate('ListarParcela');
         });
       }
     } catch (error) {

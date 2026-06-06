@@ -293,7 +293,6 @@ const styles = StyleSheet.create({
     ...Theme.typography.display,
     fontSize: 32,
     color: Theme.colors.primary,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'serif',
   },
   description: {
     ...Theme.typography.body,
@@ -323,7 +322,6 @@ const styles = StyleSheet.create({
     ...Theme.typography.headline,
     fontSize: 18,
     color: Theme.colors.onSurface,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'serif',
   },
   divider: {
     height: 1,

@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Modal,
+  ScrollView,
   SafeAreaView,
   StatusBar,
   Alert,
@@ -33,6 +33,7 @@ import { syncWorker } from '../services/sync.worker';
 import { EtapaProcesoValues } from '../db/schema/enums';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CustomAlert } from '../components/GlobalAlert';
+import { useAuthStore } from '../store/authStore';
 
 const { width } = Dimensions.get('window');
 
@@ -51,7 +52,10 @@ const ALLOWED_ROLES = [
   'Controlador Despacho',
   'Técnico de Almacenamiento',
   'Técnicos de Almacenamiento',
-  'TECNICO_SEMBRADO' // Aseguramos que esté en la lista para el conteo
+  'TECNICO_SEMBRADO',
+  'TECNICO_AGRONOMO',
+  'Técnico Agrónomo',
+  'Técnico Sembrado'
 ];
 
 const ALLOWED_ROLES_NORMALIZED = [
@@ -61,23 +65,35 @@ const ALLOWED_ROLES_NORMALIZED = [
 ];
 
 const AssignPersonalScreen = ({ navigation, route }: any) => {
+  const { role: userRoleRaw } = useAuthStore();
+  
+  const getCleanRole = () => {
+    if (!userRoleRaw) return 'COLABORADOR';
+    if (typeof userRoleRaw === 'string') return userRoleRaw;
+    if (typeof userRoleRaw === 'object') return (userRoleRaw as any).name || (userRoleRaw as any).role || 'COLABORADOR';
+    return String(userRoleRaw);
+  };
+
+  const currentRole = getCleanRole();
+  const displayRole = currentRole.trim().toUpperCase().replace(/_/g, ' ');
+
   const [lotes, setLotes] = useState<any[]>([]);
   const [personnel, setPersonnel] = useState<any[]>([]);
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [selectedLote, setSelectedLote] = useState<any>(route.params?.lote || null);
-  const [selectedEtapa, setSelectedEtapa] = useState<string>(EtapaProcesoValues[0]);
+  const [selectedEtapa, setSelectedEtapa] = useState<string>(route.params?.etapa || EtapaProcesoValues[0]);
   const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>([]);
+  const [existingAssignments, setExistingAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<'LOTE' | 'ETAPA'>('LOTE');
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [lotesData, personnelData, rolesData] = await Promise.all([
+      const [lotesData, personnelData, rolesData, assignmentsData] = await Promise.all([
         lotesService.getAll(),
         personalService.getAll(),
-        rolesService.getAll().catch(() => []) // Catch silent error if API fails
+        rolesService.getAll().catch(() => []),
+        selectedLote ? lotesService.getAssignedPersonnel(selectedLote.id) : Promise.resolve([])
       ]);
 
       // Mapeo de roles
@@ -98,6 +114,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
 
       setLotes(lotesData);
       setPersonnel(filteredPersonnel);
+      setExistingAssignments(assignmentsData);
       
       // If we don't have a lote from params, pick the first one from DB
       if (!selectedLote && lotesData.length > 0) {
@@ -115,23 +132,88 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
     fetchData();
   }, [fetchData]);
 
-  const togglePersonnelSelection = (id: string) => {
-    const worker = personnel.find(p => p.id === id);
-    const roleName = (rolesMap[worker?.role_id] || '').trim().toUpperCase();
-    
-    // Validación ESTRICTA: Solo un 'TECNICO_SEMBRADO' en etapa de 'Sembrado'
-    // Permitimos múltiples 'SEMBRADOR' u otros roles sin restricción.
-    const isExactTecnicoSembrado = roleName === 'TECNICO_SEMBRADO' || roleName === 'TECNICO SEMBRADO';
+  // Limpiar selección cuando cambia la etapa para evitar errores de asignación
+  useEffect(() => {
+    setSelectedPersonnel([]);
+  }, [selectedEtapa]);
 
-    if (selectedEtapa === 'Sembrado' && isExactTecnicoSembrado && !selectedPersonnel.includes(id)) {
+  const filteredPersonnel = useMemo(() => {
+    return personnel.filter(worker => {
+      const roleNameRaw = rolesMap[worker.role_id] || '';
+      const roleName = roleNameRaw.trim().toLowerCase().replace(/\s+/g, '_');
+      
+      if (selectedEtapa === 'Sembrado') {
+        // Para Sembrado: Sembrador o Técnico Sembrado
+        return roleName === 'sembrador' || roleName === 'tecnico_sembrado' || roleName === 'técnico_sembrado';
+      }
+      
+      if (selectedEtapa === 'Cosechado') {
+        // Para Cosechado: Recolector, Clasificador o Técnico Agrónomo
+        return roleName === 'recolector' || roleName === 'clasificador' || roleName === 'tecnico_agronomo' || roleName === 'técnico_agrónomo';
+      }
+      
+      // Para otras etapas, mostrar todo el personal permitido por defecto
+      return true;
+    });
+  }, [personnel, selectedEtapa, rolesMap]);
+
+  const alreadyAssignedIds = useMemo(() => {
+    return new Set(
+      existingAssignments
+        .filter(a => a.etapa === selectedEtapa)
+        .map(a => a.trabajador_id || a.trabajador?.id)
+    );
+  }, [existingAssignments, selectedEtapa]);
+
+  const togglePersonnelSelection = (id: string) => {
+    if (alreadyAssignedIds.has(id)) return; // No permitir seleccionar si ya está asignado
+
+    const worker = personnel.find(p => p.id === id);
+    const roleNameRaw = rolesMap[worker?.role_id] || '';
+    
+    // Normalización robusta para comparación (quitar acentos, espacios y pasar a minúsculas)
+    const normalize = (str: string) => 
+      str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+
+    const roleName = normalize(roleNameRaw);
+    
+    // Restricción para etapa de 'Sembrado': Solo un 'Tecnico de Sembrado'
+    if (selectedEtapa === 'Sembrado' && roleName === 'tecnico_sembrado' && !selectedPersonnel.includes(id)) {
       const alreadyHasTecnico = selectedPersonnel.some(pId => {
         const p = personnel.find(w => w.id === pId);
-        const rName = (rolesMap[p?.role_id] || '').trim().toUpperCase();
-        return rName === 'TECNICO_SEMBRADO' || rName === 'TECNICO SEMBRADO';
+        const rName = normalize(rolesMap[p?.role_id] || '');
+        return rName === 'tecnico_sembrado';
       });
 
-      if (alreadyHasTecnico) {
+      // Incluir también los que ya están en DB en la validación
+      const alreadyHasTecnicoInDB = Array.from(alreadyAssignedIds).some(pId => {
+        const p = personnel.find(w => w.id === pId);
+        const rName = normalize(rolesMap[p?.role_id] || '');
+        return rName === 'tecnico_sembrado';
+      });
+
+      if (alreadyHasTecnico || alreadyHasTecnicoInDB) {
         CustomAlert.show('ALERTA', 'Límite Excedido', 'Solo se puede asignar un Técnico de Sembrado para esta etapa.');
+        return;
+      }
+    }
+
+    // Restricción para etapa de 'Cosechado': Solo un 'Tecnico Agronomo' (Interpretando el límite técnico)
+    if (selectedEtapa === 'Cosechado' && roleName === 'tecnico_agronomo' && !selectedPersonnel.includes(id)) {
+      const alreadyHasTecnico = selectedPersonnel.some(pId => {
+        const p = personnel.find(w => w.id === pId);
+        const rName = normalize(rolesMap[p?.role_id] || '');
+        return rName === 'tecnico_agronomo';
+      });
+
+      const alreadyHasTecnicoInDB = Array.from(alreadyAssignedIds).some(pId => {
+        const p = personnel.find(w => w.id === pId);
+        const rName = normalize(rolesMap[p?.role_id] || '');
+        return rName === 'tecnico_agronomo';
+      });
+
+      if (alreadyHasTecnico || alreadyHasTecnicoInDB) {
+        CustomAlert.show('ALERTA', 'Límite Excedido', 'Solo se puede asignar un Técnico Agrónomo para esta etapa.');
         return;
       }
     }
@@ -162,6 +244,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       
       CustomAlert.show('SUCCESS', 'Asignación Correcta', 'El personal ha sido asignado al lote exitosamente.', () => {
         setSelectedPersonnel([]);
+        fetchData(); // Recargar datos para sombrear los nuevos asignados
       });
     } catch (error) {
       console.error('Error assigning personnel:', error);
@@ -171,35 +254,39 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
     }
   };
 
-  const openModal = (type: 'LOTE' | 'ETAPA') => {
-    setModalType(type);
-    setModalVisible(true);
-  };
 
   const renderPersonnelItem = ({ item }: { item: any }) => {
     const isSelected = selectedPersonnel.includes(item.id);
+    const isAlreadyAssigned = alreadyAssignedIds.has(item.id);
     const roleName = rolesMap[item.role_id] || item.role_id || 'TRABAJADOR';
 
     return (
       <TouchableOpacity
         style={[
           styles.personnelCard,
-          isSelected && { backgroundColor: Theme.colors.primaryFixed }
+          isSelected && { backgroundColor: Theme.colors.primaryFixed },
+          isAlreadyAssigned && { opacity: 0.6, backgroundColor: Theme.colors.surfaceContainerHighest }
         ]}
-        onPress={() => togglePersonnelSelection(item.id)}
-        activeOpacity={0.7}
+        onPress={() => !isAlreadyAssigned && togglePersonnelSelection(item.id)}
+        activeOpacity={isAlreadyAssigned ? 1 : 0.7}
+        disabled={isAlreadyAssigned}
       >
         <View style={styles.personnelAvatar}>
-          <User size={20} color={Theme.colors.primary} />
+          <User size={20} color={isAlreadyAssigned ? Theme.colors.outline : Theme.colors.primary} />
         </View>
         <View style={styles.personnelInfo}>
-          <Text style={styles.personnelName}>{`${item.first_name} ${item.last_name}`}</Text>
+          <Text style={[styles.personnelName, isAlreadyAssigned && { color: Theme.colors.onSurfaceVariant }]}>{`${item.first_name} ${item.last_name}`}</Text>
           <View style={styles.roleRow}>
-            <ShieldCheck size={12} color={Theme.colors.secondary} />
-            <Text style={styles.roleText}>{roleName}</Text>
+            <ShieldCheck size={12} color={isAlreadyAssigned ? Theme.colors.outline : Theme.colors.secondary} />
+            <Text style={[styles.roleText, isAlreadyAssigned && { color: Theme.colors.onSurfaceVariant }]}>{roleName}</Text>
           </View>
         </View>
-        {isSelected ? (
+        {isAlreadyAssigned ? (
+          <View style={{ alignItems: 'center' }}>
+            <ShieldCheck size={24} color={Theme.colors.secondary} />
+            <Text style={{ fontSize: 8, color: Theme.colors.secondary, fontWeight: '700' }}>ASIGNADO</Text>
+          </View>
+        ) : isSelected ? (
           <CheckCircle2 size={24} color={Theme.colors.primary} />
         ) : (
           <Circle size={24} color={Theme.colors.outlineVariant} />
@@ -228,43 +315,73 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
         >
           <ArrowLeft size={24} color={Theme.colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerLabel}>GESTIÓN DE CAMPO</Text>
+        <Text style={styles.headerLabel}>{displayRole}</Text>
         <Text style={styles.title}>Asignación de Personal</Text>
         <Text style={styles.subtitle}>Configure el equipo de trabajo para la etapa actual.</Text>
       </View>
 
       <View style={styles.content}>
-        {/* Selection Area */}
-        <View style={styles.selectionContainer}>
-          <TouchableOpacity 
-            style={styles.selector}
-            onPress={() => openModal('LOTE')}
-          >
-            <View style={styles.selectorIcon}>
-              <Sprout size={20} color={Theme.colors.primary} />
+        {/* Static Lote Info */}
+        <View style={styles.staticLoteContainer}>
+          <View style={styles.loteInfoContent}>
+            <View style={styles.loteIconWrapper}>
+              <Sprout size={24} color={Theme.colors.primary} />
             </View>
-            <View style={styles.selectorTextContent}>
-              <Text style={styles.selectorLabel}>Lote Seleccionado</Text>
-              <Text style={styles.selectorValue}>
-                {selectedLote ? selectedLote.codigo : 'Seleccionar Lote'}
-              </Text>
+            <View>
+              <Text style={styles.staticLoteLabel}>Lote Seleccionado</Text>
+              <Text style={styles.staticLoteValue}>{selectedLote?.codigo || 'Sin Código'}</Text>
             </View>
-            <ArrowRight size={20} color={Theme.colors.outline} />
-          </TouchableOpacity>
+          </View>
+          <View style={styles.loteHectareasBadge}>
+            <Text style={styles.hectareasText}>{selectedLote?.hectareas_lote || '0'} Ha</Text>
+          </View>
+        </View>
 
-          <TouchableOpacity 
-            style={styles.selector}
-            onPress={() => openModal('ETAPA')}
+        {/* Phase Selector (Horizontal Card Radio Group) */}
+        <View style={styles.phaseSelectorContainer}>
+          <Text style={styles.phaseSelectorTitle}>Etapa de Trabajo</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.phasesScrollContent}
           >
-            <View style={styles.selectorIcon}>
-              <Layers size={20} color={Theme.colors.primary} />
-            </View>
-            <View style={styles.selectorTextContent}>
-              <Text style={styles.selectorLabel}>Etapa de Trabajo</Text>
-              <Text style={styles.selectorValue}>{selectedEtapa}</Text>
-            </View>
-            <ArrowRight size={20} color={Theme.colors.outline} />
-          </TouchableOpacity>
+            {EtapaProcesoValues.filter(e => e !== 'Administración').map((etapa) => {
+              const isSelected = selectedEtapa === etapa;
+              return (
+                <TouchableOpacity
+                  key={etapa}
+                  style={[
+                    styles.phaseCard,
+                    isSelected && styles.phaseCardSelected
+                  ]}
+                  onPress={() => setSelectedEtapa(etapa)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[
+                    styles.phaseIconContainer,
+                    isSelected && styles.phaseIconContainerSelected
+                  ]}>
+                    {etapa === 'Sembrado' ? (
+                      <Sprout size={20} color={isSelected ? Theme.colors.onPrimary : Theme.colors.primary} />
+                    ) : (
+                      <Layers size={20} color={isSelected ? Theme.colors.onPrimary : Theme.colors.primary} />
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.phaseText,
+                    isSelected && styles.phaseTextSelected
+                  ]}>
+                    {etapa}
+                  </Text>
+                  {isSelected && (
+                    <View style={styles.selectedCheck}>
+                      <CheckCircle2 size={12} color={Theme.colors.primary} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Personnel List Section */}
@@ -274,7 +391,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
         </View>
 
         <FlatList
-          data={personnel}
+          data={filteredPersonnel}
           renderItem={renderPersonnelItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
@@ -311,51 +428,6 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
         </TouchableOpacity>
       </View>
 
-      {/* Selection Modal */}
-      <Modal
-        visible={modalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {modalType === 'LOTE' ? 'Seleccionar Lote' : 'Seleccionar Etapa'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.closeText}>Cerrar</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <FlatList
-              data={modalType === 'LOTE' ? lotes : EtapaProcesoValues}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => {
-                    if (modalType === 'LOTE') {
-                      setSelectedLote(item);
-                    } else {
-                      setSelectedEtapa(item);
-                    }
-                    setModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.modalItemText}>
-                    {modalType === 'LOTE' ? item.codigo : item}
-                  </Text>
-                  {(modalType === 'LOTE' ? selectedLote?.id === item.id : selectedEtapa === item) && (
-                    <CheckCircle2 size={20} color={Theme.colors.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
-              keyExtractor={(item, index) => (modalType === 'LOTE' ? item.id : index.toString())}
-            />
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -382,7 +454,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   headerLabel: {
-    fontFamily: 'Manrope',
+    ...Theme.typography.labelSm,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 2,
@@ -390,14 +462,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   title: {
-    fontFamily: 'Manrope',
-    fontSize: 32,
+    ...Theme.typography.display,
+    fontSize: 25,
     fontWeight: '800',
     color: Theme.colors.primary,
     lineHeight: 38,
   },
   subtitle: {
-    fontFamily: 'Public Sans',
+    ...Theme.typography.body,
     fontSize: 14,
     color: Theme.colors.onSurfaceVariant,
     marginTop: 8,
@@ -406,20 +478,22 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  selectionContainer: {
-    paddingHorizontal: Theme.spacing.lg,
-    gap: 12,
-    marginBottom: Theme.spacing.xl,
-  },
-  selector: {
+  staticLoteContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: Theme.colors.surfaceContainerLow,
+    marginHorizontal: Theme.spacing.lg,
     padding: 16,
     borderRadius: Theme.roundness.xl,
-    gap: 16,
+    marginBottom: Theme.spacing.lg,
   },
-  selectorIcon: {
+  loteInfoContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loteIconWrapper: {
     width: 44,
     height: 44,
     borderRadius: Theme.roundness.lg,
@@ -427,23 +501,88 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  selectorTextContent: {
-    flex: 1,
-  },
-  selectorLabel: {
-    fontFamily: 'Public Sans',
+  staticLoteLabel: {
+    ...Theme.typography.labelSm,
     fontSize: 10,
     fontWeight: '700',
     color: Theme.colors.onSurfaceVariant,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  selectorValue: {
-    fontFamily: 'Manrope',
+  staticLoteValue: {
+    ...Theme.typography.headline,
     fontSize: 18,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+  },
+  loteHectareasBadge: {
+    backgroundColor: Theme.colors.secondaryContainer,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99,
+  },
+  hectareasText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.onSecondaryContainer,
+  },
+  phaseSelectorContainer: {
+    marginBottom: Theme.spacing.xl,
+  },
+  phaseSelectorTitle: {
+    ...Theme.typography.headline,
+    fontSize: 16,
     fontWeight: '700',
     color: Theme.colors.onSurface,
-    marginTop: 2,
+    paddingHorizontal: Theme.spacing.lg,
+    marginBottom: 12,
+  },
+  phasesScrollContent: {
+    paddingHorizontal: Theme.spacing.lg,
+    gap: 12,
+    paddingBottom: 4,
+  },
+  phaseCard: {
+    width: 100,
+    height: 100,
+    backgroundColor: Theme.colors.surfaceContainerLowest,
+    borderRadius: Theme.roundness.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Theme.shadows.ambient,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  phaseCardSelected: {
+    backgroundColor: Theme.colors.primaryContainer,
+    borderColor: Theme.colors.primary,
+  },
+  phaseIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  phaseIconContainerSelected: {
+    backgroundColor: Theme.colors.primary,
+  },
+  phaseText: {
+    ...Theme.typography.label,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.onSurfaceVariant,
+    textAlign: 'center',
+  },
+  phaseTextSelected: {
+    color: Theme.colors.primary,
+  },
+  selectedCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
   listHeader: {
     flexDirection: 'row',
@@ -453,13 +592,13 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md,
   },
   listTitle: {
-    fontFamily: 'Manrope',
+    ...Theme.typography.headline,
     fontSize: 20,
     fontWeight: '700',
     color: Theme.colors.onSurface,
   },
   listCounter: {
-    fontFamily: 'Public Sans',
+    ...Theme.typography.label,
     fontSize: 12,
     fontWeight: '600',
     color: Theme.colors.secondary,
@@ -490,7 +629,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   personnelName: {
-    fontFamily: 'Manrope',
+    ...Theme.typography.headline,
     fontSize: 16,
     fontWeight: '700',
     color: Theme.colors.onSurface,
@@ -502,7 +641,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   roleText: {
-    fontFamily: 'Public Sans',
+    ...Theme.typography.label,
     fontSize: 11,
     fontWeight: '700',
     color: Theme.colors.secondary,
@@ -514,7 +653,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   emptyText: {
-    fontFamily: 'Public Sans',
+    ...Theme.typography.body,
     color: Theme.colors.outline,
     textAlign: 'center',
   },
@@ -540,52 +679,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   assignButtonText: {
-    fontFamily: 'Manrope',
+    ...Theme.typography.headline,
     fontSize: 16,
     fontWeight: '700',
     color: Theme.colors.onPrimary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(31, 27, 20, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Theme.colors.background,
-    borderTopLeftRadius: Theme.roundness.xxl,
-    borderTopRightRadius: Theme.roundness.xxl,
-    maxHeight: '70%',
-    padding: Theme.spacing.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.xl,
-  },
-  modalTitle: {
-    fontFamily: 'Manrope',
-    fontSize: 22,
-    fontWeight: '800',
-    color: Theme.colors.primary,
-  },
-  closeText: {
-    fontFamily: 'Public Sans',
-    color: Theme.colors.primary,
-    fontWeight: '700',
-  },
-  modalItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Theme.colors.surfaceContainer,
-  },
-  modalItemText: {
-    fontFamily: 'Public Sans',
-    fontSize: 16,
-    color: Theme.colors.onSurface,
   },
 });
 

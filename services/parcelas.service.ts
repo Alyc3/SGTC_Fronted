@@ -26,6 +26,27 @@ export const parcelasService = {
     }).returning();
   },
 
+  async countCapatacesAsignados(loteId: string) {
+    const asignaciones = await db.query.asignacion_personal.findMany({
+      where: (asig, { eq, and }) => and(
+        eq(asig.lote_id, loteId),
+        eq(asig.etapa, 'Administración')
+      )
+    });
+    return asignaciones.length;
+  },
+
+  async isCapatazYaAsignado(loteId: string, trabajadorId: string) {
+    const existing = await db.query.asignacion_personal.findFirst({
+      where: (asig, { eq, and }) => and(
+        eq(asig.lote_id, loteId),
+        eq(asig.trabajador_id, trabajadorId),
+        eq(asig.etapa, 'Administración')
+      )
+    });
+    return !!existing;
+  },
+
   async getById(id: string) {
     return await db.query.parcelas.findFirst({
       where: eq(parcelas.id, id),
@@ -77,7 +98,8 @@ export const parcelasService = {
     });
 
     if (productionLots.length > 0) {
-      throw new Error('No se puede dar de baja una parcela con lotes en producción.');
+      const lotCodes = productionLots.map(l => l.codigo).join(', ');
+      throw new Error(`No se puede dar de baja o eliminar la parcela ya que tiene: el lote ${lotCodes} en estado En Producción.`);
     }
 
     return await db.delete(parcelas).where(eq(parcelas.id, id)).returning();
@@ -135,7 +157,7 @@ export const parcelasService = {
     }
 
     if (data.hectareas !== undefined) {
-      const strVal = data.hectareas.toString();
+      const strVal = data.hectareas?.toString();
       if (!strVal || strVal.trim() === '') {
         errors.hectareas = 'El campo hectáreas es obligatorio.';
       } else if (/[^0-9.]/.test(strVal)) {
@@ -153,7 +175,7 @@ export const parcelasService = {
     }
 
     if (data.altitud !== undefined) {
-      const strVal = data.altitud.toString();
+      const strVal = data.altitud?.toString() ?? '';
       if (!strVal || strVal.trim() === '') {
         errors.altitud = 'La altitud es obligatoria (Calibre GPS).';
       }

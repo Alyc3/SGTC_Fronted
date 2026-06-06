@@ -129,10 +129,20 @@ export const authService = {
   },
 
   /**
-   * Listar todos los usuarios
+   * List all users
    */
   async getAllUsers() {
-    const response = await authApi.get('/api/users/');
-    return response.data;
+    try {
+      const response = await authApi.get('/api/users/');
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        console.log('[authService] Acceso restringido (403): Tu rol actual no permite listar todos los usuarios del sistema remoto.');
+      } else {
+        console.warn('authService.getAllUsers: No se pudieron obtener los usuarios de la API.', error.response?.status || error.message);
+      }
+      return []; // Devolvemos array vacío para evitar romper procesos de sincronización o UI
+    }
   },
+
 };
