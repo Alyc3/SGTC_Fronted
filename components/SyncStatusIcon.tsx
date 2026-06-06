@@ -90,13 +90,13 @@ export const SyncStatusIcon = () => {
       accessibilityLabel="Estado de sincronización"
     >
       {status === 'synced' && (
-        <Cloud size={24} color={Theme.colors.primary} />
+        <Cloud size={24} color={Theme.colors.surface} />
       )}
       {status === 'pending' && (
-        <CloudLightning size={24} color={Theme.colors.secondary} />
+        <CloudLightning size={24} color={Theme.colors.error} />
       )}
       {status === 'offline' && (
-        <CloudOff size={24} color={Theme.colors.outline} />
+        <CloudOff size={24} color={Theme.colors.offline} />
       )}
     </TouchableOpacity>
   );

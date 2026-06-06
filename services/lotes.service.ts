@@ -193,16 +193,12 @@ export const lotesService = {
     }
   },
 
-  async getCapataz(loteId: string) {
-    const assignment = await db.query.asignacion_personal.findFirst({
-      where: and(
-        eq(asignacion_personal.lote_id, loteId),
-        eq(asignacion_personal.etapa, 'Administración' as any)
-      ),
+  async getAssignedPersonnel(loteId: string) {
+    return await db.query.asignacion_personal.findMany({
+      where: eq(asignacion_personal.lote_id, loteId),
       with: {
         trabajador: true
       }
     });
-    return assignment?.trabajador || null;
   }
 };

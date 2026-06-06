@@ -30,15 +30,28 @@ import { parcelasService } from '../services/parcelas.service';
 import { syncWorker } from '../services/sync.worker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CustomAlert } from '../components/GlobalAlert';
+import { useAuthStore } from '../store/authStore';
 
 const { width } = Dimensions.get('window');
 
 const AssignCapatazScreen = ({ navigation, route }: any) => {
+  const role = useAuthStore((state) => state.role);
+
+  const getCleanRole = () => {
+    if (!role) return '';
+    if (typeof role === 'string') return role;
+    if (typeof role === 'object') return (role as any).name || (role as any).role || '';
+    return String(role);
+  };
+
+  const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
+  const isCapataz = userRole.includes('capataz');
+
   const [lotes, setLotes] = useState<any[]>([]);
   const [capataces, setCapataces] = useState<any[]>([]);
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [selectedLote, setSelectedLote] = useState<any>(route.params?.lote || null);
-  const [selectedCapataz, setSelectedCapataz] = useState<string | null>(null);
+  const [selectedCapataces, setSelectedCapataces] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAssigning, setIsAssigning] = useState(false);
 
@@ -89,21 +102,46 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
 
   useFocusEffect(
     useCallback(() => {
+      if (isCapataz) {
+        CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para acceder a esta pantalla.', () => {
+          navigation.goBack();
+        });
+        return;
+      }
       fetchData();
-    }, [fetchData])
+    }, [fetchData, isCapataz, navigation])
   );
 
   const handleAssign = async () => {
-    if (!selectedLote || !selectedCapataz) {
-      CustomAlert.show('ALERTA', 'Selección Incompleta', 'Por favor seleccione un lote y el capataz responsable.');
+    if (!selectedLote || selectedCapataces.length === 0) {
+      CustomAlert.show('ALERTA', 'Selección Incompleta', 'Por favor seleccione un lote y al menos un capataz responsable.');
       return;
     }
 
     try {
       setIsAssigning(true);
-      await parcelasService.asignarPersonal(selectedLote.id, selectedCapataz, 'Administración');
+
+      const hectareas = selectedLote.hectareas_lote || (selectedLote.parcela?.hectareas) || 0;
+      
+      // Utilizar la validación centralizada en personalService
+      const validation = await personalService.validateCapatazAssignment(
+        selectedLote.id, 
+        selectedCapataces, 
+        hectareas
+      );
+
+      if (!validation.valid) {
+        CustomAlert.show('ALERTA', 'Restricción de Asignación', validation.message);
+        return;
+      }
+
+      // Realizar las asignaciones una por una
+      for (const capatazId of selectedCapataces) {
+        await parcelasService.asignarPersonal(selectedLote.id, capatazId, 'Administración');
+      }
+
       syncWorker.syncPendingData();
-      CustomAlert.show('SUCCESS', 'Asignación Exitosa', 'El Capataz ha sido vinculado al lote correctamente.', () => {
+      CustomAlert.show('SUCCESS', 'Vinculación Exitosa', 'Los capataces han sido vinculados al lote correctamente.', () => {
         navigation.goBack();
       });
     } catch (error) {
@@ -114,8 +152,14 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const toggleCapataz = (id: string) => {
+    setSelectedCapataces(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
   const renderCapatazItem = ({ item }: { item: any }) => {
-    const isSelected = selectedCapataz === item.id;
+    const isSelected = selectedCapataces.includes(item.id);
     const roleName = rolesMap[item.role_id] || 'CAPATAZ';
     const fullName = `${item.first_name || item.firstName || ''} ${item.last_name || item.lastName || ''}`.trim();
 
@@ -125,7 +169,7 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
           styles.card,
           isSelected && { backgroundColor: Theme.colors.primaryFixed }
         ]}
-        onPress={() => setSelectedCapataz(item.id)}
+        onPress={() => toggleCapataz(item.id)}
         activeOpacity={0.8}
       >
         <View style={styles.avatarContainer}>

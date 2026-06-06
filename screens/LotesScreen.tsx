@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -11,14 +11,16 @@ import {
   ScrollView,
   Dimensions,
   Platform,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { db } from '../db';
 import { asignacion_personal } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { Theme } from '../theme';
 import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck } from 'lucide-react-native';
-import { lotesService, parcelasService } from '../services';
+import { lotesService, parcelasService, rolesService } from '../services';
 import { useNavigation } from '@react-navigation/native';
 import { CustomAlert } from '../components/GlobalAlert';
 import { useAuthStore } from '../store/authStore';
@@ -41,7 +43,7 @@ const StatCard = ({ label, value, type = 'normal' }: any) => (
   </View>
 );
 
-const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
+const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
   const navigation = useNavigation<any>();
   const role = useAuthStore((state) => state.role);
   
@@ -55,6 +57,12 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
 
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
   const canAssignCapataz = userRole === 'admin' || userRole === 'gerente general';
+
+  // Filtrar solo asignaciones que sean de Capataces para el Responsable Técnico
+  const capatacesAsignados = (item.asignaciones || []).filter((a: any) => {
+    const roleName = (rolesMap[a.trabajador?.role_id] || '').toLowerCase();
+    return roleName === 'capataz';
+  });
 
   const getStatusStyle = (status: string) => {
     switch (status) {
@@ -108,6 +116,23 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
             </Text>
           </View>
 
+          {/* Sección de Responsable Técnico */}
+          <View style={styles.technicalSection}>
+            <ShieldCheck size={12} color={Theme.colors.secondary} />
+            <Text style={styles.technicalLabel}>RESPONSABLE TÉCNICO ({capatacesAsignados.length})</Text>
+          </View>
+          <View style={styles.capatacesList}>
+            {capatacesAsignados.length > 0 ? (
+              capatacesAsignados.map((a: any) => (
+                <Text key={a.id} style={styles.capatazName} numberOfLines={1}>
+                  • {a.trabajador?.first_name} {a.trabajador?.last_name}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.noCapataz}>Sin capataces asignados</Text>
+            )}
+          </View>
+
           <View style={styles.cardActions}>
             <TouchableOpacity 
               onPress={(e) => {
@@ -155,26 +180,78 @@ const LoteCard = ({ item, onDelete, onEdit, onView }: any) => {
 
 const LotesScreen = () => {
   const navigation = useNavigation<any>();
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('Dashboard');
+        return true; // Bloquea la acción por defecto
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          navigation.navigate('Dashboard');
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const userId = useAuthStore((state) => state.role === 'string' ? state.userId : (state as any).userId);
   const role = useAuthStore((state) => state.role);
 
   // Normalización ultra-robusta del rol
-  const getCleanRole = () => {
+  const getCleanRole = useCallback(() => {
     if (!role) return '';
     if (typeof role === 'string') return role;
     if (typeof role === 'object') return (role as any).name || (role as any).role || '';
     return String(role);
-  };
+  }, [role]);
+
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
   const isAdminOrManager = userRole === 'admin' || userRole === 'gerente general';
   
+  const fetchRoles = useCallback(async () => {
+    try {
+      const rolesData = await rolesService.getAll();
+      const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.roles || rolesData.data || []);
+      const newRolesMap: Record<string, string> = {};
+      rolesArray.forEach((r: any) => {
+        newRolesMap[r.id] = (r.name || r.nombre || r.role_name || '').trim().toLowerCase();
+      });
+      setRolesMap(newRolesMap);
+    } catch (e) {
+      console.warn('[LotesScreen] No se pudieron cargar los roles:', e);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchRoles();
+    }, [fetchRoles])
+  );
+
   const { data: lotes = [] } = useLiveQuery(db.query.lotes.findMany({
     with: { 
       parcela: true, 
       semilla: {
         with: { variedad: true }
-      } 
+      },
+      asignaciones: {
+        with: {
+          trabajador: true
+        }
+      }
     }
   }));
 
@@ -269,6 +346,7 @@ const LotesScreen = () => {
             onDelete={handleDelete} 
             onEdit={handleEdit}
             onView={handleView}
+            rolesMap={rolesMap}
           />
         )}
         renderSectionHeader={({ section: { title } }) => (
@@ -357,7 +435,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   topLabel: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 13,
     fontWeight: '800',
     color: Theme.colors.onSurfaceVariant,
@@ -365,7 +443,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   title: {
-    fontFamily: 'System',
+    ...Theme.typography.display,
     fontSize: 24,
     fontWeight: '900',
     color: Theme.colors.primary,
@@ -386,7 +464,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontFamily: 'System',
+    ...Theme.typography.body,
     fontSize: 13,
     color: Theme.colors.onSurface,
   },
@@ -483,6 +561,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Theme.colors.onSurfaceVariant,
     fontWeight: '500',
+  },
+  technicalSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  technicalLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.secondary,
+    letterSpacing: 0.5,
+  },
+  capatacesList: {
+    marginBottom: 8,
+    paddingLeft: 4,
+  },
+  capatazName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.onSurface,
+    lineHeight: 14,
+  },
+  noCapataz: {
+    fontSize: 10,
+    color: Theme.colors.outline,
+    fontStyle: 'italic',
   },
   cardActions: {
     flexDirection: 'row',

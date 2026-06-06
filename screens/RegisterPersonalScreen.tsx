@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,7 +14,9 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ArrowLeft,
   User,
@@ -30,9 +32,48 @@ import { Theme } from '../theme';
 import { CustomAlert } from '../components/GlobalAlert';
 import { rolesService } from '../services/roles.service';
 import { personalService } from '../services/personal.service';
+import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 
 const RegisterPersonalScreen = ({ navigation, route }: any) => {
+  const { role: userRoleRaw } = useAuthStore();
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('Personal');
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        // Capturamos cualquier intento de volver (gesto, botón o dispatch)
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          navigation.navigate('Personal');
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
+  
+  const getCleanRole = () => {
+    if (!userRoleRaw) return 'COLABORADOR';
+    if (typeof userRoleRaw === 'string') return userRoleRaw;
+    if (typeof userRoleRaw === 'object') return (userRoleRaw as any).name || (userRoleRaw as any).role || 'COLABORADOR';
+    return String(userRoleRaw);
+  };
+
+  const currentRole = getCleanRole();
+  const displayRole = currentRole.trim().toUpperCase().replace(/_/g, ' ');
+  const isCapatazUser = currentRole.trim().toUpperCase() === 'CAPATAZ';
+
   const editWorker = route.params?.worker;
   const isEditMode = !!editWorker;
 
@@ -90,13 +131,26 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
     try {
       setIsRolesLoading(true);
       const data = await rolesService.getAll();
-      const rolesArray = Array.isArray(data) ? data : (data.roles || data.data || []);
+      let rolesArray = Array.isArray(data) ? data : (data.roles || data.data || []);
+      
+      // Fallback si no hay roles (error 403 o red)
+      if (rolesArray.length === 0) {
+        rolesArray = [
+          { id: 'TRABAJADOR', name: 'Trabajador', description: 'Personal operativo de campo' },
+          { id: 'CAPATAZ', name: 'Capataz', description: 'Supervisor de cuadrilla' }
+        ];
+      }
+      
       setAvailableRoles(rolesArray);
     } catch (error: any) {
       const isSessionError = error.message === 'SESSION_EXPIRED' || error.response?.status === 401;
       if (!isSessionError) {
         console.error('Error fetching roles:', error);
-        CustomAlert.show('ERROR', 'Error', 'No se pudieron cargar los roles.');
+        // Fallback en error
+        setAvailableRoles([
+          { id: 'TRABAJADOR', name: 'Trabajador', description: 'Personal operativo de campo' },
+          { id: 'CAPATAZ', name: 'Capataz', description: 'Supervisor de cuadrilla' }
+        ]);
       }
     } finally {
       setIsRolesLoading(false);
@@ -195,7 +249,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
       <StatusBar barStyle="dark-content" />
       
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
+        <TouchableOpacity onPress={() => navigation.navigate('Personal')} style={styles.iconButton}>
           <ArrowLeft size={24} color={Theme.colors.onSurface} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>{isEditMode ? 'Editar Perfil' : 'Nuevo Registro'}</Text>
@@ -211,7 +265,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.contextText}>ADMINISTRACIÓN DE PROPIEDAD</Text>
+            <Text style={styles.contextText}>{displayRole}</Text>
             <Text style={styles.mainTitle}>{isEditMode ? 'Actualizar Personal' : 'Registro de Personal'}</Text>
             <Text style={styles.description}>
               {isEditMode 
@@ -259,41 +313,44 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Tipo de Documento</Text>
               <TouchableOpacity 
-                style={styles.inputWrapper} 
+                style={[styles.inputWrapper, isEditMode && { backgroundColor: Theme.colors.surfaceContainerLow }]} 
                 activeOpacity={0.7}
-                onPress={() => setIsDocTypeModalVisible(true)}
+                onPress={() => !isEditMode && setIsDocTypeModalVisible(true)}
+                disabled={isEditMode}
               >
-                <Text style={styles.input}>
+                <Text style={[styles.input, isEditMode && { color: Theme.colors.outline }]}>
                   {documentType === 'Cedula' ? 'Cédula' : 'Pasaporte'}
                 </Text>
-                <ChevronDown size={20} color={Theme.colors.outline} />
+                {!isEditMode && <ChevronDown size={20} color={Theme.colors.outline} />}
               </TouchableOpacity>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Identificación ({documentType === 'Cedula' ? 'Cédula' : 'Pasaporte'})</Text>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, isEditMode && { backgroundColor: Theme.colors.surfaceContainerLow }]}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, isEditMode && { color: Theme.colors.outline }]}
                   placeholder={documentType === 'Cedula' ? "Ej. 0102030405" : "Ej. A1234567"}
                   placeholderTextColor={Theme.colors.outline}
                   keyboardType={documentType === 'Cedula' ? 'numeric' : 'default'}
                   value={identifier}
                   onChangeText={handleIdentifierChange}
+                  editable={!isEditMode}
                 />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Teléfono</Text>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }]}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, (isEditMode && isCapatazUser) && { color: Theme.colors.outline }]}
                   placeholder="Ej. 0985369858"
                   placeholderTextColor={Theme.colors.outline}
                   keyboardType="phone-pad"
                   value={phoneNumber}
                   onChangeText={setPhoneNumber}
+                  editable={!isEditMode || !isCapatazUser}
                 />
               </View>
             </View>
@@ -326,22 +383,25 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>{isEditMode ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}</Text>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }]}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, (isEditMode && isCapatazUser) && { color: Theme.colors.outline }]}
                   placeholder="••••••••"
                   placeholderTextColor={Theme.colors.outline}
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
+                  editable={!isEditMode || !isCapatazUser}
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  {showPassword ? (
-                    <EyeOff size={20} color={Theme.colors.outline} />
-                  ) : (
-                    <Eye size={20} color={Theme.colors.outline} />
-                  )}
-                </TouchableOpacity>
+                {!isCapatazUser && (
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                    {showPassword ? (
+                      <EyeOff size={20} color={Theme.colors.outline} />
+                    ) : (
+                      <Eye size={20} color={Theme.colors.outline} />
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
@@ -361,7 +421,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
           </View>
 
           {/* Status Card */}
-          <View style={styles.statusCard}>
+          <View style={[styles.statusCard, (isEditMode && isCapatazUser) && { opacity: 0.7 }]}>
             <View style={styles.statusInfo}>
               <View style={styles.statusIconWrapper}>
                 <CheckCircle2 size={24} color={Theme.colors.secondary} />
@@ -376,6 +436,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
               onValueChange={setIsActive}
               trackColor={{ false: Theme.colors.surfaceVariant, true: Theme.colors.secondary }}
               thumbColor={Platform.OS === 'ios' ? undefined : Theme.colors.white}
+              disabled={isEditMode && isCapatazUser}
             />
           </View>
 
@@ -530,7 +591,6 @@ const styles = StyleSheet.create({
     ...Theme.typography.display,
     fontSize: 32,
     color: Theme.colors.primary,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'serif',
   },
   description: {
     ...Theme.typography.body,
@@ -560,7 +620,6 @@ const styles = StyleSheet.create({
     ...Theme.typography.headline,
     fontSize: 18,
     color: Theme.colors.onSurface,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'serif',
   },
   divider: {
     height: 1,
@@ -665,7 +724,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalTitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'serif',
+    ...Theme.typography.headline,
     fontSize: 22,
     fontWeight: '800',
     color: Theme.colors.primary,

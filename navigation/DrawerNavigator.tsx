@@ -31,14 +31,23 @@ import {
 const Drawer = createDrawerNavigator();
 
 export const DrawerNavigator = () => {
-  const role = useAuthStore((state) => state.role);
+  const roleRaw = useAuthStore((state) => state.role);
+  
+  const getCleanRole = () => {
+    if (!roleRaw) return '';
+    if (typeof roleRaw === 'string') return roleRaw;
+    if (typeof roleRaw === 'object') return (roleRaw as any).name || (roleRaw as any).role || '';
+    return String(roleRaw);
+  };
+
+  const role = getCleanRole().toUpperCase();
 
   // Definición de permisos por rol
-  const canAccessLotes = ['ADMIN', 'GESTOR_INVENTARIO', 'CAPATAZ'].includes(role || '');
-  const canAccessParcelas = ['ADMIN', 'CAPATAZ'].includes(role || '');
-  const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO'].includes(role || '');
-  const canAccessPersonal = ['ADMIN', 'CAPATAZ'].includes(role || '');
-  const canAccessRoles = ['ADMIN'].includes(role || '');
+  const canAccessLotes = ['ADMIN', 'GESTOR_INVENTARIO', 'CAPATAZ'].includes(role);
+  const canAccessParcelas = ['ADMIN', 'CAPATAZ'].includes(role);
+  const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO'].includes(role);
+  const canAccessPersonal = ['ADMIN', 'CAPATAZ'].includes(role);
+  const canAccessRoles = ['ADMIN'].includes(role);
 
   return (
     <Drawer.Navigator
@@ -211,7 +220,8 @@ export const DrawerNavigator = () => {
         component={AssignCapatazScreen} 
         options={{ 
           title: 'Asignar Capataz',
-          drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />
+          drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />,
+          drawerItemStyle: { display: 'none' }
         }}
       />
     </Drawer.Navigator>

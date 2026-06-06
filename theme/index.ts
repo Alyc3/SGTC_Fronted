@@ -10,6 +10,7 @@ export const Theme = {
     primaryFixedDim: '#e7bdb1',
     secondary: '#3a6843', // Plantation Green
     secondaryContainer: '#b9ecbd',
+    offline:'#26e34c',
     onSecondary: '#ffffff',
     onSecondaryContainer: '#3e6d47',
     secondaryFixed: '#bcefc0',

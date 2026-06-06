@@ -47,8 +47,6 @@ export const CustomDrawer = (props: DrawerContentComponentProps) => {
 
       {/* Footer - Más compacto */}
       <View style={styles.footer}>
-        <SyncButton />
-        
         <View style={styles.footerActions}>
           <View>
             <Text style={styles.versionText}>v1.0.0 Grupo 1</Text>

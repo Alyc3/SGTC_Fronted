@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ import {
   StatusBar,
   ImageBackground,
   Dimensions,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Boxes,
   ChevronDown,
@@ -109,6 +111,39 @@ const LotCard = ({ index, lot, updateLot, semillas, styles }: any) => {
 const GestionLoteScreen = ({ navigation, route }: any) => {
   const { parcelaId, id: loteId } = route.params || {};
   const isEditing = !!loteId;
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (parcelaId) {
+          navigation.navigate('GestionParcela', { id: parcelaId });
+        } else {
+          navigation.navigate('Lotes');
+        }
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        // Capturamos cualquier intento de volver (gesto, botón o dispatch)
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          if (parcelaId) {
+            navigation.navigate('GestionParcela', { id: parcelaId });
+          } else {
+            navigation.navigate('Lotes');
+          }
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation, parcelaId])
+  );
 
   const [tipoParcela, setTipoParcela] = useState<'Regular' | 'Irregular'>('Regular');
   const [numLotes, setNumLotes] = useState(1);
@@ -264,8 +299,13 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
         }
       }
       
-      CustomAlert.show('SUCCESS', 'Éxito', isEditing ? 'Lote actualizado correctamente.' : `${numLotes} lote(s) registrado(s).`);
-      navigation.goBack();
+      CustomAlert.show('SUCCESS', 'Éxito', isEditing ? 'Lote actualizado correctamente.' : `${numLotes} lote(s) registrado(s).`, () => {
+        if (parcelaId) {
+          navigation.navigate('GestionParcela', { id: parcelaId });
+        } else {
+          navigation.goBack();
+        }
+      });
     } catch (error) {
       CustomAlert.show('ERROR', 'Fallo al Guardar', 'No se pudo procesar la solicitud.');
     } finally {
@@ -287,7 +327,16 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
           style={styles.hero}
         >
           <View style={styles.heroOverlay}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <TouchableOpacity 
+              onPress={() => {
+                if (parcelaId) {
+                  navigation.navigate('GestionParcela', { id: parcelaId });
+                } else {
+                  navigation.navigate('Lotes');
+                }
+              }} 
+              style={styles.backButton}
+            >
               <ChevronDown size={28} color={Theme.colors.white} style={{ transform: [{ rotate: '90deg' }] }} />
             </TouchableOpacity>
             <View style={styles.heroContent}>
@@ -455,14 +504,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   heroTitle: {
-    fontFamily: 'System',
+    ...Theme.typography.display,
     fontSize: 36,
     fontWeight: '900',
     color: Theme.colors.white,
     letterSpacing: -1,
   },
   heroSubtitle: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 10,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.8)',
@@ -485,7 +534,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   sidebarTitle: {
-    fontFamily: 'System',
+    ...Theme.typography.headline,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 16,
@@ -507,7 +556,7 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.primary,
   },
   toggleText: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 14,
     fontWeight: '600',
     color: Theme.colors.onSurfaceVariant,
@@ -528,20 +577,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryHeaderText: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 10,
     fontWeight: '800',
     color: Theme.colors.secondary,
     letterSpacing: 1,
   },
   summaryValue: {
-    fontFamily: 'System',
+    ...Theme.typography.display,
     fontSize: 28,
     fontWeight: '800',
     color: Theme.colors.onSurface,
   },
   summaryLabel: {
-    fontFamily: 'System',
+    ...Theme.typography.body,
     fontSize: 12,
     color: Theme.colors.onSurfaceVariant,
   },
@@ -561,13 +610,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   sectionTitle: {
-    fontFamily: 'System',
+    ...Theme.typography.headline,
     fontSize: 22,
     fontWeight: '700',
     color: Theme.colors.onSurface,
   },
   sectionSubtitle: {
-    fontFamily: 'System',
+    ...Theme.typography.body,
     fontSize: 14,
     color: Theme.colors.onSurfaceVariant,
   },
@@ -641,7 +690,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Theme.colors.outlineVariant,
     paddingVertical: 8,
-    fontFamily: 'System',
+    ...Theme.typography.body,
     fontSize: 18,
     fontWeight: '700',
     color: Theme.colors.primary,
@@ -655,7 +704,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   selectInputText: {
-    fontFamily: 'System',
+    ...Theme.typography.body,
     fontSize: 16,
     fontWeight: '500',
     color: Theme.colors.onSurface,
@@ -716,7 +765,7 @@ const styles = StyleSheet.create({
   },
   fabText: {
     color: Theme.colors.white,
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 18,
     fontWeight: '800',
   },
@@ -741,7 +790,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   existingLotCode: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 16,
     fontWeight: '800',
     color: Theme.colors.primary,
@@ -753,7 +802,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   statusTextSmall: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 10,
     fontWeight: '800',
     color: Theme.colors.onSurfaceVariant,
@@ -769,7 +818,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   detailText: {
-    fontFamily: 'System',
+    ...Theme.typography.label,
     fontSize: 12,
     color: Theme.colors.onSurfaceVariant,
     fontWeight: '600',

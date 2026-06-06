@@ -3,7 +3,8 @@ import {
   semillasSync, 
   parcelasSync, 
   personalSync,
-  catalogoSync 
+  catalogoSync,
+  asignacionPersonalSync
 } from './online';
 import { networkService } from './network.service';
 
@@ -32,6 +33,7 @@ export const syncService = {
       await parcelasSync.sync();
       await parcelasSync.syncLotes();
       await personalSync.sync();
+      await asignacionPersonalSync.sync();
 
       console.log('--- Sincronización Modular Completada ---');
     } catch (error) {

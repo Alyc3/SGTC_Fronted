@@ -37,15 +37,38 @@ const ListarParcelaScreen = ({ navigation }: any) => {
   const loading = !parcelasRaw;
 
   const handleDelete = (id: string, nombre: string) => {
+    const parcela = parcelas.find(p => p.id === id);
+    if (!parcela) return;
+
+    // 1. Verificar si hay lotes en producción
+    const lotesEnProduccion = (parcela.lotes || []).filter((l: any) => l.estado_lote === 'En_Produccion');
+    
+    if (lotesEnProduccion.length > 0) {
+      CustomAlert.show(
+        'ALERTA',
+        'Restricción de Baja',
+        `No se puede eliminar la parcela "${nombre}" porque tiene lotes en producción activa. Finalice los ciclos de cosecha antes de eliminar la parcela.`
+      );
+      return;
+    }
+
+    // 2. Si no hay en producción, pero tiene otros lotes (Completados o Reservados)
+    const tieneLotes = (parcela.lotes || []).length > 0;
+    const lotesInfo = (parcela.lotes || []).map((l: any) => l.codigo).join(', ');
+    
+    const mensaje = tieneLotes 
+      ? `La parcela "${nombre}" tiene los siguientes lotes registrados: ${lotesInfo}. ¿Está seguro que desea eliminar la parcela y toda su trazabilidad asociada?`
+      : `¿Está seguro que desea eliminar la parcela "${nombre}"? Esta acción no se puede deshacer.`;
+
     CustomAlert.show(
       'ALERTA',
-      'Eliminar Parcela',
-      `¿Está seguro que desea eliminar la parcela "${nombre}"? Esta acción no se puede deshacer.`,
+      'Confirmar Eliminación',
+      mensaje,
       async () => {
         try {
           await parcelasService.delete(id);
-        } catch (error) {
-          CustomAlert.show('ERROR', 'Error', 'No se pudo eliminar la parcela.');
+        } catch (error: any) {
+          CustomAlert.show('ERROR', 'Error', error.message || 'No se pudo eliminar la parcela.');
         }
       },
       'ELIMINAR',

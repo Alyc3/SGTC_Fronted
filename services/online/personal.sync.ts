@@ -67,7 +67,13 @@ export const personalSync = {
   async pull() {
     try {
       const remoteData = await authService.getAllUsers();
+      // Si la respuesta fue 403, authService.getAllUsers() devuelve [] y ya logueó la advertencia
       const usersList = Array.isArray(remoteData) ? remoteData : (remoteData.users || remoteData.data || []);
+      
+      if (usersList.length === 0) {
+        // Podría ser un 403 o simplemente que no hay usuarios, el servicio ya manejó el log
+        return;
+      }
 
       for (const record of usersList) {
         // Mapeo robusto del role_id y otros campos según el esquema de producción

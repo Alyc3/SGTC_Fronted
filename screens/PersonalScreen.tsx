@@ -29,6 +29,7 @@ import { Theme } from '../theme';
 import { personalService } from '../services/personal.service';
 import { rolesService } from '../services/roles.service';
 import { CustomAlert } from '../components/GlobalAlert';
+import { useAuthStore } from '../store/authStore';
 
 const ALLOWED_ROLES = [
   'ADMIN',
@@ -54,6 +55,18 @@ const ALLOWED_ROLES_NORMALIZED = [
 ];
 
 const PersonalScreen = ({ navigation }: any) => {
+  const { role: userRoleRaw } = useAuthStore();
+  
+  const getCleanRole = () => {
+    if (!userRoleRaw) return 'COLABORADOR';
+    if (typeof userRoleRaw === 'string') return userRoleRaw;
+    if (typeof userRoleRaw === 'object') return (userRoleRaw as any).name || (userRoleRaw as any).role || 'COLABORADOR';
+    return String(userRoleRaw);
+  };
+
+  const currentRole = getCleanRole();
+  const displayRole = currentRole.trim().toUpperCase().replace(/_/g, ' ');
+
   const [workers, setWorkers] = useState<any[]>([]);
   const [filteredWorkers, setFilteredWorkers] = useState<any[]>([]);
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
@@ -73,8 +86,12 @@ const PersonalScreen = ({ navigation }: any) => {
       let rolesData: any = [];
       try {
         rolesData = await rolesService.getAll();
-      } catch (roleError) {
-        console.warn('No se pudieron obtener los roles de la API. Mostrando IDs.', roleError);
+      } catch (roleError: any) {
+        if (roleError.response?.status === 403) {
+          console.log(`[Personal] El rol ${currentRole} no tiene permisos para ver roles remotos.`);
+        } else {
+          console.warn('No se pudieron obtener los roles de la API. Mostrando IDs.', roleError);
+        }
       }
 
       const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.roles || rolesData.data || []);
@@ -87,7 +104,11 @@ const PersonalScreen = ({ navigation }: any) => {
 
       // Filtrar trabajadores según los roles permitidos
       const filteredWorkersData = workersData.filter((w: any) => {
-        const roleName = newRolesMap[w.role_id] || w.role_id;
+        const roleName = newRolesMap[w.role_id];
+        
+        // Si no pudimos cargar los roles (mapa vacío), permitimos ver a todos para no dejar la pantalla en blanco
+        if (Object.keys(newRolesMap).length === 0) return true;
+
         if (!roleName) return false; 
         const cleanName = roleName.trim().toLowerCase();
         return ALLOWED_ROLES_NORMALIZED.includes(cleanName);
@@ -107,6 +128,7 @@ const PersonalScreen = ({ navigation }: any) => {
 
   useFocusEffect(
     useCallback(() => {
+      setSearchTerm('');
       fetchWorkersAndRoles();
     }, [fetchWorkersAndRoles])
   );
@@ -180,6 +202,7 @@ const PersonalScreen = ({ navigation }: any) => {
         <TouchableOpacity 
           style={styles.workerMainInfo}
           onPress={() => {
+            setSearchTerm('');
             setSelectedWorker(item);
             setIsDetailVisible(true);
           }}
@@ -202,7 +225,10 @@ const PersonalScreen = ({ navigation }: any) => {
         <View style={styles.actionButtons}>
           <TouchableOpacity 
             style={styles.actionIcon} 
-            onPress={() => navigation.navigate('RegisterPersonal', { worker: item })}
+            onPress={() => {
+              setSearchTerm('');
+              navigation.navigate('RegisterPersonal', { worker: item });
+            }}
           >
             <Edit2 size={18} color={Theme.colors.primary} />
           </TouchableOpacity>
@@ -216,7 +242,7 @@ const PersonalScreen = ({ navigation }: any) => {
       <StatusBar barStyle="dark-content" />
       
       <View style={styles.header}>
-        <Text style={styles.headerLabel}>ADMINISTRACIÓN</Text>
+        <Text style={styles.headerLabel}>{displayRole}</Text>
         <Text style={styles.title}>{`Personal (${filteredWorkers.length})`}</Text>
         <Text style={styles.description}>
           Gestione los colaboradores y sus roles de acceso dentro del ecosistema STGC.

@@ -35,15 +35,32 @@ const LoginAuthScreen = () => {
       await login(email, password);
     } catch (err: any) {
       // Obtenemos el error ya formateado (string) desde el store
-      const formattedError = useAuthStore.getState().error || '';
+      const formattedError = (useAuthStore.getState().error || '').toLowerCase();
       const status = err.response?.status;
 
-      if (status === 404 || formattedError.toLowerCase().includes('no existe')) {
-        CustomAlert.show('ERROR', 'Cuenta no encontrada', 'No existe una cuenta asociada a este correo electrónico.');
-      } else if (status === 401 || formattedError.toLowerCase().includes('incorrecto') || formattedError.toLowerCase().includes('invalid')) {
-        CustomAlert.show('ERROR', 'Credenciales Incorrectas', 'El correo o la contraseña son incorrectos.');
-      } else {
-        CustomAlert.show('ERROR', 'Error de Autenticación', formattedError || 'Ocurrió un error inesperado.');
+      // 1. Caso: Cuenta no encontrada o formato de correo inválido
+      if (status === 404 || formattedError.includes('no existe') || formattedError.includes('valid email')) {
+        CustomAlert.show('ERROR', 'Correo Incorrecto', 'El correo electrónico es incorrecto.');
+      } 
+      // 2. Caso: Error de contraseña o validaciones múltiples (401 o 422)
+      else if (status === 401 || status === 422) {
+        const hasPwdErr = formattedError.includes('password') || formattedError.includes('contraseña');
+        const hasEmailErr = formattedError.includes('email') || formattedError.includes('correo');
+
+        if (hasEmailErr && hasPwdErr) {
+          CustomAlert.show('ERROR', 'Campos Incorrectos', 'Ambos campos están incorrectos.');
+        } else if (hasPwdErr) {
+          CustomAlert.show('ERROR', 'Contraseña Incorrecta', 'La contraseña es incorrecta.');
+        } else if (hasEmailErr) {
+          CustomAlert.show('ERROR', 'Correo Incorrecto', 'El correo electrónico es incorrecto.');
+        } else {
+          // Fallback para 401/422 genérico
+          CustomAlert.show('ERROR', 'Campos Incorrectos', 'Ambos campos están incorrectos.');
+        }
+      } 
+      // 3. Otros errores inesperados
+      else {
+        CustomAlert.show('ERROR', 'Error de Autenticación', useAuthStore.getState().error || 'Ocurrió un error inesperado.');
       }
     }
   };

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { dashboardService, ActivityItemData, personalService, rolesService } from '../services';
+import { useAuthStore } from '../store/authStore';
 
 const { width } = Dimensions.get('window');
 
@@ -56,6 +57,18 @@ const ALLOWED_ROLES_NORMALIZED = [
 ];
 
 const DashboardScreen = ({ navigation }: any) => {
+  const { role: userRoleRaw } = useAuthStore();
+  
+  const getCleanRole = () => {
+    if (!userRoleRaw) return 'COLABORADOR';
+    if (typeof userRoleRaw === 'string') return userRoleRaw;
+    if (typeof userRoleRaw === 'object') return (userRoleRaw as any).name || (userRoleRaw as any).role || 'COLABORADOR';
+    return String(userRoleRaw);
+  };
+
+  const currentRole = getCleanRole();
+  const displayRole = currentRole.trim().toUpperCase().replace(/_/g, ' ');
+
   const [stats, setStats] = useState({ activeLotsCount: 0, personalCount: 0 });
   const [activities, setActivities] = useState<ActivityItemData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +80,14 @@ const DashboardScreen = ({ navigation }: any) => {
         dashboardService.getStats(),
         dashboardService.getRecentActivity(),
         personalService.getAll(),
-        rolesService.getAll()
+        rolesService.getAll().catch(error => {
+          if (error.response?.status === 403) {
+            console.log(`[Dashboard] El rol ${currentRole} no tiene permisos para ver roles remotos. Usando fallback local.`);
+          } else {
+            console.warn('Dashboard: No se pudieron obtener los roles de la API.', error.response?.status);
+          }
+          return [];
+        })
       ]);
 
       // Calcular el conteo de personal filtrado por los roles permitidos
@@ -79,6 +99,8 @@ const DashboardScreen = ({ navigation }: any) => {
 
       const filteredCount = workersData.filter((w: any) => {
         const roleName = rolesMap[w.role_id];
+        // Si no hay roles (error 403), mostramos el conteo total de trabajadores locales activos
+        if (Object.keys(rolesMap).length === 0) return true;
         return roleName && ALLOWED_ROLES_NORMALIZED.includes(roleName);
       }).length;
 
@@ -92,7 +114,7 @@ const DashboardScreen = ({ navigation }: any) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentRole]);
 
   useFocusEffect(
     useCallback(() => {
@@ -123,7 +145,7 @@ const DashboardScreen = ({ navigation }: any) => {
       >
         {/* Welcome Header */}
         <View style={styles.header}>
-          <Text style={styles.welcomeLabel}>BIENVENIDO, ADMINISTRADOR</Text>
+          <Text style={styles.welcomeLabel}>BIENVENIDO, {displayRole}</Text>
           <Text style={styles.title}>Panel de Control</Text>
         </View>
 
@@ -285,7 +307,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4
   },
   welcomeLabel: {
-    fontFamily: 'System',
+    ...Theme.typography.labelSm,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.5,
@@ -293,7 +315,7 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   title: {
-    fontFamily: 'System',
+    ...Theme.typography.display,
     fontSize: 28,
     fontWeight: '800',
     color: Theme.colors.primary
@@ -354,7 +376,7 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md
   },
   sectionTitle: {
-    fontFamily: 'System',
+    ...Theme.typography.headline,
     fontSize: 18,
     fontWeight: '700',
     color: Theme.colors.onSurface,

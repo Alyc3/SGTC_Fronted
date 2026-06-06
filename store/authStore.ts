@@ -7,6 +7,7 @@ interface AuthState {
   token: string | null;
   role: string | null;
   userId: string | null;
+  userName: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -42,6 +43,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   role: null,
   userId: null,
+  userName: null,
   isAuthenticated: false,
   isLoading: true,
   error: null,
@@ -58,20 +60,35 @@ export const useAuthStore = create<AuthState>((set) => ({
         await SecureStore.setItemAsync('userToken', token);
         const decoded = jwtDecode<JWTPayload>(token);
         
-        // Obtener el perfil real para asegurar el rol
-        let realRole = decoded.role;
+        // Obtener el perfil real para asegurar el rol y nombre
+        let realRole: string = decoded.role;
+        let realName: string = '';
         try {
           const profile = await authService.getMe();
           // Intentar obtener rol de varias posibles llaves del backend
-          realRole = profile.rol || profile.role || profile.role_name || decoded.role;
+          const roleValue = profile.rol || profile.role || profile.role_name || decoded.role;
+          
+          if (roleValue && typeof roleValue === 'object') {
+            realRole = roleValue.name || roleValue.role || decoded.role;
+          } else {
+            realRole = roleValue || decoded.role;
+          }
+
+          // Obtener nombre completo
+          if (profile.first_name || profile.last_name) {
+            realName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
+          } else if (profile.full_name) {
+            realName = profile.full_name;
+          }
         } catch (profileError) {
           console.log('No se pudo obtener el perfil, usando rol del token', profileError);
         }
         
         set({
           token,
-          role: realRole,
+          role: String(realRole),
           userId: decoded.sub,
+          userName: realName || null,
           isAuthenticated: true,
           isLoading: false,
         });
@@ -92,6 +109,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       token: null,
       role: null,
       userId: null,
+      userName: null,
       isAuthenticated: false,
       isLoading: false,
     });
@@ -112,19 +130,34 @@ export const useAuthStore = create<AuthState>((set) => ({
           return;
         }
 
-        // Obtener el perfil real para asegurar el rol actualizado
-        let realRole = decoded.role;
+        // Obtener el perfil real para asegurar el rol actualizado y nombre
+        let realRole: string = decoded.role;
+        let realName: string = '';
         try {
           const profile = await authService.getMe();
-          realRole = profile.rol || profile.role || profile.role_name || decoded.role;
+          const roleValue = profile.rol || profile.role || profile.role_name || decoded.role;
+          
+          if (roleValue && typeof roleValue === 'object') {
+            realRole = roleValue.name || roleValue.role || decoded.role;
+          } else {
+            realRole = roleValue || decoded.role;
+          }
+
+          // Obtener nombre completo
+          if (profile.first_name || profile.last_name) {
+            realName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
+          } else if (profile.full_name) {
+            realName = profile.full_name;
+          }
         } catch (profileError) {
           console.log('No se pudo obtener el perfil en restore, usando rol del token', profileError);
         }
 
         set({
           token,
-          role: realRole,
+          role: String(realRole),
           userId: decoded.sub,
+          userName: realName || null,
           isAuthenticated: true,
           isLoading: false,
         });

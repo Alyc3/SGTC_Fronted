@@ -5,8 +5,17 @@ export const rolesService = {
    * List all roles
    */
   async getAll() {
-    const response = await authApi.get('/api/roles/');
-    return response.data;
+    try {
+      const response = await authApi.get('/api/roles/');
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        console.log('[rolesService] Acceso restringido (403): El rol actual no tiene permisos para listar roles remotos. Usando datos locales.');
+      } else {
+        console.warn('rolesService.getAll: No se pudieron obtener los roles.', error.response?.status || error.message);
+      }
+      return []; // Devolvemos un array vacío para evitar romper la UI
+    }
   },
 
   /**

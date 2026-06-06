@@ -10,6 +10,7 @@ import {
   Dimensions,
   Animated,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -44,6 +45,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Theme } from '../theme';
 import { lotesService } from '../services/lotes.service';
+import { rolesService } from '../services/roles.service';
 import { syncWorker } from '../services/sync.worker';
 import { CustomAlert } from '../components/GlobalAlert';
 import { EtapaProcesoValues } from '../db/schema/enums';
@@ -55,6 +57,31 @@ const { width } = Dimensions.get('window');
 const ViewLoteScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
   const role = useAuthStore((state) => state.role);
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('Lotes');
+        return true; // Bloquea la acción por defecto
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        // Capturamos cualquier intento de volver (gesto, botón o dispatch)
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          navigation.navigate('Lotes');
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
   
   // Normalización ultra-robusta del rol
   const getCleanRole = () => {
@@ -67,8 +94,8 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
   const canAssignCapataz = userRole === 'admin' || userRole === 'gerente general';
 
-  const [isProcessing, setIsProcessing] = useState(lote?.estado_lote === 'En_Produccion');
-  const [capataz, setCapataz] = useState<any>(null);
+  const [assignedPersonnel, setAssignedPersonnel] = useState<any[]>([]);
+  const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [stages, setStages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -83,11 +110,19 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
     if (!lote?.id) return;
     try {
       setLoading(true);
-      const [capatazData, stagesData] = await Promise.all([
-        lotesService.getCapataz(lote.id),
+      const [personnelData, rolesData, stagesData] = await Promise.all([
+        lotesService.getAssignedPersonnel(lote.id),
+        rolesService.getAll().catch(() => []),
         lotesService.getStages(lote.id)
       ]);
-      setCapataz(capatazData);
+
+      const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.roles || rolesData.data || []);
+      const newRolesMap: Record<string, string> = {};
+      rolesArray.forEach((r: any) => {
+        newRolesMap[r.id] = (r.name || r.nombre || r.role_name || '').trim().toLowerCase();
+      });
+      setRolesMap(newRolesMap);
+      setAssignedPersonnel(personnelData);
       setStages(stagesData);
     } catch (error) {
       console.error('Error fetching lote details:', error);
@@ -101,10 +136,6 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
       fetchData();
     }, [fetchData])
   );
-
-  const toggleProcess = () => {
-    setIsProcessing(!isProcessing);
-  };
 
   const handleStartStage = async (etapa: string) => {
     try {
@@ -131,18 +162,23 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   );
 
   const renderStageCard = (title: string, index: number) => {
+    if (title === 'Administración') return null;
+
     const stageInfo = stages.find(s => s.etapa === title);
     const status = stageInfo?.estado || 'Pendiente';
     
-    // Lógica de habilitación: La primera siempre, las demás si la anterior está Completada
-    let isEnabled = index === 0;
-    if (index > 0) {
+    // Lógica de habilitación: Sembrado siempre, las demás si la anterior está Completada
+    let isEnabled = title === 'Sembrado';
+    if (!isEnabled && index > 0) {
       const prevStage = stages.find(s => s.etapa === EtapaProcesoValues[index - 1]);
       isEnabled = prevStage?.estado === 'Completada';
     }
 
     const isActive = status === 'En_Proceso';
     const isCompleted = status === 'Completada';
+
+    // Usuarios asignados a esta etapa específica
+    const stagePersonnel = assignedPersonnel.filter(p => p.etapa === title);
 
     return (
       <View key={title} style={[
@@ -166,6 +202,16 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         <Text style={styles.stageDescription}>
           {isCompleted ? 'Etapa finalizada exitosamente.' : isActive ? 'Etapa en ejecución actual.' : 'Esperando inicio de fase.'}
         </Text>
+
+        {/* Lista de Personal Asignado a esta Etapa */}
+        {stagePersonnel.length > 0 && (
+          <View style={styles.stagePersonnelList}>
+            <Users size={12} color={Theme.colors.outline} />
+            <Text style={styles.stagePersonnelText}>
+              {stagePersonnel.map(p => `${p.trabajador?.first_name}`).join(', ')}
+            </Text>
+          </View>
+        )}
         
         <View style={styles.stageFooter}>
           {isEnabled && status === 'Pendiente' && (
@@ -199,8 +245,15 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         <View style={styles.stickyContent}>
           <Text style={styles.stickyCode}>{lote?.codigo || 'LOTE-C01'}</Text>
           <View style={styles.stickyStatus}>
-            <View style={[styles.statusDot, isProcessing ? { backgroundColor: Theme.colors.secondary } : { backgroundColor: Theme.colors.outline }]} />
-            <Text style={styles.stickyStatusText}>{isProcessing ? 'PROCESANDO' : 'DETENIDO'}</Text>
+            <View style={[
+              styles.statusDot, 
+              lote?.estado_lote === 'En_Produccion' ? { backgroundColor: Theme.colors.secondary } : 
+              lote?.estado_lote === 'Completada' ? { backgroundColor: Theme.colors.primary } :
+              { backgroundColor: Theme.colors.tertiary }
+            ]} />
+            <Text style={styles.stickyStatusText}>
+              {(lote?.estado_lote || 'RESERVADO').replace('_', ' ').toUpperCase()}
+            </Text>
           </View>
         </View>
       </Animated.View>
@@ -217,7 +270,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         <View style={styles.topSection}>
           <TouchableOpacity 
             style={styles.circleBackButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => navigation.navigate('Lotes')}
           >
             <ArrowLeft size={24} color={Theme.colors.primary} />
           </TouchableOpacity>
@@ -231,8 +284,15 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
             style={styles.heroGradient}
           >
             <View style={styles.heroBadgeRow}>
-              <View style={[styles.heroStatusBadge, isProcessing ? styles.bgSuccess : styles.bgTertiary]}>
-                <Text style={styles.heroStatusText}>{isProcessing ? 'EN PRODUCCIÓN' : 'RESERVADO'}</Text>
+              <View style={[
+                styles.heroStatusBadge, 
+                lote?.estado_lote === 'En_Produccion' ? styles.bgSuccess : 
+                lote?.estado_lote === 'Completada' ? { backgroundColor: Theme.colors.primary } :
+                styles.bgTertiary
+              ]}>
+                <Text style={styles.heroStatusText}>
+                  {(lote?.estado_lote || 'RESERVADO').replace('_', ' ').toUpperCase()}
+                </Text>
               </View>
               <View style={styles.heroGlassBadge}>
                 <Calendar size={12} color={Theme.colors.white} />
@@ -287,17 +347,36 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
 
         <View style={styles.sectionPadding}>
           <Text style={styles.sectionLabel}>RESPONSABLE TÉCNICO</Text>
-          <View style={styles.foremanCard}>
-            <View style={styles.foremanAvatar}>
-              <User size={28} color={Theme.colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.foremanName}>{capataz ? `${capataz.first_name} ${capataz.last_name}` : 'Sin Asignar'}</Text>
-              <Text style={styles.foremanRole}>{capataz ? 'Capataz Responsable' : 'Pendiente de vinculación'}</Text>
-            </View>
-            {capataz && (
-              <View style={styles.verifiedIcon}>
-                <ShieldCheck size={18} color={Theme.colors.secondary} />
+          <View style={styles.foremanList}>
+            {assignedPersonnel
+              .filter(p => {
+                const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
+                return rName === 'capataz' || p.etapa === 'Administración';
+              })
+              .map((p, idx) => (
+                <View key={p.id || idx} style={styles.foremanCard}>
+                  <View style={styles.foremanAvatar}>
+                    <User size={28} color={Theme.colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.foremanName}>{`${p.trabajador?.first_name} ${p.trabajador?.last_name}`}</Text>
+                    <Text style={styles.foremanRole}>Capataz Responsable</Text>
+                  </View>
+                  <View style={styles.verifiedIcon}>
+                    <ShieldCheck size={18} color={Theme.colors.secondary} />
+                  </View>
+                </View>
+              ))
+            }
+            {assignedPersonnel.filter(p => (rolesMap[p.trabajador?.role_id] || '').toLowerCase() === 'capataz' || p.etapa === 'Administración').length === 0 && (
+              <View style={styles.foremanCard}>
+                <View style={styles.foremanAvatar}>
+                  <User size={28} color={Theme.colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.foremanName}>Sin Asignar</Text>
+                  <Text style={styles.foremanRole}>Pendiente de vinculación</Text>
+                </View>
               </View>
             )}
           </View>
@@ -310,7 +389,9 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
           </View>
           
           <View style={styles.stagesList}>
-            {EtapaProcesoValues.map((etapa, index) => renderStageCard(etapa, index))}
+            {EtapaProcesoValues
+              .filter(etapa => etapa !== 'Administración')
+              .map((etapa, index) => renderStageCard(etapa, index))}
           </View>
         </View>
 
@@ -319,23 +400,6 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
           <Text style={styles.footerLegal}>VERIFICACIÓN CIENTÍFICA DE ORIGEN • 2026</Text>
         </View>
       </Animated.ScrollView>
-
-      <TouchableOpacity 
-        style={[styles.mainFab, isProcessing ? styles.fabPause : styles.fabPlay]}
-        onPress={toggleProcess}
-        activeOpacity={0.9}
-      >
-        <LinearGradient
-          colors={isProcessing ? [Theme.colors.primary, '#2c160e'] : [Theme.colors.secondary, '#22502d']}
-          style={styles.fabGradient}
-        >
-          {isProcessing ? (
-            <PauseCircle size={32} color={Theme.colors.white} />
-          ) : (
-            <PlayCircle size={32} color={Theme.colors.white} />
-          )}
-        </LinearGradient>
-      </TouchableOpacity>
     </View>
   );
 };
@@ -546,6 +610,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Theme.colors.white,
   },
+  foremanList: {
+    gap: 12,
+  },
   foremanCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -555,7 +622,24 @@ const styles = StyleSheet.create({
     gap: 16,
     ...Theme.shadows.ambient,
   },
-  foremanAvatar: {
+  stagePersonnelList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  stagePersonnelText: {
+    fontSize: 11,
+    color: Theme.colors.onSurfaceVariant,
+    fontWeight: '600',
+  },
+  sectionHeaderRow: {
+
     width: 56,
     height: 56,
     borderRadius: 28,
