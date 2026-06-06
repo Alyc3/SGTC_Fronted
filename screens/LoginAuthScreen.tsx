@@ -65,10 +65,10 @@ const LoginAuthScreen = () => {
 
           <View style={styles.content}>
             {/* Branding */}
-            <Text style={styles.brandSubtitle}>Est. 2020</Text>
+            <Text style={styles.brandSubtitle}>Est. 2026</Text>
             <Text style={styles.brandTitle}>Tierra Fertil</Text>
             <Text style={styles.tagline}>
-              Un recorrido desde la tierra hasta la taza, con precisión científica y elegancia narrativa.
+              Un recorrido desde la tierra hasta la taza.
             </Text>
 
             {/* Form Header */}
@@ -90,7 +90,7 @@ const LoginAuthScreen = () => {
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
-                  placeholder="mail@example.com"
+                  placeholder="email@ejemplo.com"
                   placeholderTextColor={Theme.colors.outline}
                   value={email}
                   onChangeText={(text) => {
@@ -126,7 +126,7 @@ const LoginAuthScreen = () => {
                   onPress={() => setIsPasswordVisible(!isPasswordVisible)}
                   style={styles.iconButton}
                 >
-                  <Text style={styles.toggleText}>{isPasswordVisible ? 'Hide' : 'Mostrar'}</Text>
+                  <Text style={styles.toggleText}>{isPasswordVisible ? 'Ocultar' : 'Mostrar'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
