@@ -6,4 +6,5 @@ export * from './lotes';
 export * from './users';
 export * from './asignacion_personal';
 export * from './estado_etapa';
+export * from './cosecha';
 export * from './relations';

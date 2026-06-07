@@ -64,6 +64,13 @@
       "when": 1780257833545,
       "tag": "0008_careful_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1780789718326,
+      "tag": "0009_add_cosecha_schema",
+      "breakpoints": true
     }
   ]
 }

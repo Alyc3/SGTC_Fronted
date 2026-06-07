@@ -11,6 +11,8 @@ import {
   Animated,
   ActivityIndicator,
   BackHandler,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -41,18 +43,25 @@ import {
   Mountain,
   Ruler,
   Rocket,
+  X,
+  Camera,
+  ClipboardCheck,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as DocumentPicker from 'expo-document-picker';
 import { Theme } from '../theme';
 import { lotesService } from '../services/lotes.service';
 import { rolesService } from '../services/roles.service';
+import { cosechaService } from '../services/cosecha.service';
 import { syncWorker } from '../services/sync.worker';
 import { CustomAlert } from '../components/GlobalAlert';
 import { EtapaProcesoValues } from '../db/schema/enums';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuthStore } from '../store/authStore';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width } = Dimensions.get('window');
+const GRAIN_TYPES = ['Verde', 'Rojo', 'Variado'];
 
 const ViewLoteScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
@@ -98,6 +107,15 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [stages, setStages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [harvestModalVisible, setHarvestModalVisible] = useState(false);
+  const [harvestBrix, setHarvestBrix] = useState('');
+  const [harvestEvidenceUri, setHarvestEvidenceUri] = useState('');
+  const [harvestObservations, setHarvestObservations] = useState('');
+  const [harvestDate, setHarvestDate] = useState(new Date().toISOString().slice(0, 10));
+  const [harvestDuration, setHarvestDuration] = useState('');
+  const [workerHarvestData, setWorkerHarvestData] = useState<Record<string, { cantidad: string; tipoGrano: string }>>({});
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date()); 
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = scrollY.interpolate({
@@ -149,6 +167,170 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const harvestPersonnel = assignedPersonnel.filter(p => p.etapa === 'Cosechado');
+
+  const openHarvestModal = () => {
+    const initialData: Record<string, { cantidad: string; tipoGrano: string }> = {};
+    harvestPersonnel.forEach((p, index) => {
+      const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+      initialData[key] = workerHarvestData[key] || { cantidad: '', tipoGrano: 'Rojo' };
+    });
+    setWorkerHarvestData(initialData);
+    setHarvestModalVisible(true);
+  };
+
+  const updateWorkerHarvestData = (id: string, field: 'cantidad' | 'tipoGrano', value: string) => {
+    setWorkerHarvestData(prev => ({
+      ...prev,
+      [id]: {
+        cantidad: prev[id]?.cantidad || '',
+        tipoGrano: prev[id]?.tipoGrano || 'Rojo',
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleConfirmHarvest = async () => {  // ← async
+  if (!harvestBrix.trim() || Number.isNaN(Number(harvestBrix))) {
+    CustomAlert.show('ALERTA', 'Dato Requerido', 'Ingresa un valor numérico para Grados Brix.');
+    return;
+  }
+
+  const hasInvalidWorkerAmount = harvestPersonnel.some((p, index) => {
+    const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+    const amount = workerHarvestData[key]?.cantidad;
+    return !amount || Number.isNaN(Number(amount)) || Number(amount) <= 0;
+  });
+
+  if (harvestPersonnel.length > 0 && hasInvalidWorkerAmount) {
+    CustomAlert.show('ALERTA', 'Cantidad Requerida', 'Ingresa la cantidad recolectada para cada trabajador.');
+    return;
+  
+  }
+
+  if (!harvestDate.trim()) {
+  CustomAlert.show('ALERTA', 'Fecha Requerida', 'Selecciona la fecha de la cosecha.');
+  return;
+}
+
+// Validar imagen de evidencia
+if (!harvestEvidenceUri.trim()) {
+  CustomAlert.show('ALERTA', 'Evidencia Requerida', 'Debes seleccionar una imagen de evidencia de la cosecha.');
+  return;
+}
+
+// Validar que haya al menos un trabajador asignado
+if (harvestPersonnel.length === 0) {
+  CustomAlert.show('ALERTA', 'Sin Personal', 'No hay trabajadores asignados a la etapa de cosecha.');
+  return;
+}
+
+// Validar grados Brix en rango razonable
+const brixValue = parseFloat(harvestBrix);
+if (brixValue < 1 || brixValue > 30) {
+  CustomAlert.show('ALERTA', 'Grados Brix Inválidos', 'Los grados Brix deben estar entre 1 y 30.');
+  return;
+}
+
+  const getTarifaByGrano = (tipoGrano: string): number => {
+  switch (tipoGrano) {
+    case 'Rojo':    return 0.30;
+    case 'Verde':   return 0.20;
+    case 'Variado': return 0.25;
+    default:        return 0.25;
+  }
+};
+
+const getCalidadByCosecha = (brix: number, tipoGrano: string): 'alta' | 'media' | 'baja' => {
+  if (brix >= 18 && tipoGrano === 'Rojo') return 'alta';
+  if (brix >= 14 && brix <= 17) return 'media';
+  if (brix < 14 || tipoGrano === 'Verde') return 'baja';
+  // Variado con brix >= 18 → media (mezcla)
+  return 'media';
+};
+
+// Calidad general de la cosecha = la más frecuente entre los trabajadores
+const getCalidadGeneral = (
+  workers: { brix: number; tipoGrano: string }[]
+): 'alta' | 'media' | 'baja' => {
+  const counts = { alta: 0, media: 0, baja: 0 };
+  workers.forEach(w => { counts[getCalidadByCosecha(w.brix, w.tipoGrano)]++; });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] as 'alta' | 'media' | 'baja';
+};
+
+const brix = parseFloat(harvestBrix);
+
+const workersResumen = harvestPersonnel.map((p, index) => {
+  const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+  const data = workerHarvestData[key];
+  const tipoGrano = data?.tipoGrano || 'Rojo';
+  const cantidad = parseFloat(data?.cantidad || '0');
+  const tarifa = getTarifaByGrano(tipoGrano);
+  const calidad = getCalidadByCosecha(brix, tipoGrano);
+
+  return { key, tipoGrano, cantidad, tarifa, calidad };
+});
+
+const pesoTotal = workersResumen.reduce((sum, w) => sum + w.cantidad, 0);
+const calidadGeneral = getCalidadGeneral(
+  workersResumen.map(w => ({ brix, tipoGrano: w.tipoGrano }))
+);
+
+// Tarifa general = promedio ponderado por peso
+const tarifaGeneral = pesoTotal > 0
+  ? workersResumen.reduce((sum, w) => sum + w.tarifa * w.cantidad, 0) / pesoTotal
+  : 0.25;
+  
+    const cosechaData = {
+    id: `cosecha_${Date.now()}`,
+    lote_id: lote.id,
+    responsable_id: assignedPersonnel.find(p => {
+      const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
+      return rName === 'capataz' || p.etapa === 'Administración';
+    })?.trabajador_id ?? '',
+    grados_brix: brix,
+    peso_kilos: pesoTotal,
+    calidad_cosecha: calidadGeneral,         
+    tarifa_por_kilo: parseFloat(tarifaGeneral.toFixed(2)), 
+    imagen_evidencia_uri: harvestEvidenceUri,
+    observaciones: harvestObservations,
+    fecha_inicio: new Date().toISOString(),
+    fecha_final: harvestDate,
+    duracion_horas: harvestDuration ? parseFloat(harvestDuration) : undefined,
+  };
+
+  try {
+    setLoading(true);
+    setHarvestModalVisible(false);
+
+    await cosechaService.create(cosechaData);  // ← await dentro del try
+
+    CustomAlert.show('SUCCESS', 'Éxito', 'Cosecha registrada correctamente.', () => {
+      navigation.navigate('Lotes');
+    });
+  } catch (error) {
+    CustomAlert.show('ERROR', 'Error', 'Fallo al guardar la cosecha.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const handlePickHarvestEvidence = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setHarvestEvidenceUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error selecting harvest evidence:', error);
+      CustomAlert.show('ERROR', 'Error', 'No se pudo seleccionar la imagen de evidencia.');
+    }
+  };
+
   const renderSensor = (icon: any, label: string, value: string, color: string) => (
     <View style={styles.sensorCard}>
       <View style={[styles.sensorIconContainer, { backgroundColor: color + '15' }]}>
@@ -159,6 +341,217 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         <Text style={styles.sensorValue}>{value}</Text>
       </View>
     </View>
+  );
+
+  const renderHarvestModal = () => (
+    <Modal
+      visible={harvestModalVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setHarvestModalVisible(false)}
+    >
+      <View style={styles.harvestModalOverlay}>
+        <View style={styles.harvestModalCard}>
+          <View style={styles.harvestModalHeader}>
+            <View>
+              <Text style={styles.harvestEyebrow}>CIERRE DE FASE</Text>
+              <Text style={styles.harvestModalTitle}>Cosechado Selectivo</Text>
+            </View>
+            <TouchableOpacity style={styles.harvestCloseButton} onPress={() => setHarvestModalVisible(false)}>
+              <X size={20} color={Theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.harvestModalBody}>
+            <View style={styles.harvestFieldRow}>
+              <View style={styles.harvestFieldHalf}>
+                <Text style={styles.harvestLabel}>Grados Brix *</Text>
+                <TextInput
+                  style={styles.harvestInput}
+                  value={harvestBrix}
+                  onChangeText={(text) => {
+                    if (text.length <= 10) setHarvestBrix(text);
+                  }}
+                  keyboardType="numeric"
+                  placeholder="18.5"
+                  maxLength={10}
+                  placeholderTextColor={Theme.colors.outline}
+                />
+              </View>
+              <View style={styles.harvestFieldHalf}>
+                <Text style={styles.harvestLabel}>Fecha *</Text>
+                <TouchableOpacity
+                  style={[styles.harvestInput, { 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between' 
+                  }]}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={{ color: Theme.colors.onSurface, fontSize: 14, fontWeight: '600' }}>
+                    {harvestDate}
+                  </Text>
+                  <Calendar size={18} color={Theme.colors.primary} />
+                </TouchableOpacity>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="calendar"
+                    maximumDate={new Date()}
+                    onChange={(event: any, date: Date | undefined) => {
+                      setShowDatePicker(false);
+                      if (event.type === 'set' && date) {
+                        setSelectedDate(date);
+                        setHarvestDate(date.toISOString().slice(0, 10));
+                      }
+                    }}
+                  />
+                )}
+              </View>
+            </View>
+
+            <View style={styles.harvestSectionHeader}>
+              <Users size={16} color={Theme.colors.primary} />
+              <Text style={styles.harvestSectionTitle}>Trabajadores asignados *</Text>
+            </View>
+
+            {harvestPersonnel.length === 0 ? (
+              <View style={styles.harvestEmptyWorkers}>
+                <Text style={styles.harvestEmptyTitle}>Sin personal en Cosechado</Text> 
+              </View>
+            ) : (
+              harvestPersonnel.map((p, index) => {
+                const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+                const workerName = `${p.trabajador?.first_name || 'Trabajador'} ${p.trabajador?.last_name || ''}`.trim();
+                const workerData = workerHarvestData[key] || { cantidad: '', tipoGrano: 'Rojo' };
+
+                return (
+                  <View key={key} style={styles.harvestWorkerCard}>
+                    <View style={styles.harvestWorkerHeader}>
+                      <View style={styles.harvestWorkerAvatar}>
+                        <User size={18} color={Theme.colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.harvestWorkerName}>{workerName}</Text>
+                        <Text style={styles.harvestWorkerRole}>Recolector técnico</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.harvestLabel}>Cantidad recolectada (kg) *</Text>
+                    <TextInput
+                      style={styles.harvestInput}
+                      value={workerData.cantidad}
+                      onChangeText={(value) => {
+                        if (value.length <= 10) updateWorkerHarvestData(key, 'cantidad', value);
+                      }}
+                      keyboardType="numeric"
+                      placeholder="0.00"
+                      maxLength={10}
+                      placeholderTextColor={Theme.colors.outline}
+                    />
+
+                    <Text style={[styles.harvestLabel, { marginTop: 12 }]}>Tipo de grano *</Text>
+                    <View style={styles.grainOptions}>
+                      {GRAIN_TYPES.map(type => {
+                        const selected = workerData.tipoGrano === type;
+                        return (
+                          <TouchableOpacity
+                            key={type}
+                            style={[styles.grainOption, selected && styles.grainOptionActive]}
+                            onPress={() => updateWorkerHarvestData(key, 'tipoGrano', type)}
+                          >
+                            <Text style={[styles.grainOptionText, selected && styles.grainOptionTextActive]}>{type}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+
+            <View style={styles.harvestSectionHeader}>
+              <Camera size={16} color={Theme.colors.primary} />
+              <Text style={styles.harvestSectionTitle}>Evidencia</Text>
+            </View>
+
+            <View style={styles.evidenceBox}>
+              <Camera size={26} color={Theme.colors.outline} />
+              <Text style={styles.evidenceTitle}>Imagen de cosecha selectiva</Text>
+
+              <TouchableOpacity style={styles.evidencePickerButton} onPress={handlePickHarvestEvidence}>
+                <Camera size={15} color={Theme.colors.white} />
+                <Text style={styles.evidencePickerText}>
+                  {harvestEvidenceUri ? 'Cambiar imagen' : 'Seleccionar imagen'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* URI — solo lectura, se llena automáticamente */}
+              <View style={[
+                styles.harvestInput, 
+                styles.evidenceInput, 
+                { 
+                  justifyContent: 'center',
+                  backgroundColor: harvestEvidenceUri 
+                    ? Theme.colors.secondaryContainer  // verde suave cuando hay imagen
+                    : Theme.colors.surfaceContainerHigh, // gris cuando está vacío
+                }
+              ]}>
+                <Text 
+                  numberOfLines={1} 
+                  style={{ 
+                    color: harvestEvidenceUri ? Theme.colors.secondary : Theme.colors.outline,
+                    fontSize: 12,
+                    fontWeight: '600',
+                  }}
+                >
+                  {harvestEvidenceUri || 'Sin imagen seleccionada'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.harvestField}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.harvestLabel}>Observaciones</Text>
+                <Text style={{ 
+                  fontSize: 10, 
+                  fontWeight: '700',
+                  color: harvestObservations.trim().split(/\s+/).filter(Boolean).length >= 100 
+                    ? Theme.colors.error 
+                    : Theme.colors.outline 
+                }}>
+                  {harvestObservations.trim() === '' ? 0 : harvestObservations.trim().split(/\s+/).filter(Boolean).length}/100 palabras
+                </Text>
+              </View>
+              <TextInput
+                style={[styles.harvestInput, styles.harvestTextarea]}
+                value={harvestObservations}
+                onChangeText={(text) => {
+                  const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).filter(Boolean).length;
+                  if (wordCount <= 100) setHarvestObservations(text);
+                }}
+                multiline
+                textAlignVertical="top"
+                placeholder="Notas técnicas de madurez, selección o incidencias..."
+                placeholderTextColor={Theme.colors.outline}
+              />
+            </View>
+          </ScrollView>
+
+          <View style={styles.harvestModalActions}>
+            <TouchableOpacity style={styles.harvestCancelButton} onPress={() => setHarvestModalVisible(false)}>
+              <Text style={styles.harvestCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.harvestConfirmButton} onPress={handleConfirmHarvest}>
+              <ClipboardCheck size={16} color={Theme.colors.white} />
+              <Text style={styles.harvestConfirmText}>Registrar cierre</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 
   const renderStageCard = (title: string, index: number) => {
@@ -221,6 +614,16 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
             >
               <Rocket size={14} color={Theme.colors.white} />
               <Text style={styles.startStageText}>Iniciar {title}</Text>
+            </TouchableOpacity>
+          )}
+
+          {title === 'Cosechado' && isActive && (
+            <TouchableOpacity 
+              style={styles.finishHarvestButton}
+              onPress={openHarvestModal}
+            >
+              <ClipboardCheck size={14} color={Theme.colors.white} />
+              <Text style={styles.startStageText}>Terminar Cosechado</Text>
             </TouchableOpacity>
           )}
 
@@ -385,7 +788,10 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         <View style={styles.sectionPadding}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionLabel}>CONTROL DE ETAPAS</Text>
-            <Text style={styles.progressPct}>GESTIÓN SECUENCIAL</Text>
+            <TouchableOpacity style={styles.simulateHarvestButton} onPress={openHarvestModal}>
+              <ClipboardCheck size={13} color={Theme.colors.secondary} />
+              <Text style={styles.simulateHarvestText}>Simular cosecha</Text>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.stagesList}>
@@ -400,6 +806,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
           <Text style={styles.footerLegal}>VERIFICACIÓN CIENTÍFICA DE ORIGEN • 2026</Text>
         </View>
       </Animated.ScrollView>
+      {renderHarvestModal()}
     </View>
   );
 };
@@ -622,6 +1029,14 @@ const styles = StyleSheet.create({
     gap: 16,
     ...Theme.shadows.ambient,
   },
+  foremanAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   stagePersonnelList: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -637,15 +1052,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Theme.colors.onSurfaceVariant,
     fontWeight: '600',
-  },
-  sectionHeaderRow: {
-
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Theme.colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   foremanName: {
     ...Theme.typography.headline,
@@ -668,7 +1074,8 @@ const styles = StyleSheet.create({
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    gap: 12,
   },
   progressPct: {
     fontSize: 12,
@@ -732,6 +1139,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 6,
   },
+  finishHarvestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
   startStageText: {
     fontSize: 11,
     fontWeight: '800',
@@ -750,6 +1166,258 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Theme.colors.onSecondaryContainer,
+  },
+  simulateHarvestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.secondaryContainer,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  simulateHarvestText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: Theme.colors.secondary,
+    letterSpacing: 0.3,
+  },
+  harvestModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(31, 27, 20, 0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  harvestModalCard: {
+    maxHeight: '88%',
+    backgroundColor: Theme.colors.background,
+    borderRadius: 28,
+    overflow: 'hidden',
+    ...Theme.shadows.ambient,
+  },
+  harvestModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.surfaceContainerHigh,
+  },
+  harvestEyebrow: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: Theme.colors.secondary,
+  },
+  harvestModalTitle: {
+    ...Theme.typography.headline,
+    fontSize: 21,
+    color: Theme.colors.primary,
+    marginTop: 4,
+  },
+  harvestCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  harvestModalBody: {
+    padding: 22,
+    gap: 16,
+  },
+  harvestField: {
+    gap: 8,
+  },
+  harvestFieldRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  harvestFieldHalf: {
+    flex: 1,
+    gap: 8,
+  },
+  harvestLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Theme.colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  harvestInput: {
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: Theme.colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Theme.colors.surfaceContainerHigh,
+    paddingHorizontal: 14,
+    color: Theme.colors.onSurface,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  harvestTextarea: {
+    minHeight: 104,
+    paddingTop: 14,
+    lineHeight: 20,
+  },
+  harvestSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  harvestSectionTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Theme.colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  harvestEmptyWorkers: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.surfaceContainerHigh,
+  },
+  harvestEmptyTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Theme.colors.onSurface,
+  },
+  harvestEmptyText: {
+    fontSize: 12,
+    color: Theme.colors.onSurfaceVariant,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  harvestWorkerCard: {
+    backgroundColor: Theme.colors.surfaceContainerLowest,
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.surfaceContainerHigh,
+  },
+  harvestWorkerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  harvestWorkerAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  harvestWorkerName: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Theme.colors.onSurface,
+  },
+  harvestWorkerRole: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  grainOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  grainOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Theme.colors.surfaceContainerHigh,
+  },
+  grainOptionActive: {
+    backgroundColor: Theme.colors.secondaryContainer,
+    borderColor: Theme.colors.secondary,
+  },
+  grainOptionText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Theme.colors.onSurfaceVariant,
+  },
+  grainOptionTextActive: {
+    color: Theme.colors.secondary,
+  },
+  evidenceBox: {
+    alignItems: 'center',
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.surfaceContainerHigh,
+  },
+  evidenceTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Theme.colors.onSurfaceVariant,
+  },
+  evidencePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 8,
+  },
+  evidencePickerText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Theme.colors.white,
+  },
+  evidenceInput: {
+    width: '100%',
+  },
+  harvestModalActions: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.surfaceContainerHigh,
+    backgroundColor: Theme.colors.background,
+  },
+  harvestCancelButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  harvestCancelText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Theme.colors.onSurfaceVariant,
+  },
+  harvestConfirmButton: {
+    flex: 1.35,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Theme.colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  harvestConfirmText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Theme.colors.white,
   },
   footer: {
     paddingTop: 80,
