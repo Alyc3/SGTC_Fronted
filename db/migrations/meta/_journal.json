@@ -67,9 +67,14 @@
     },
     {
       "idx": 9,
-      "version": "6",
+      "when": 1780789718326,
+      "tag": "0009_add_cosecha_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
       "when": 1780799268093,
-      "tag": "0009_icy_steve_rogers",
+      "tag": "0010_icy_steve_rogers",
       "breakpoints": true
     }
   ]
