@@ -40,5 +40,5 @@ export const metricas_subetapa_sembrado = sqliteTable('metricas_subetapa_sembrad
   incidencia_broca: real('incidencia_broca'),
   grados_brix: real('grados_brix'),
 
-  is_synced: integer('is_synced', { mode: 'boolean' }).default(0).notNull(),
+  is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
 });

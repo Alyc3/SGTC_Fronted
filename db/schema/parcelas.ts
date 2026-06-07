@@ -18,7 +18,7 @@ export const parcelas = sqliteTable('parcelas', {
   estado: text('estado', { enum: EstadoParcelaValues }).default('Libre').notNull(),
   fecha_creacion: text('fecha_creacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
-  activo: integer('activo', { mode: 'boolean' }).default(1).notNull(),
+  activo: integer('activo', { mode: 'boolean' }).default(true).notNull(),
   is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(),
   sync_status: text('sync_status', { enum: ['synced', 'pending', 'error'] }).default('pending').notNull(),
 });

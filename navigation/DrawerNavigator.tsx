@@ -54,6 +54,7 @@ export const DrawerNavigator = () => {
 
   return (
     <Drawer.Navigator
+      id="main-drawer"
       drawerContent={(props) => <CustomDrawer {...props} />}
       initialRouteName="Dashboard"
       screenOptions={{

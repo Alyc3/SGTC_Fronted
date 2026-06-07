@@ -17,7 +17,7 @@ export const semillas = sqliteTable('semillas', {
   anexo_creacion: text('anexo_creacion'),
   fecha_creacion: text('fecha_creacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
   fecha_modificacion: text('fecha_modificacion').default(sql`CURRENT_TIMESTAMP`).notNull(),
-  activo: integer('activo', { mode: 'boolean' }).default(1).notNull(), // Use 1 instead of true for SQLite compatibility check
-  is_synced: integer('is_synced', { mode: 'boolean' }).default(0).notNull(), // Use 0 instead of false
+  activo: integer('activo', { mode: 'boolean' }).default(true).notNull(), // Use true instead of 1
+  is_synced: integer('is_synced', { mode: 'boolean' }).default(false).notNull(), // Use false instead of 0
   sync_status: text('sync_status', { enum: ['synced', 'pending', 'error'] }).default('pending').notNull(),
 });

@@ -1,6 +1,6 @@
 import { pgTable, text, boolean, timestamp, integer, real } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
-import { TexturaSueloValues, OrientacionLaderaValues, TipoTerrenoValues, EstadoParcelaValues } from '../db/schema/enums';
+import { TexturaSueloValues, OrientacionLaderaValues, TipoTerrenoValues, EstadoParcelaValues } from '../schema/enums';
 import { lotes } from './lotes';
 
 export const parcelas = pgTable('parcelas', {

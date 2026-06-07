@@ -80,33 +80,6 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
   const readOnly = route.params?.readOnly ?? false;
   const isEditing = !!parcelId;
 
-  // Control de gestos y botón físico de atrás
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        resetForm();
-        navigation.navigate('ListarParcela');
-        return true; // Bloquea la acción por defecto
-      };
-
-      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
-      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-        // Capturamos cualquier intento de volver (gesto, botón o dispatch)
-        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
-          e.preventDefault();
-          resetForm();
-          navigation.navigate('ListarParcela');
-        }
-      });
-
-      return () => {
-        backHandler.remove();
-        unsubscribe();
-      };
-    }, [navigation, resetForm])
-  );
-
   const [nombre, setNombre] = useState('');
   const [hectareas, setHectareas] = useState('');
   const [altitud, setAltitud] = useState('');
@@ -141,6 +114,33 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     setLotesAssociated([]);
     setGpsLocation('Pendiente calibración');
   }, []);
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        resetForm();
+        navigation.navigate('ListarParcela');
+        return true; // Bloquea la acción por defecto
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        // Capturamos cualquier intento de volver (gesto, botón o dispatch)
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          resetForm();
+          navigation.navigate('ListarParcela');
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation, resetForm])
+  );
 
   useFocusEffect(
     useCallback(() => {

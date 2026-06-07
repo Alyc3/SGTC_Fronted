@@ -35,7 +35,7 @@ export const sembradoMetricasService = {
         await db.update(metricas_subetapa_sembrado)
           .set({
             ...data,
-            is_synced: 0,
+            is_synced: false,
           })
           .where(eq(metricas_subetapa_sembrado.id, metricId));
         return metricId;
@@ -49,7 +49,7 @@ export const sembradoMetricasService = {
         await db.update(metricas_subetapa_sembrado)
           .set({
             ...data,
-            is_synced: 0,
+            is_synced: false,
           })
           .where(eq(metricas_subetapa_sembrado.id, existing.id));
         return existing.id;
@@ -60,7 +60,7 @@ export const sembradoMetricasService = {
           id,
           ...data,
           fecha_inicio: data.fecha_inicio || new Date().toISOString(),
-          is_synced: 0,
+          is_synced: false,
         });
         return id;
       }
@@ -80,7 +80,7 @@ export const sembradoMetricasService = {
         await db.update(metricas_subetapa_sembrado)
           .set({
             fecha_fin: new Date().toISOString(),
-            is_synced: 0,
+            is_synced: false,
           })
           .where(eq(metricas_subetapa_sembrado.id, existing.id));
       }

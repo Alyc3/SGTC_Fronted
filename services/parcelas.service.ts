@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { parcelas, lotes, asignacion_personal } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as Location from 'expo-location';
 
@@ -67,10 +67,10 @@ export const parcelasService = {
     if (trabajadorIds.length === 0) return;
     
     return await db.delete(asignacion_personal).where(
-      (asig, { eq, and, inArray }) => and(
-        eq(asig.lote_id, loteId),
-        eq(asig.etapa, etapa),
-        inArray(asig.trabajador_id, trabajadorIds)
+      and(
+        eq(asignacion_personal.lote_id, loteId),
+        eq(asignacion_personal.etapa, etapa),
+        inArray(asignacion_personal.trabajador_id, trabajadorIds)
       )
     ).returning();
   },

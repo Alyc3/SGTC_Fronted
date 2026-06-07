@@ -6,6 +6,7 @@ import {
   SubFaseSiembraValues,
   EtapaActualValues,
   EtapaProcesoValues,
+  EstadoLoteValues,
   semillas,
   parcelas
 } from '../db/schema';
