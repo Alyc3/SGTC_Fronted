@@ -14,6 +14,20 @@ export const parcelasService = {
    * Se guarda localmente y se marca como pendiente para sincronización.
    */
   async asignarPersonal(loteId: string, trabajadorId: string, etapa: any) {
+    // 1. Verificar si ya existe esta asignación exacta para evitar duplicados
+    const existing = await db.query.asignacion_personal.findFirst({
+      where: (asig, { eq, and }) => and(
+        eq(asig.lote_id, loteId),
+        eq(asig.trabajador_id, trabajadorId),
+        eq(asig.etapa, etapa)
+      )
+    });
+
+    if (existing) {
+      return [existing]; // Ya existe, retornamos el registro actual sin duplicar
+    }
+
+    // 2. Si no existe, insertar nueva asignación
     return await db.insert(asignacion_personal).values({
       id: uuidv4(),
       lote_id: loteId,
@@ -24,6 +38,41 @@ export const parcelasService = {
       sync_status: 'pending',
       fecha_modificacion: new Date().toISOString()
     }).returning();
+  },
+
+  async desasignarPersonal(loteId: string, trabajadorId: string, etapa: any) {
+    // 1. Buscar el registro exacto para asegurar un borrado infalible por ID primario
+    const existing = await db.query.asignacion_personal.findFirst({
+      where: (asig, { eq, and }) => and(
+        eq(asig.lote_id, loteId),
+        eq(asig.trabajador_id, trabajadorId),
+        eq(asig.etapa, etapa)
+      )
+    });
+
+    if (existing) {
+      return await db.delete(asignacion_personal)
+        .where(eq(asignacion_personal.id, existing.id))
+        .returning();
+    }
+    
+    return [];
+  },
+
+  /**
+   * Elimina todas las asignaciones de una etapa y lote específicos que correspondan 
+   * a ciertos IDs de trabajadores (útil para barrer roles específicos).
+   */
+  async limpiarAsignacionesEspecificas(loteId: string, etapa: any, trabajadorIds: string[]) {
+    if (trabajadorIds.length === 0) return;
+    
+    return await db.delete(asignacion_personal).where(
+      (asig, { eq, and, inArray }) => and(
+        eq(asig.lote_id, loteId),
+        eq(asig.etapa, etapa),
+        inArray(asig.trabajador_id, trabajadorIds)
+      )
+    ).returning();
   },
 
   async countCapatacesAsignados(loteId: string) {

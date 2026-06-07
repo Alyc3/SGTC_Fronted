@@ -1,0 +1,934 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
+  Image,
+  TextInput,
+  Switch,
+  Platform,
+  Modal,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  ArrowLeft,
+  Check,
+  Flower,
+  History,
+  Thermometer,
+  Droplets,
+  CloudRain,
+  Save,
+  CheckCircle2,
+  Info,
+  ChevronDown,
+  TrendingUp,
+  Sun,
+  Timer,
+  Play,
+  Square,
+  Edit2,
+} from 'lucide-react-native';
+import { Theme } from '../theme';
+import { lotesService } from '../services/lotes.service';
+import { sembradoMetricasService } from '../services/sembrado_metricas.service';
+import { CustomAlert } from '../components/GlobalAlert';
+import { useAuthStore } from '../store/authStore';
+
+const { width } = Dimensions.get('window');
+
+const EtapaSembradosScreen = ({ navigation, route }: any) => {
+  const lote = route.params?.lote;
+  const userId = useAuthStore((state) => state.userId);
+  
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaveLoading] = useState(false);
+  const [currentSubFase, setCurrentSubFase] = useState<string>('Floracion'); // Default from prototype
+  const [stagesData, setStagesData] = useState<any[]>([]);
+  const [metricsForm, setMetricsForm] = useState<Record<string, any>>({});
+  const [editModes, setEditModes] = useState<Record<string, boolean>>({});
+  
+  // Modal for selects
+  const [pickerModal, setPickerModal] = useState<{ visible: boolean; field: string; options: string[] }>({
+    visible: false,
+    field: '',
+    options: [],
+  });
+
+  const subFases = [
+    { id: 'Germinacion', label: 'Germinación', icon: <Check size={20} color="white" /> },
+    { id: 'Vivero', label: 'Vivero', icon: <Check size={20} color="white" /> },
+    { id: 'Crecimiento', label: 'Crecimiento', icon: <Check size={20} color="white" /> },
+    { id: 'Floracion', label: 'Floración', icon: <Sun size={20} color={Theme.colors.terroirBrown} /> },
+    { id: 'Maduracion', label: 'Maduración', icon: <Timer size={20} color={Theme.colors.terroirGray} /> },
+  ];
+
+  const fetchData = useCallback(async () => {
+    if (!lote?.id) return;
+    try {
+      setLoading(true);
+      const data = await lotesService.getStages(lote.id);
+      const sembradoStage = data.find(s => s.etapa === 'Sembrado');
+      
+      let subfase = 'Germinacion';
+      if (sembradoStage?.subFaseSiembra) {
+        subfase = sembradoStage.subFaseSiembra;
+        setCurrentSubFase(subfase);
+      }
+
+      // Fetch metrics for all sub-phases to pre-fill the timeline
+      const allMetrics: Record<string, any> = {};
+      for (const phase of subFases) {
+        const metrics = await sembradoMetricasService.getMetricas(lote.id, phase.id);
+        if (metrics) {
+          allMetrics[phase.id] = metrics;
+        }
+      }
+      setMetricsForm(allMetrics);
+      setStagesData(data);
+    } catch (error) {
+      console.error('Error fetching stage data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [lote?.id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleUpdateField = (phaseId: string, field: string, value: any) => {
+    setMetricsForm((prev) => ({
+      ...prev,
+      [phaseId]: {
+        ...(prev[phaseId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleConfirmStart = (phaseId: string, phaseLabel: string) => {
+    CustomAlert.show(
+      'ALERTA',
+      'Iniciar Fase',
+      `¿Estás seguro de iniciar la etapa de ${phaseLabel.toLowerCase()}?`,
+      async () => {
+        const now = new Date().toISOString();
+        // Update local state first for instant UI feedback
+        setMetricsForm((prev) => ({
+          ...prev,
+          [phaseId]: { ...(prev[phaseId] || {}), fecha_inicio: now }
+        }));
+        // Auto-save to DB and keep edit mode open
+        await handleSavePhase(phaseId, now, null, true);
+      },
+      'ACEPTAR',
+      () => {},
+      'CANCELAR'
+    );
+  };
+
+  const handleConfirmEnd = (phaseId: string, phaseLabel: string) => {
+    CustomAlert.show(
+      'ALERTA',
+      'Finalizar Fase',
+      `¿Estás seguro de finalizar la etapa de ${phaseLabel.toLowerCase()}?`,
+      async () => {
+        const now = new Date().toISOString();
+        // Update local state first
+        setMetricsForm((prev) => ({
+          ...prev,
+          [phaseId]: { ...(prev[phaseId] || {}), fecha_fin: now }
+        }));
+        // Auto-save to DB and lock
+        await handleSavePhase(phaseId, null, now, false);
+      },
+      'ACEPTAR',
+      () => {},
+      'CANCELAR'
+    );
+  };
+
+  const validateForm = (phaseId: string, data: any) => {
+    switch (phaseId) {
+      case 'Germinacion':
+        if (data.tasa_germinacion === undefined || data.tasa_germinacion === '' || parseFloat(data.tasa_germinacion) < 0 || parseFloat(data.tasa_germinacion) > 100) 
+           return 'La tasa de germinación debe estar entre 0.0 y 100.0%';
+        if (!data.dias_emergencia || parseInt(data.dias_emergencia) < 1 || parseInt(data.dias_emergencia) > 120)
+           return 'Los días de emergencia deben estar entre 1 y 120';
+        break;
+      case 'Vivero':
+        if (data.pares_hojas_verdaderas === undefined || data.pares_hojas_verdaderas === '' || parseInt(data.pares_hojas_verdaderas) < 0 || parseInt(data.pares_hojas_verdaderas) > 15)
+           return 'Los pares de hojas verdaderas deben estar entre 0 y 15';
+        if (!data.altura_plantula || parseFloat(data.altura_plantula) < 0.1)
+           return 'La altura de la plántula debe ser al menos 0.1 cm';
+        if (!data.vigor_radicular || data.vigor_radicular === 'Seleccionar...')
+           return 'El vigor radicular es obligatorio';
+        break;
+      case 'Crecimiento':
+        if (!data.indice_crecimiento || parseFloat(data.indice_crecimiento) < 0.1 || parseFloat(data.indice_crecimiento) > 4.0)
+           return 'El índice de crecimiento debe estar entre 0.1 y 4.0 m';
+        if (!data.grosor_tallo || parseFloat(data.grosor_tallo) < 0.1)
+           return 'El grosor del tallo debe ser al menos 0.1 mm';
+        if (data.formacion_bandolas === undefined || data.formacion_bandolas === '' || parseInt(data.formacion_bandolas) < 0)
+           return 'La formación de bandolas no puede ser negativa';
+        if (data.incidencia_foliar === undefined || data.incidencia_foliar === '' || parseFloat(data.incidencia_foliar) < 0 || parseFloat(data.incidencia_foliar) > 100)
+           return 'La incidencia foliar debe estar entre 0.0 y 100.0%';
+        break;
+      case 'Floracion':
+        if (!data.intensidad_floracion || data.intensidad_floracion === 'Seleccionar...')
+           return 'La intensidad de floración es obligatoria';
+        if (!data.uniformidad_floracion || data.uniformidad_floracion === 'Seleccionar...')
+           return 'La uniformidad es obligatoria';
+        if (!data.estres_hidrico || data.estres_hidrico === 'Seleccionar...')
+           return 'El estrés hídrico post-floración es obligatorio';
+        break;
+      case 'Maduracion':
+        if (data.porcentaje_cuajado === undefined || data.porcentaje_cuajado === '' || parseFloat(data.porcentaje_cuajado) < 0 || parseFloat(data.porcentaje_cuajado) > 100)
+           return 'El porcentaje de cuajado debe estar entre 0.0 y 100.0%';
+        if (!data.homogeneidad_maduracion || data.homogeneidad_maduracion === 'Seleccionar...')
+           return 'La homogeneidad de maduración es obligatoria';
+        if (data.incidencia_broca === undefined || data.incidencia_broca === '' || parseFloat(data.incidencia_broca) < 0 || parseFloat(data.incidencia_broca) > 100)
+           return 'La incidencia de broca debe estar entre 0.0 y 100.0%';
+        break;
+    }
+    return null;
+  };
+
+  const handleSavePhase = async (phaseId: string, customStart?: string | null, customEnd?: string | null, keepEditMode: boolean = false) => {
+    // Si se está intentando FINALIZAR o Guardar Avance, validamos los datos
+    const phaseMetrics = { ...(metricsForm[phaseId] || {}) };
+    
+    if (customEnd || (!customStart && !customEnd)) {
+      const errorMsg = validateForm(phaseId, phaseMetrics);
+      if (errorMsg) {
+        CustomAlert.show('ALERTA', 'Datos Incompletos', errorMsg);
+        return;
+      }
+
+      // Regla de Negocio: Broca > 5.0%
+      if (phaseId === 'Maduracion' && parseFloat(phaseMetrics.incidencia_broca) > 5.0) {
+        CustomAlert.show(
+          'ALERTA', 
+          'Alerta de Plaga', 
+          'La incidencia de Broca es superior al 5.0%. Se requiere la creación de una incidencia técnica obligatoria.'
+        );
+      }
+    }
+
+    try {
+      setSaveLoading(true);
+      
+      // 1. Update general stage status if it's the current phase
+      if (phaseId === currentSubFase) {
+        await lotesService.gestionarEtapaSembrado(lote.id, phaseId as any, 'En_Proceso');
+      }
+
+      // 2. Especial logic: If Germinacion starts, lot status -> En_Produccion
+      if (phaseId === 'Germinacion' && customStart) {
+        await lotesService.updateEstadoLote(lote.id, 'En_Produccion');
+      }
+      
+      // 3. Prepare data for DB
+      if (customStart) phaseMetrics.fecha_inicio = customStart;
+      if (customEnd) phaseMetrics.fecha_fin = customEnd;
+
+      // 4. Save quality metrics for this specific phase
+      await sembradoMetricasService.saveMetricas({
+        ...phaseMetrics,
+        lote_id: lote.id,
+        subfase: phaseId,
+        tecnico_id: userId || 'UNKNOWN_TECH',
+      });
+
+      if (!customStart && !customEnd) {
+        CustomAlert.show('SUCCESS', 'Avance Guardado', `Los datos de la fase de ${phaseId} han sido actualizados.`);
+      }
+      
+      await fetchData(); // Refresh to ensure sync (gets the ID)
+      
+      // Manage lock state
+      setEditModes(prev => ({ ...prev, [phaseId]: keepEditMode }));
+      
+    } catch (error) {
+      console.error('Error saving metrics:', error);
+      CustomAlert.show('ERROR', 'Error', 'No se pudieron guardar los cambios.');
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const getPhaseStatus = (phaseId: string) => {
+    const currentIndex = subFases.findIndex(f => f.id === currentSubFase);
+    const phaseIndex = subFases.findIndex(f => f.id === phaseId);
+    
+    if (phaseIndex < currentIndex) return 'completed';
+    if (phaseIndex === currentIndex) return 'active';
+    return 'pending';
+  };
+
+  const openPicker = (phaseId: string, field: string, options: string[]) => {
+    setPickerModal({ visible: true, field: `${phaseId}.${field}`, options });
+  };
+
+  const selectOption = (option: string) => {
+    const [phaseId, field] = pickerModal.field.split('.');
+    handleUpdateField(phaseId, field, option);
+    setPickerModal({ ...pickerModal, visible: false });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Theme.colors.terroirBrown} />
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={Theme.colors.terroirBeige} />
+      
+      {/* Custom NavBar to match prototype background */}
+      <View style={styles.navBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <ArrowLeft size={24} color={Theme.colors.terroirBrown} />
+        </TouchableOpacity>
+        <CheckCircle2 size={24} color={Theme.colors.terroirBrown} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Header Section */}
+        <View style={styles.header}>
+          <View style={styles.headerMeta}>
+            <Text style={styles.labelCaps}>LOTE ID: {lote?.codigo || 'ET-892'}</Text>
+            <Text style={styles.dot}>•</Text>
+            <Text style={styles.labelCaps}>VARIEDAD: {lote?.variedadCafe || 'GEISHA'}</Text>
+          </View>
+          <Text style={styles.displayTitle}>Control de Sembrado</Text>
+          <Text style={styles.subtitle}>
+            Monitoreo preciso del ciclo de vida del cultivo. Gestione las transiciones de etapa y verifique los estándares de calidad en cada fase.
+          </Text>
+        </View>
+
+        {/* Timeline Section */}
+        <View style={styles.timelineCard}>
+           <View style={styles.timelineHeader}>
+             <TrendingUp size={16} color={Theme.colors.terroirBrown} />
+             <Text style={styles.timelineHeaderText}>GESTIÓN DEL CICLO DE VIDA</Text>
+           </View>
+
+           {subFases.map((phase, index) => {
+             const status = getPhaseStatus(phase.id);
+             const isLast = index === subFases.length - 1;
+             const phaseMetrics = metricsForm[phase.id] || {};
+             const isLocked = !!phaseMetrics.id && !editModes[phase.id];
+             const isReadOnly = status === 'pending' || isLocked;
+
+             return (
+               <View key={phase.id} style={styles.phaseRow}>
+                 {/* Visual indicator (line and circle) */}
+                 <View style={styles.indicatorContainer}>
+                   <View style={[
+                     styles.circle, 
+                     status === 'completed' && styles.circleCompleted,
+                     status === 'active' && styles.circleActive,
+                     status === 'pending' && styles.circlePending
+                   ]}>
+                     {status === 'completed' ? <Check size={20} color="white" strokeWidth={3} /> : phase.icon}
+                   </View>
+                   {!isLast && <View style={styles.line} />}
+                 </View>
+
+                 {/* Phase Content */}
+                 <View style={styles.phaseContent}>
+                   <View style={styles.phaseHeaderRow}>
+                     <View>
+                        <Text style={[
+                          styles.phaseTitle,
+                          status === 'completed' && { color: Theme.colors.terroirGreen },
+                          status === 'active' && { color: Theme.colors.terroirBrown },
+                          status === 'pending' && { color: Theme.colors.terroirGray }
+                        ]}>
+                          {phase.label}
+                        </Text>
+                        
+                        {status === 'active' && (
+                          <Text style={styles.activeTag}>EN PROCESO</Text>
+                        )}
+                     </View>
+
+                     {/* Edit Button */}
+                     {!!phaseMetrics.id && !editModes[phase.id] && status !== 'pending' && (
+                       <TouchableOpacity 
+                         style={styles.editPhaseBtn}
+                         onPress={() => setEditModes(prev => ({ ...prev, [phase.id]: true }))}
+                       >
+                         <Edit2 size={14} color={Theme.colors.terroirBrown} />
+                         <Text style={styles.editPhaseText}>EDITAR</Text>
+                       </TouchableOpacity>
+                     )}
+                   </View>
+
+                   {/* Metrics Card */}
+                   <View style={[
+                     styles.metricsCard,
+                     status === 'completed' && styles.cardBeige,
+                     status === 'active' && styles.cardGreenLight,
+                     status === 'pending' && styles.cardWhiteDashed
+                   ]}>
+                     {/* Dates with Buttons */}
+                     <View style={styles.datesGrid}>
+                       <View style={styles.dateInputGroup}>
+                         <Text style={styles.dateLabel}>INICIO</Text>
+                         {phaseMetrics.fecha_inicio ? (
+                           <View style={styles.dateDisplay}>
+                             <Text style={styles.dateText}>{phaseMetrics.fecha_inicio.split('T')[0]}</Text>
+                             <Text style={styles.timeText}>{phaseMetrics.fecha_inicio.split('T')[1]?.substring(0, 5)}</Text>
+                           </View>
+                         ) : (
+                           <TouchableOpacity 
+                             style={[styles.dateButton, status === 'pending' && styles.btnDisabled]} 
+                             onPress={() => handleConfirmStart(phase.id, phase.label)}
+                             disabled={status === 'pending'}
+                           >
+                             <Play size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
+                             <Text style={styles.dateButtonText}>INICIAR</Text>
+                           </TouchableOpacity>
+                         )}
+                       </View>
+
+                       <View style={styles.dateInputGroup}>
+                         <Text style={styles.dateLabel}>{status === 'active' ? 'FINAL (EST.)' : 'FINAL'}</Text>
+                         {phaseMetrics.fecha_fin ? (
+                           <View style={styles.dateDisplay}>
+                             <Text style={styles.dateText}>{phaseMetrics.fecha_fin.split('T')[0]}</Text>
+                             <Text style={styles.timeText}>{phaseMetrics.fecha_fin.split('T')[1]?.substring(0, 5)}</Text>
+                           </View>
+                         ) : (
+                           <TouchableOpacity 
+                             style={[styles.dateButton, (!phaseMetrics.fecha_inicio || status === 'pending') && styles.btnDisabled]} 
+                             onPress={() => handleConfirmEnd(phase.id, phase.label)}
+                             disabled={!phaseMetrics.fecha_inicio || status === 'pending'}
+                           >
+                             <Square size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
+                             <Text style={styles.dateButtonText}>FINALIZAR</Text>
+                           </TouchableOpacity>
+                         )}
+                       </View>
+                     </View>
+
+                     {/* Phase Specific Metrics */}
+                     {renderPhaseMetrics(phase.id, phaseMetrics, status, isReadOnly)}
+
+                     {/* Action Button - Only show if not locked or explicitly editing */}
+                     {(!isLocked || editModes[phase.id]) && status !== 'pending' && (
+                       <TouchableOpacity 
+                         style={[
+                           styles.actionButton,
+                           status === 'completed' && styles.btnCompleted,
+                           status === 'active' && styles.btnActive,
+                         ]}
+                         onPress={() => handleSavePhase(phase.id)}
+                         disabled={saving}
+                       >
+                         {saving ? (
+                           <ActivityIndicator size="small" color="white" />
+                         ) : (
+                           <Text style={styles.actionButtonText}>
+                             {status === 'completed' ? 'GUARDAR ACTUALIZACIÓN' : 'GUARDAR AVANCE'}
+                           </Text>
+                         )}
+                       </TouchableOpacity>
+                     )}
+                   </View>
+                 </View>
+               </View>
+             );
+           })}
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+
+      {/* Picker Modal */}
+      <Modal
+        visible={pickerModal.visible}
+        transparent={true}
+        animationType="fade"
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setPickerModal({ ...pickerModal, visible: false })}
+        >
+          <View style={styles.modalContent}>
+            {pickerModal.options.map((opt) => (
+              <TouchableOpacity 
+                key={opt} 
+                style={styles.modalOption}
+                onPress={() => selectOption(opt)}
+              >
+                <Text style={styles.modalOptionText}>{opt}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </SafeAreaView>
+  );
+
+  function renderPhaseMetrics(phaseId: string, metrics: any, status: string, isReadOnly: boolean) {
+    switch (phaseId) {
+      case 'Germinacion':
+        return (
+          <View style={styles.metricsList}>
+            <MetricRow label="Tasa germinación (%)" value={metrics.tasa_germinacion} onChange={(v: string) => handleUpdateField(phaseId, 'tasa_germinacion', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Emergencia (días)" value={metrics.dias_emergencia} onChange={(v: string) => handleUpdateField(phaseId, 'dias_emergencia', v)} isReadOnly={isReadOnly} />
+            <MetricSelect 
+              label="Hongos" 
+              value={metrics.presencia_hongos || 'Ninguna'} 
+              onPress={() => !isReadOnly && openPicker(phaseId, 'presencia_hongos', ['Ninguna', 'Baja', 'Moderada'])}
+              isReadOnly={isReadOnly}
+            />
+          </View>
+        );
+      case 'Vivero':
+        return (
+          <View style={styles.metricsList}>
+            <MetricRow label="Hojas verdaderas" value={metrics.pares_hojas_verdaderas} onChange={(v: string) => handleUpdateField(phaseId, 'pares_hojas_verdaderas', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Altura (cm)" value={metrics.altura_plantula} onChange={(v: string) => handleUpdateField(phaseId, 'altura_plantula', v)} isReadOnly={isReadOnly} />
+            <MetricSelect 
+              label="Vigor radicular" 
+              value={metrics.vigor_radicular || 'Seleccionar...'} 
+              onPress={() => !isReadOnly && openPicker(phaseId, 'vigor_radicular', ['Óptimo', 'Bueno', 'Regular'])}
+              isReadOnly={isReadOnly}
+              highlight={true}
+            />
+          </View>
+        );
+      case 'Crecimiento':
+        return (
+          <View style={styles.metricsList}>
+            <MetricRow label="Índice Altura (m)" value={metrics.indice_crecimiento} onChange={(v: string) => handleUpdateField(phaseId, 'indice_crecimiento', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Grosor tallo (mm)" value={metrics.grosor_tallo} onChange={(v: string) => handleUpdateField(phaseId, 'grosor_tallo', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Bandolas" value={metrics.formacion_bandolas} onChange={(v: string) => handleUpdateField(phaseId, 'formacion_bandolas', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Incidencia foliar (%)" value={metrics.incidencia_foliar} onChange={(v: string) => handleUpdateField(phaseId, 'incidencia_foliar', v)} isReadOnly={isReadOnly} color="#EA580C" />
+          </View>
+        );
+      case 'Floracion':
+        return (
+          <View style={styles.metricsList}>
+            <MetricSelect 
+              label="Intensidad de Floración" 
+              value={metrics.intensidad_floracion || 'Seleccionar...'} 
+              onPress={() => !isReadOnly && openPicker(phaseId, 'intensidad_floracion', ['Abundante', 'Media', 'Escasa'])}
+              isReadOnly={isReadOnly}
+            />
+            <MetricSelect 
+              label="Uniformidad" 
+              value={metrics.uniformidad_floracion || 'Seleccionar...'} 
+              onPress={() => !isReadOnly && openPicker(phaseId, 'uniformidad_floracion', ['Homogénea', 'Irregular'])}
+              isReadOnly={isReadOnly}
+            />
+            <MetricSelect 
+              label="Estrés Hídrico Post-Floración" 
+              value={metrics.estres_hidrico || 'Seleccionar...'} 
+              onPress={() => !isReadOnly && openPicker(phaseId, 'estres_hidrico', ['Seco (Ideal)', 'Lluvia ligera', 'Tormenta (Pérdida)'])}
+              isReadOnly={isReadOnly}
+              highlight={true}
+            />
+          </View>
+        );
+      case 'Maduracion':
+        return (
+          <View style={styles.metricsList}>
+            <MetricRow label="Porcentaje de Cuajado (%)" value={metrics.porcentaje_cuajado} onChange={(v: string) => handleUpdateField(phaseId, 'porcentaje_cuajado', v)} isReadOnly={isReadOnly} />
+            <MetricSelect 
+              label="Homogeneidad de Maduración" 
+              value={metrics.homogeneidad_maduracion || 'Seleccionar...'} 
+              onPress={() => !isReadOnly && openPicker(phaseId, 'homogeneidad_maduracion', ['Uniforme', 'Irregular'])}
+              isReadOnly={isReadOnly}
+            />
+            <MetricRow label="Incidencia de Broca (%)" value={metrics.incidencia_broca} onChange={(v: string) => handleUpdateField(phaseId, 'incidencia_broca', v)} isReadOnly={isReadOnly} color="#EA580C" />
+            <MetricRow label="Grados Brix Prematuros" value={metrics.grados_brix} onChange={(v: string) => handleUpdateField(phaseId, 'grados_brix', v)} isReadOnly={isReadOnly} />
+          </View>
+        );
+      default:
+        return null;
+    }
+  }
+};
+
+const MetricRow = ({ label, value, onChange, isReadOnly, color }: any) => (
+  <View style={styles.metricInputGroup}>
+    <Text style={styles.standardLabel}>{label.toUpperCase()}</Text>
+    <View style={[styles.standardInputWrapper, isReadOnly && styles.inputDisabled]}>
+      <TextInput
+        style={[
+          styles.standardInput, 
+          color && { color, fontWeight: '700' }
+        ]}
+        keyboardType="numeric"
+        value={value?.toString() || ''}
+        onChangeText={onChange}
+        editable={!isReadOnly}
+        placeholder="0.00"
+      />
+    </View>
+  </View>
+);
+
+const MetricSelect = ({ label, value, onPress, isReadOnly, highlight }: any) => (
+  <View style={styles.metricInputGroup}>
+    <Text style={styles.standardLabel}>{label.toUpperCase()}</Text>
+    <TouchableOpacity 
+      onPress={onPress} 
+      disabled={isReadOnly} 
+      style={[styles.standardInputWrapper, isReadOnly && styles.inputDisabled]}
+      activeOpacity={0.7}
+    >
+      <Text style={[
+        styles.standardInput, 
+        isReadOnly && { color: '#9CA3AF' },
+        highlight && !isReadOnly && { color: Theme.colors.terroirGreen, fontWeight: '700' }
+      ]}>
+        {value}
+      </Text>
+      {!isReadOnly && <ChevronDown size={16} color={Theme.colors.terroirGray} />}
+    </TouchableOpacity>
+  </View>
+);
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Theme.colors.terroirBeige,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.terroirBeige,
+  },
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  backButton: {
+    padding: 4,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  headerMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  labelCaps: {
+    fontFamily: 'Manrope',
+    fontSize: 10,
+    fontWeight: '800',
+    color: Theme.colors.terroirBrown,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  dot: {
+    color: '#D1D5DB',
+  },
+  displayTitle: {
+    fontFamily: 'Manrope',
+    fontSize: 30,
+    fontWeight: '800',
+    color: Theme.colors.terroirBrown,
+    marginBottom: 12,
+  },
+  subtitle: {
+    fontFamily: 'Manrope',
+    fontSize: 14,
+    color: Theme.colors.terroirGray,
+    lineHeight: 22,
+  },
+  timelineCard: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 32,
+  },
+  timelineHeaderText: {
+    fontFamily: 'Manrope',
+    fontSize: 11,
+    fontWeight: '800',
+    color: Theme.colors.terroirGray,
+    letterSpacing: 2,
+  },
+  phaseRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 40,
+  },
+  indicatorContainer: {
+    alignItems: 'center',
+    width: 40,
+  },
+  circle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  circleCompleted: {
+    backgroundColor: Theme.colors.terroirGreen,
+  },
+  circleActive: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: Theme.colors.terroirBrown,
+  },
+  circlePending: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  line: {
+    position: 'absolute',
+    top: 40,
+    bottom: -40,
+    left: 19.5,
+    width: 1,
+    backgroundColor: '#E5E7EB',
+    zIndex: 0,
+  },
+  phaseContent: {
+    flex: 1,
+  },
+  phaseTitle: {
+    fontFamily: 'Manrope',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  activeTag: {
+    fontFamily: 'Manrope',
+    fontSize: 10,
+    fontWeight: '800',
+    color: Theme.colors.terroirGreen,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  phaseHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  editPhaseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(93, 58, 44, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  editPhaseText: {
+    fontFamily: 'Manrope',
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.terroirBrown,
+    letterSpacing: 1,
+  },
+  metricsCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 16,
+  },
+  cardBeige: {
+    backgroundColor: Theme.colors.terroirBeige,
+  },
+  cardGreenLight: {
+    backgroundColor: Theme.colors.terroirGreenLight,
+    borderWidth: 1,
+    borderColor: 'rgba(62, 102, 65, 0.1)',
+  },
+  cardWhiteDashed: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  dateDisplay: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  dateText: {
+    fontSize: 10,
+    fontFamily: 'Manrope',
+    fontWeight: '700',
+    color: Theme.colors.terroirText,
+  },
+  timeText: {
+    fontSize: 9,
+    fontFamily: 'Manrope',
+    color: Theme.colors.terroirGray,
+  },
+  dateButton: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: Theme.colors.terroirBrown,
+    borderRadius: 8,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dateButtonText: {
+    fontSize: 9,
+    fontFamily: 'Manrope',
+    fontWeight: '800',
+    color: Theme.colors.terroirBrown,
+    letterSpacing: 0.5,
+  },
+  btnDisabled: {
+    opacity: 0.4,
+    borderColor: '#E5E7EB',
+  },
+  datesGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  dateInputGroup: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontFamily: 'Manrope',
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.terroirGray,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  metricsList: {
+    gap: 16,
+  },
+  metricInputGroup: {
+    marginBottom: 4,
+  },
+  standardLabel: {
+    ...Theme.typography.labelSm,
+    fontSize: 10,
+    fontWeight: '800',
+    color: Theme.colors.terroirGray,
+    marginBottom: 8,
+    marginLeft: 2,
+    letterSpacing: 1,
+  },
+  standardInputWrapper: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    height: 48,
+  },
+  standardInput: {
+    flex: 1,
+    fontFamily: 'Manrope',
+    fontSize: 13,
+    fontWeight: '600',
+    color: Theme.colors.terroirText,
+  },
+  inputDisabled: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#F3F4F6',
+  },
+  actionButton: {
+    width: '100%',
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  btnCompleted: {
+    backgroundColor: Theme.colors.terroirGreen,
+    opacity: 0.8,
+  },
+  btnActive: {
+    backgroundColor: Theme.colors.terroirBrown,
+  },
+  btnPending: {
+    borderWidth: 1,
+    borderColor: Theme.colors.terroirBrown,
+  },
+  actionButtonText: {
+    fontFamily: 'Manrope',
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'white',
+    letterSpacing: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: width * 0.8,
+    padding: 16,
+    gap: 12,
+  },
+  modalOption: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalOptionText: {
+    fontFamily: 'Manrope',
+    fontSize: 16,
+    color: Theme.colors.terroirText,
+    textAlign: 'center',
+  },
+});
+
+export default EtapaSembradosScreen;

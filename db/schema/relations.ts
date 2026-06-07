@@ -5,7 +5,7 @@ import { semillas } from './semillas';
 import { catalogo } from './catalogo';
 import { asignacion_personal } from './asignacion_personal';
 import { users } from './users';
-import { cosecha } from './cosecha';
+import { estado_etapa } from './estado_etapa';
 
 export const parcelasRelations = relations(parcelas, ({ many }) => ({
   lotes: many(lotes),
@@ -21,7 +21,14 @@ export const lotesRelations = relations(lotes, ({ one, many }) => ({
     references: [semillas.id],
   }),
   asignaciones: many(asignacion_personal),
-  cosechas: many(cosecha),
+  estados_etapas: many(estado_etapa),
+}));
+
+export const estado_etapaRelations = relations(estado_etapa, ({ one }) => ({
+  lote: one(lotes, {
+    fields: [estado_etapa.lote_id],
+    references: [lotes.id],
+  }),
 }));
 
 export const asignacion_personalRelations = relations(asignacion_personal, ({ one }) => ({
@@ -31,17 +38,6 @@ export const asignacion_personalRelations = relations(asignacion_personal, ({ on
   }),
   trabajador: one(users, {
     fields: [asignacion_personal.trabajador_id],
-    references: [users.id],
-  }),
-}));
-
-export const cosechaRelations = relations(cosecha, ({ one }) => ({
-  lote: one(lotes, {
-    fields: [cosecha.lote_id],
-    references: [lotes.id],
-  }),
-  responsable: one(users, {
-    fields: [cosecha.responsable_id],
     references: [users.id],
   }),
 }));

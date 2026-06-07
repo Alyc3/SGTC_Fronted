@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "57c0ae43-4f35-4aeb-b763-efd22e56489a",
+  "id": "54a2f233-e1f0-4bb1-a793-e265868269f4",
   "prevId": "3db093ce-11cc-4194-9ea7-3373e24d08e2",
   "tables": {
     "catalogo": {
@@ -983,8 +983,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "cosecha": {
-      "name": "cosecha",
+    "metricas_subetapa_sembrado": {
+      "name": "metricas_subetapa_sembrado",
       "columns": {
         "id": {
           "name": "id",
@@ -1000,9 +1000,143 @@
           "notNull": true,
           "autoincrement": false
         },
-        "responsable_id": {
-          "name": "responsable_id",
+        "tecnico_id": {
+          "name": "tecnico_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "subfase": {
+          "name": "subfase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fecha_inicio": {
+          "name": "fecha_inicio",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "fecha_fin": {
+          "name": "fecha_fin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tasa_germinacion": {
+          "name": "tasa_germinacion",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dias_emergencia": {
+          "name": "dias_emergencia",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "presencia_hongos": {
+          "name": "presencia_hongos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pares_hojas_verdaderas": {
+          "name": "pares_hojas_verdaderas",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "altura_plantula": {
+          "name": "altura_plantula",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "vigor_radicular": {
+          "name": "vigor_radicular",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "indice_crecimiento": {
+          "name": "indice_crecimiento",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "grosor_tallo": {
+          "name": "grosor_tallo",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "formacion_bandolas": {
+          "name": "formacion_bandolas",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "incidencia_foliar": {
+          "name": "incidencia_foliar",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "intensidad_floracion": {
+          "name": "intensidad_floracion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "uniformidad_floracion": {
+          "name": "uniformidad_floracion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "estres_hidrico": {
+          "name": "estres_hidrico",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "porcentaje_cuajado": {
+          "name": "porcentaje_cuajado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "homogeneidad_maduracion": {
+          "name": "homogeneidad_maduracion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "incidencia_broca": {
+          "name": "incidencia_broca",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1011,80 +1145,8 @@
           "name": "grados_brix",
           "type": "real",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "peso_kilos": {
-          "name": "peso_kilos",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "imagen_evidencia_uri": {
-          "name": "imagen_evidencia_uri",
-          "type": "text",
-          "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "observaciones": {
-          "name": "observaciones",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "fecha_inicio": {
-          "name": "fecha_inicio",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "calidad_cosecha": {
-          "name": "calidad_cosecha",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "tarifa_por_kilo": {
-          "name": "tarifa_por_kilo",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "fecha_final": {
-          "name": "fecha_final",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "duracion_horas": {
-          "name": "duracion_horas",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "fecha_creacion": {
-          "name": "fecha_creacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "fecha_modificacion": {
-          "name": "fecha_modificacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
         },
         "is_synced": {
           "name": "is_synced",
@@ -1092,22 +1154,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": false
-        },
-        "sync_status": {
-          "name": "sync_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
+          "default": 0
         }
       },
       "indexes": {},
       "foreignKeys": {
-        "cosecha_lote_id_lotes_id_fk": {
-          "name": "cosecha_lote_id_lotes_id_fk",
-          "tableFrom": "cosecha",
+        "metricas_subetapa_sembrado_lote_id_lotes_id_fk": {
+          "name": "metricas_subetapa_sembrado_lote_id_lotes_id_fk",
+          "tableFrom": "metricas_subetapa_sembrado",
           "tableTo": "lotes",
           "columnsFrom": [
             "lote_id"
@@ -1118,12 +1172,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "cosecha_responsable_id_users_id_fk": {
-          "name": "cosecha_responsable_id_users_id_fk",
-          "tableFrom": "cosecha",
+        "metricas_subetapa_sembrado_tecnico_id_users_id_fk": {
+          "name": "metricas_subetapa_sembrado_tecnico_id_users_id_fk",
+          "tableFrom": "metricas_subetapa_sembrado",
           "tableTo": "users",
           "columnsFrom": [
-            "responsable_id"
+            "tecnico_id"
           ],
           "columnsTo": [
             "id"

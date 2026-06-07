@@ -23,3 +23,6 @@ export const CalidadFinalValues = ['Alta', 'Media', 'Baja'] as const;
 export const EtapaActualValues = ['Pendiente', 'En_Proceso', 'Completada'] as const;
 //Enum para Trabajador
 export const EtapaProcesoValues = ['Administración', 'Sembrado', 'Cosechado', 'Despulpado', 'Secado', 'Tostado', 'Molido', 'Empaquetado', 'Transporte'] as const;
+
+// Enum para Presencia de Hongos en Sembrado
+export const PresenciaHongosValues = ['Ninguna', 'Baja', 'Moderada'] as const;

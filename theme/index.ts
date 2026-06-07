@@ -50,6 +50,13 @@ export const Theme = {
     inversePrimary: '#e7bdb1',
     white: '#ffffff',
     success: '#3a6843',
+    // Terroir Editorial Theme
+    terroirBeige: '#F9F7F2',
+    terroirBrown: '#5D3A2C',
+    terroirGreen: '#3E6641',
+    terroirGreenLight: '#E9F1EA',
+    terroirGray: '#7A7A7A',
+    terroirText: '#2D2D2D',
   },
   spacing: {
     xs: 4,

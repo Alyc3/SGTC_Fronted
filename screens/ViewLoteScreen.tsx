@@ -33,6 +33,7 @@ import {
   Map,
   Users,
   UserPlus,
+  Eye,
   Droplets,
   Thermometer,
   Sun,
@@ -43,6 +44,7 @@ import {
   Mountain,
   Ruler,
   Rocket,
+  Edit2,
   X,
   Camera,
   ClipboardCheck,
@@ -58,14 +60,49 @@ import { CustomAlert } from '../components/GlobalAlert';
 import { EtapaProcesoValues } from '../db/schema/enums';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuthStore } from '../store/authStore';
-import DateTimePicker from '@react-native-community/datetimepicker';
+const DateTimePicker = require('@react-native-community/datetimepicker');
 
 const { width } = Dimensions.get('window');
 const GRAIN_TYPES = ['Verde', 'Rojo', 'Variado'];
 
+const SubFaseTimeline = ({ subFaseActual, isProduccion, stageStatus }: { subFaseActual: string, isProduccion: boolean, stageStatus: string }) => {
+  const subFases = ['Germinacion', 'Vivero', 'Crecimiento', 'Floracion', 'Maduracion'];
+  const currentIndex = subFases.indexOf(subFaseActual);
+  const isCompleted = stageStatus === 'Completada';
+
+  if (!isProduccion && currentIndex <= 0 && !isCompleted) return null;
+
+  return (
+    <View style={styles.miniTimeline}>
+      <View style={styles.dotsRow}>
+        {subFases.map((f, i) => {
+          const isPast = isCompleted || i < currentIndex;
+          const isCurrent = !isCompleted && i === currentIndex;
+          return (
+            <React.Fragment key={f}>
+              <View style={[
+                styles.timelineDot,
+                isPast && styles.dotCompleted,
+                isCurrent && styles.dotActive,
+              ]} />
+              {i < subFases.length - 1 && (
+                <View style={[
+                  styles.timelineConnector,
+                  (i < currentIndex || isCompleted) && styles.connectorCompleted
+                ]} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </View>
+      <Text style={styles.subFaseText}>{isCompleted ? 'COMPLETADA' : subFaseActual.toUpperCase()}</Text>
+    </View>
+  );
+};
+
 const ViewLoteScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
-  const role = useAuthStore((state) => state.role);
+  const { role, userId } = useAuthStore();
 
   // Control de gestos y botón físico de atrás
   useFocusEffect(
@@ -101,7 +138,22 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   };
 
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
-  const canAssignCapataz = userRole === 'admin' || userRole === 'gerente general';
+  const isAdminOrManager = userRole === 'admin' || userRole === 'gerente general';
+  const canAssignCapataz =  (typeof isAdminOrManager !== "undefined" && isAdminOrManager);
+
+  // Mapeo de roles técnicos a sus etapas correspondientes
+  const getAssignedStageForTechnician = (role: string): string | null => {
+    const r = role.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+    if (r.includes('tecnico_sembrado')) return 'Sembrado';
+    if (r.includes('tecnico_agronomo')) return 'Cosechado';
+    if (r.includes('tecnico_de_despulpado')) return 'Despulpado';
+    if (r.includes('encargado_de_secado')) return 'Secado';
+    if (r.includes('tostador')) return 'Tostado';
+    return null;
+  };
+
+  const assignedStage = (typeof getAssignedStageForTechnician === "function" ? getAssignedStageForTechnician(userRole) : null);
+  const isStrictTechnician = ! (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && assignedStage !== null;
 
   const [assignedPersonnel, setAssignedPersonnel] = useState<any[]>([]);
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
@@ -148,6 +200,17 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
       setLoading(false);
     }
   }, [lote?.id]);
+
+  // Función para obtener una lista única de trabajadores por ID (Accesible en toda la pantalla)
+  const getUniquePersonnel = useCallback((list: any[]) => {
+    const seen = new Set();
+    return list.filter(p => {
+      const id = p.trabajador?.id || p.trabajador_id || p.id;
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -570,25 +633,58 @@ const tarifaGeneral = pesoTotal > 0
     const isActive = status === 'En_Proceso';
     const isCompleted = status === 'Completada';
 
-    // Usuarios asignados a esta etapa específica
-    const stagePersonnel = assignedPersonnel.filter(p => p.etapa === title);
+    // Usuarios asignados a esta etapa específica, separados por rol y eliminando duplicados visuales
+    const stagePersonnelRaw = assignedPersonnel.filter(p => p.etapa === title);
+    const stagePersonnel = getUniquePersonnel(stagePersonnelRaw);
+
+    const technicalStaff = stagePersonnel.filter(p => {
+
+      const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
+      return rName.includes('tecnico') || rName.includes('técnico');
+    });
+    const operationalStaff = stagePersonnel.filter(p => {
+      const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
+      return !rName.includes('tecnico') && !rName.includes('técnico');
+    });
+
+    const isAssignedTechnical = technicalStaff.some(t => t.trabajador?.id === userId);
+    const canStart = isAssignedTechnical && isEnabled && status === 'Pendiente';
 
     return (
-      <View key={title} style={[
-        styles.stageCard, 
-        isActive && styles.stageCardActive,
-        !isEnabled && { opacity: 0.5 }
-      ]}>
+      <TouchableOpacity 
+        key={title} 
+        activeOpacity={title === 'Sembrado' ? 0.9 : 1}
+        onPress={() => {
+          if (title === 'Sembrado') {
+            navigation.navigate('EtapaSembrados', { lote });
+          }
+        }}
+        style={[
+          styles.stageCard, 
+          isActive && styles.stageCardActive,
+          !isEnabled && { opacity: 0.5 }
+        ]}
+      >
         <View style={styles.stageHeader}>
-          <View style={styles.stageTitleRow}>
-            <Text style={[styles.stageTitle, isActive && { color: Theme.colors.primary }]}>{title}</Text>
-            {isCompleted && <CheckCircle2 size={16} color={Theme.colors.secondary} />}
-            {isActive && <Activity size={16} color={Theme.colors.primary} />}
+          <View style={{ flex: 1 }}>
+            <View style={styles.stageTitleRow}>
+              <Text style={[styles.stageTitle, isActive && { color: Theme.colors.primary }]}>{title}</Text>
+              {isCompleted && <CheckCircle2 size={16} color={Theme.colors.secondary} />}
+              {isActive && <Activity size={16} color={Theme.colors.primary} />}
+            </View>
+            {stageInfo?.fecha_inicio && (
+              <Text style={styles.stageDate}>
+                {isCompleted ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}` : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
+              </Text>
+            )}
           </View>
-          {stageInfo?.fecha_inicio && (
-            <Text style={styles.stageDate}>
-              {isCompleted ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}` : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
-            </Text>
+          
+          {title === 'Sembrado' && (
+            <SubFaseTimeline 
+              subFaseActual={stageInfo?.subFaseSiembra || 'Germinacion'} 
+              isProduccion={lote?.estado_lote === 'En_Produccion'} 
+              stageStatus={status}
+            />
           )}
         </View>
 
@@ -596,18 +692,28 @@ const tarifaGeneral = pesoTotal > 0
           {isCompleted ? 'Etapa finalizada exitosamente.' : isActive ? 'Etapa en ejecución actual.' : 'Esperando inicio de fase.'}
         </Text>
 
-        {/* Lista de Personal Asignado a esta Etapa */}
-        {stagePersonnel.length > 0 && (
-          <View style={styles.stagePersonnelList}>
-            <Users size={12} color={Theme.colors.outline} />
-            <Text style={styles.stagePersonnelText}>
-              {stagePersonnel.map(p => `${p.trabajador?.first_name}`).join(', ')}
-            </Text>
-          </View>
-        )}
+        {/* Separación de Personal: Técnico vs Equipo */}
+        <View style={styles.personnelGroups}>
+          {technicalStaff.length > 0 && (
+            <View style={styles.personnelGroupItem}>
+              <ShieldCheck size={14} color={Theme.colors.secondary} />
+              <Text style={styles.technicalStaffText}>
+                RESPONSABLE: {technicalStaff.map(p => `${p.trabajador?.first_name} ${p.trabajador?.last_name}`).join(', ')}
+              </Text>
+            </View>
+          )}
+          {operationalStaff.length > 0 && (
+            <View style={styles.personnelGroupItem}>
+              <Users size={14} color={Theme.colors.outline} />
+              <Text style={styles.operationalStaffText}>
+                EQUIPO: {operationalStaff.map(p => `${p.trabajador?.first_name}`).join(', ')}
+              </Text>
+            </View>
+          )}
+        </View>
         
         <View style={styles.stageFooter}>
-          {isEnabled && status === 'Pendiente' && (
+          {canStart && (
             <TouchableOpacity 
               style={styles.startStageButton}
               onPress={() => handleStartStage(title)}
@@ -617,26 +723,50 @@ const tarifaGeneral = pesoTotal > 0
             </TouchableOpacity>
           )}
 
-          {title === 'Cosechado' && isActive && (
-            <TouchableOpacity 
-              style={styles.finishHarvestButton}
-              onPress={openHarvestModal}
-            >
-              <ClipboardCheck size={14} color={Theme.colors.white} />
-              <Text style={styles.startStageText}>Terminar Cosechado</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.stageActionsRow}>
+            {title === 'Cosechado' && isActive && (
+              <TouchableOpacity 
+                style={styles.finishHarvestButton}
+                onPress={openHarvestModal}
+              >
+                <ClipboardCheck size={14} color={Theme.colors.white} />
+                <Text style={styles.startStageText}>Terminar</Text>
+              </TouchableOpacity>
+            )}
 
-          <TouchableOpacity 
-            style={[styles.addPersonnelMiniButton, !isEnabled && { backgroundColor: Theme.colors.surfaceVariant }]}
-            onPress={() => isEnabled && navigation.navigate('AssignPersonal', { lote, etapa: title })}
-            disabled={!isEnabled}
-          >
-            <UserPlus size={14} color={isEnabled ? Theme.colors.onSecondaryContainer : Theme.colors.outline} />
-            <Text style={[styles.addPersonnelMiniText, !isEnabled && { color: Theme.colors.outline }]}>Agregar Personal</Text>
-          </TouchableOpacity>
+            {status === 'Pendiente' && stagePersonnel.length > 0 && !isStrictTechnician && (
+              <TouchableOpacity 
+                style={[styles.editPersonnelButton, !isEnabled && { opacity: 0.5 }]}
+                onPress={() => isEnabled && navigation.navigate('AssignPersonal', { lote, etapa: title, isEditMode: true })}
+                disabled={!isEnabled}
+              >
+                <Edit2 size={14} color={Theme.colors.primary} />
+              </TouchableOpacity>
+            )}
+
+            {!isStrictTechnician && (
+              <TouchableOpacity 
+                style={[styles.addPersonnelMiniButton, !isEnabled && { backgroundColor: Theme.colors.surfaceVariant }]}
+                onPress={() => isEnabled && navigation.navigate('AssignPersonal', { lote, etapa: title })}
+                disabled={!isEnabled}
+              >
+                <UserPlus size={14} color={isEnabled ? Theme.colors.onSecondaryContainer : Theme.colors.outline} />
+                <Text style={[styles.addPersonnelMiniText, !isEnabled && { color: Theme.colors.outline }]}>Personal</Text>
+              </TouchableOpacity>
+            )}
+
+            {title === 'Sembrado' && (status === 'En_Proceso' || status === 'Completada') && (
+              <TouchableOpacity 
+                style={styles.monitorStageButton}
+                onPress={() => navigation.navigate('EtapaSembrados', { lote })}
+              >
+                <Eye size={14} color={Theme.colors.white} />
+                <Text style={styles.monitorStageText}>Monitorear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -751,11 +881,11 @@ const tarifaGeneral = pesoTotal > 0
         <View style={styles.sectionPadding}>
           <Text style={styles.sectionLabel}>RESPONSABLE TÉCNICO</Text>
           <View style={styles.foremanList}>
-            {assignedPersonnel
+            {getUniquePersonnel(assignedPersonnel
               .filter(p => {
                 const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
                 return rName === 'capataz' || p.etapa === 'Administración';
-              })
+              }))
               .map((p, idx) => (
                 <View key={p.id || idx} style={styles.foremanCard}>
                   <View style={styles.foremanAvatar}>
@@ -788,15 +918,22 @@ const tarifaGeneral = pesoTotal > 0
         <View style={styles.sectionPadding}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionLabel}>CONTROL DE ETAPAS</Text>
-            <TouchableOpacity style={styles.simulateHarvestButton} onPress={openHarvestModal}>
-              <ClipboardCheck size={13} color={Theme.colors.secondary} />
-              <Text style={styles.simulateHarvestText}>Simular cosecha</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={styles.progressPct}>{isStrictTechnician ? 'VISTA TÉCNICA' : 'GESTIÓN SECUENCIAL'}</Text>
+              <TouchableOpacity style={styles.simulateHarvestButton} onPress={openHarvestModal}>
+                <ClipboardCheck size={13} color={Theme.colors.secondary} />
+                <Text style={styles.simulateHarvestText}>Simular cosecha</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           
           <View style={styles.stagesList}>
             {EtapaProcesoValues
-              .filter(etapa => etapa !== 'Administración')
+              .filter(etapa => {
+                if (etapa === 'Administración') return false;
+                if (isStrictTechnician) return etapa === assignedStage;
+                return true;
+              })
               .map((etapa, index) => renderStageCard(etapa, index))}
           </View>
         </View>
@@ -1052,6 +1189,60 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Theme.colors.onSurfaceVariant,
     fontWeight: '600',
+  },
+  personnelGroups: {
+    marginTop: 12,
+    gap: 8,
+  },
+  personnelGroupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  technicalStaffText: {
+    fontSize: 11,
+    color: Theme.colors.secondary,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  operationalStaffText: {
+    fontSize: 11,
+    color: Theme.colors.onSurfaceVariant,
+    fontWeight: '600',
+  },
+  stageActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editPersonnelButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Theme.colors.primary + '20',
+  },
+  monitorStageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  monitorStageText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Theme.colors.white,
   },
   foremanName: {
     ...Theme.typography.headline,
@@ -1455,6 +1646,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  miniTimeline: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  timelineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5E7EB',
+  },
+  dotActive: {
+    backgroundColor: Theme.colors.terroirBrown,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dotCompleted: {
+    backgroundColor: Theme.colors.terroirGreen,
+  },
+  timelineConnector: {
+    width: 8,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  connectorCompleted: {
+    backgroundColor: Theme.colors.terroirGreen,
+  },
+  subFaseText: {
+    fontSize: 7,
+    fontFamily: 'Manrope',
+    fontWeight: '800',
+    color: Theme.colors.terroirGray,
+    letterSpacing: 0.5,
+  }
 });
 
 export default ViewLoteScreen;

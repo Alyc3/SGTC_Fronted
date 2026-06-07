@@ -11,6 +11,7 @@ import GestionParcelaScreen from '../screens/GestionParcelaScreen';
 import ListarParcelaScreen from '../screens/ListarParcelaScreen';
 import GestionLoteScreen from '../screens/GestionLoteScreen';
 import ViewLoteScreen from '../screens/ViewLoteScreen';
+import EtapaSembradosScreen from '../screens/EtapaSembradosScreen';
 import AssignPersonalScreen from '../screens/AssignPersonalScreen';
 import AssignCapatazScreen from '../screens/AssignCapatazScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -23,6 +24,7 @@ import {
   Boxes, 
   Map, 
   Sprout, 
+  Flower,
   Users, 
   Settings,
   ShieldCheck
@@ -41,12 +43,13 @@ export const DrawerNavigator = () => {
   };
 
   const role = getCleanRole().toUpperCase();
+  const isTechnical = role.includes('TECNICO') || role.includes('ENCARGADO') || role.includes('TOSTADOR');
 
   // Definición de permisos por rol
-  const canAccessLotes = ['ADMIN', 'GESTOR_INVENTARIO', 'CAPATAZ'].includes(role);
-  const canAccessParcelas = ['ADMIN', 'CAPATAZ'].includes(role);
-  const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO'].includes(role);
-  const canAccessPersonal = ['ADMIN', 'CAPATAZ'].includes(role);
+  const canAccessLotes = true; // Acceso universal a lotes (filtrado internamente)
+  const canAccessParcelas = ['ADMIN', 'CAPATAZ'].includes(role) && !isTechnical;
+  const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO'].includes(role) && !isTechnical;
+  const canAccessPersonal = ['ADMIN', 'CAPATAZ'].includes(role) && !isTechnical;
   const canAccessRoles = ['ADMIN'].includes(role);
 
   return (
@@ -149,69 +152,22 @@ export const DrawerNavigator = () => {
       />
 
       <Drawer.Screen 
-        name="AssignPersonal" 
-        component={AssignPersonalScreen} 
-        options={{ 
-          title: 'Asignación de Personal',
-          drawerItemStyle: { display: 'none' },
-          headerShown: false
-        }}
-      />
-
-      <Drawer.Screen 
-        name="InventarioSemillas" 
-        component={InventarioSemillasScreen} 
-        options={{ 
-          title: 'Semillas',
-          drawerIcon: ({ color }) => <Sprout size={20} color={color} />,
-          drawerItemStyle: canAccessSemillas ? {} : { display: 'none' }
-        }}
-      />
-
-      <Drawer.Screen 
-        name="RegistroSemilla" 
-        component={RegistroSemillaScreen} 
-        options={{ 
-          title: 'Nueva Semilla',
-          drawerItemStyle: { display: 'none' }
-        }}
-      />
-
-      <Drawer.Screen 
-        name="Personal" 
-        component={PersonalScreen} 
-        options={{ 
-          title: 'Personal',
-          drawerIcon: ({ color }) => <Users size={20} color={color} />,
-          drawerItemStyle: canAccessPersonal ? {} : { display: 'none' }
-        }}
-      />
-
-      <Drawer.Screen 
-        name="GestionRoles" 
-        component={GestionRolesScreen} 
-        options={{ 
-          title: 'Gestión de Roles',
-          drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />,
-          drawerItemStyle: canAccessRoles ? {} : { display: 'none' }
-        }}
-      />
-
-      <Drawer.Screen 
-        name="RegisterPersonal" 
-        component={RegisterPersonalScreen} 
-        options={{ 
-          title: 'Registro de Personal',
-          drawerItemStyle: { display: 'none' }
-        }}
-      />
-
-      <Drawer.Screen 
         name="Configuracion" 
         component={ConfiguracionScreen} 
         options={{ 
           title: 'Configuración',
           drawerIcon: ({ color }) => <Settings size={20} color={color} />
+        }}
+      />
+
+      <Drawer.Screen 
+        name="EtapaSembrados" 
+        component={EtapaSembradosScreen} 
+        options={{ 
+          title: 'Control de Sembrado',
+          drawerIcon: ({ color }) => <Flower size={20} color={color} />,
+          drawerItemStyle: isTechnical ? {} : { display: 'none' },
+          headerShown: false
         }}
       />
 

@@ -19,7 +19,7 @@ import { db } from '../db';
 import { asignacion_personal } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { Theme } from '../theme';
-import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck } from 'lucide-react-native';
+import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck, CheckCircle2, Clock } from 'lucide-react-native';
 import { lotesService, parcelasService, rolesService } from '../services';
 import { useNavigation } from '@react-navigation/native';
 import { CustomAlert } from '../components/GlobalAlert';
@@ -56,7 +56,8 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
   };
 
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
-  const canAssignCapataz = userRole === 'admin' || userRole === 'gerente general';
+  const isAdminOrManager = (userRole === 'admin' || userRole === 'gerente general' || userRole.includes('capataz') || userRole.includes('tecnico'));/* DEFINED_HERE */
+  const canAssignCapataz = (typeof isAdminOrManager !== "undefined" && isAdminOrManager);
 
   // Filtrar solo asignaciones que sean de Capataces para el Responsable Técnico
   const capatacesAsignados = (item.asignaciones || []).filter((a: any) => {
@@ -134,18 +135,20 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
           </View>
 
           <View style={styles.cardActions}>
-            <TouchableOpacity 
-              onPress={(e) => {
-                e.stopPropagation();
-                onEdit(item.id, item.parcela_id, isProduccion);
-              }} 
-              style={[styles.actionBtn, isProduccion && { opacity: 0.5 }]}
-            >
-              <Edit size={16} color={isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant} />
-              <Text style={[styles.actionBtnText, { color: isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant }]}>
-                {isProduccion ? 'BLOQUEADO' : 'MODIFICAR'}
-              </Text>
-            </TouchableOpacity>
+            { (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && (
+              <TouchableOpacity 
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onEdit(item.id, item.parcela_id, isProduccion);
+                }} 
+                style={[styles.actionBtn, isProduccion && { opacity: 0.5 }]}
+              >
+                <Edit size={16} color={isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant} />
+                <Text style={[styles.actionBtnText, { color: isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant }]}>
+                  {isProduccion ? 'BLOQUEADO' : 'MODIFICAR'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {canAssignCapataz && (
               <TouchableOpacity 
@@ -162,15 +165,17 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity 
-              onPress={(e) => {
-                e.stopPropagation();
-                onDelete(item.id, item.codigo, isProduccion);
-              }} 
-              style={[styles.archiveBtn, isProduccion && { opacity: 0.5 }]}
-            >
-              <Archive size={14} color={isProduccion ? Theme.colors.outline : Theme.colors.outline} />
-            </TouchableOpacity>
+            { (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && (
+              <TouchableOpacity 
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onDelete(item.id, item.codigo, isProduccion);
+                }} 
+                style={[styles.archiveBtn, isProduccion && { opacity: 0.5 }]}
+              >
+                <Archive size={14} color={isProduccion ? Theme.colors.outline : Theme.colors.outline} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -207,7 +212,9 @@ const LotesScreen = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
-  const userId = useAuthStore((state) => state.role === 'string' ? state.userId : (state as any).userId);
+  
+  // Selectores reactivos
+  const userId = useAuthStore((state) => state.userId);
   const role = useAuthStore((state) => state.role);
 
   // Normalización ultra-robusta del rol
@@ -219,7 +226,12 @@ const LotesScreen = () => {
   }, [role]);
 
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
-  const isAdminOrManager = userRole === 'admin' || userRole === 'gerente general';
+  
+  // Solo los administradores de nivel superior ven TODO el inventario sin filtros
+  const isSuperUser = (userRole === 'admin' || userRole === 'gerente general');
+  
+  // Capataces y Técnicos tienen permisos para gestionar los lotes que VEN
+  const isAdminOrManager = isSuperUser || userRole.includes('capataz') || userRole.includes('tecnico') || userRole.includes('técnico');
   
   const fetchRoles = useCallback(async () => {
     try {
@@ -241,9 +253,11 @@ const LotesScreen = () => {
     }, [fetchRoles])
   );
 
+  // Query global de lotes (filtrada luego en memoria por rendimiento y reactividad)
   const { data: lotes = [] } = useLiveQuery(db.query.lotes.findMany({
     with: { 
       parcela: true, 
+      estados_etapas: true,
       semilla: {
         with: { variedad: true }
       },
@@ -255,7 +269,7 @@ const LotesScreen = () => {
     }
   }));
 
-  // Obtener asignaciones para el usuario actual (solo si no es admin/manager)
+  // Obtener asignaciones específicas del usuario para el filtrado de no-admins
   const { data: userAssignments = [] } = useLiveQuery(
     db.query.asignacion_personal.findMany({
       where: userId ? eq(asignacion_personal.trabajador_id, userId) : undefined
@@ -264,19 +278,22 @@ const LotesScreen = () => {
   );
 
   const sections = useMemo(() => {
-    // 1. Filtrado por Rol y Asignación
-    let filteredByAssignment = lotes;
-    if (!isAdminOrManager) {
-      const assignedLotIds = userAssignments.map(a => a.lote_id);
-      filteredByAssignment = lotes.filter(l => assignedLotIds.includes(l.id));
+    // 1. Filtrado por Privilegios y Asignación
+    let filteredByAssignment = lotes || [];
+    
+    if (!isSuperUser) {
+      // Si no es Admin/Gerente, solo mostramos lo que tiene asignado
+      const assignedLotIds = (userAssignments || []).map(a => a.lote_id);
+      filteredByAssignment = (lotes || []).filter(l => assignedLotIds.includes(l.id));
     }
 
-    // 2. Filtrado por Búsqueda
+    // 2. Filtrado por Búsqueda (sobre el set ya filtrado por seguridad)
     const filtered = filteredByAssignment.filter(l => 
       l.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (l.semilla as any)?.variedad?.valor?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    // 3. Agrupación por Parcelas
     const grouped = filtered.reduce((acc: any[], lot: any) => {
       const parcelaNombre = lot.parcela?.nombre || 'General';
       const section = acc.find(s => s.title === parcelaNombre);
@@ -289,7 +306,7 @@ const LotesScreen = () => {
     }, []);
 
     return grouped.sort((a, b) => a.title.localeCompare(b.title));
-  }, [lotes, userAssignments, isAdminOrManager, searchQuery]);
+  }, [lotes, userAssignments, isSuperUser, searchQuery]);
 
   const stats = {
     total: lotes.length,
@@ -374,7 +391,7 @@ const LotesScreen = () => {
             </View>
 
             {/* Stats Scroll */}
-            {isAdminOrManager && (
+            { (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && (
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
@@ -392,7 +409,7 @@ const LotesScreen = () => {
           <View style={styles.emptyContainer}>
             <Info size={48} color={Theme.colors.outlineVariant} />
             <Text style={styles.empty}>
-              {!isAdminOrManager 
+              {! (typeof isAdminOrManager !== "undefined" && isAdminOrManager) 
                 ? "No tiene lotes asignados bajo su responsabilidad." 
                 : "No hay registros coincidentes."}
             </Text>

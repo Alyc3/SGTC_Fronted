@@ -66,6 +66,7 @@ const ALLOWED_ROLES_NORMALIZED = [
 
 const AssignPersonalScreen = ({ navigation, route }: any) => {
   const { role: userRoleRaw } = useAuthStore();
+  const isEditMode = route.params?.isEditMode || false;
   
   const getCleanRole = () => {
     if (!userRoleRaw) return 'COLABORADOR';
@@ -84,6 +85,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   const [selectedEtapa, setSelectedEtapa] = useState<string>(route.params?.etapa || EtapaProcesoValues[0]);
   const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>([]);
   const [existingAssignments, setExistingAssignments] = useState<any[]>([]);
+  const [initialSelectedIds, setInitialSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -116,6 +118,16 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       setPersonnel(filteredPersonnel);
       setExistingAssignments(assignmentsData);
       
+      // Inicialización inmediata de la selección (Crucial para que se vea seleccionado al cargar)
+      if (route.params?.isEditMode) {
+        const currentStageIds = Array.from(new Set(assignmentsData
+          .filter((a: any) => a.etapa === selectedEtapa)
+          .map((a: any) => a.trabajador_id || a.trabajador?.id)));
+        
+        setSelectedPersonnel(currentStageIds);
+        setInitialSelectedIds(currentStageIds);
+      }
+
       // If we don't have a lote from params, pick the first one from DB
       if (!selectedLote && lotesData.length > 0) {
         setSelectedLote(lotesData[0]);
@@ -132,10 +144,22 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
     fetchData();
   }, [fetchData]);
 
-  // Limpiar selección cuando cambia la etapa para evitar errores de asignación
+  // Sincronizar selección cuando cambia la etapa MANUALMENTE en el carrusel
   useEffect(() => {
-    setSelectedPersonnel([]);
-  }, [selectedEtapa]);
+    // Solo actuamos si no es la carga inicial (cuando existingAssignments ya tiene datos)
+    if (existingAssignments.length > 0) {
+      if (isEditMode) {
+        const currentStageIds = Array.from(new Set(existingAssignments
+          .filter((a: any) => a.etapa === selectedEtapa)
+          .map((a: any) => a.trabajador_id || a.trabajador?.id)));
+        
+        setSelectedPersonnel(currentStageIds);
+        setInitialSelectedIds(currentStageIds);
+      } else {
+        setSelectedPersonnel([]);
+      }
+    }
+  }, [selectedEtapa]); // Escuchamos solo el cambio de etapa
 
   const filteredPersonnel = useMemo(() => {
     return personnel.filter(worker => {
@@ -166,7 +190,8 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   }, [existingAssignments, selectedEtapa]);
 
   const togglePersonnelSelection = (id: string) => {
-    if (alreadyAssignedIds.has(id)) return; // No permitir seleccionar si ya está asignado
+    // Si NO estamos en modo edición y ya está asignado, bloqueamos la selección
+    if (!isEditMode && alreadyAssignedIds.has(id)) return;
 
     const worker = personnel.find(p => p.id === id);
     const roleNameRaw = rolesMap[worker?.role_id] || '';
@@ -176,75 +201,107 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
 
     const roleName = normalize(roleNameRaw);
-    
-    // Restricción para etapa de 'Sembrado': Solo un 'Tecnico de Sembrado'
-    if (selectedEtapa === 'Sembrado' && roleName === 'tecnico_sembrado' && !selectedPersonnel.includes(id)) {
-      const alreadyHasTecnico = selectedPersonnel.some(pId => {
+    const isTechnicalRole = roleName === 'tecnico_sembrado' || roleName === 'tecnico_agronomo';
+    const isAlreadySelected = selectedPersonnel.includes(id);
+
+    // BLOQUEO ESTRICTO: Si el usuario intenta SELECCIONAR un técnico (isAdding)
+    if (isTechnicalRole && !isAlreadySelected) {
+      // Buscamos si YA hay algún técnico en la lista de seleccionados
+      const existingTechnicalId = selectedPersonnel.find(pId => {
         const p = personnel.find(w => w.id === pId);
         const rName = normalize(rolesMap[p?.role_id] || '');
-        return rName === 'tecnico_sembrado';
+        return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
       });
 
-      // Incluir también los que ya están en DB en la validación
-      const alreadyHasTecnicoInDB = Array.from(alreadyAssignedIds).some(pId => {
-        const p = personnel.find(w => w.id === pId);
-        const rName = normalize(rolesMap[p?.role_id] || '');
-        return rName === 'tecnico_sembrado';
-      });
-
-      if (alreadyHasTecnico || alreadyHasTecnicoInDB) {
-        CustomAlert.show('ALERTA', 'Límite Excedido', 'Solo se puede asignar un Técnico de Sembrado para esta etapa.');
-        return;
+      if (existingTechnicalId) {
+        CustomAlert.show(
+          'ALERTA', 
+          'Límite de Técnicos', 
+          'Solo se permite un Técnico Responsable por fase. Desmarque al técnico actual si desea asignar a uno diferente.'
+        );
+        return; // Detenemos la selección inmediatamente
       }
     }
 
-    // Restricción para etapa de 'Cosechado': Solo un 'Tecnico Agronomo' (Interpretando el límite técnico)
-    if (selectedEtapa === 'Cosechado' && roleName === 'tecnico_agronomo' && !selectedPersonnel.includes(id)) {
-      const alreadyHasTecnico = selectedPersonnel.some(pId => {
-        const p = personnel.find(w => w.id === pId);
-        const rName = normalize(rolesMap[p?.role_id] || '');
-        return rName === 'tecnico_agronomo';
-      });
-
-      const alreadyHasTecnicoInDB = Array.from(alreadyAssignedIds).some(pId => {
-        const p = personnel.find(w => w.id === pId);
-        const rName = normalize(rolesMap[p?.role_id] || '');
-        return rName === 'tecnico_agronomo';
-      });
-
-      if (alreadyHasTecnico || alreadyHasTecnicoInDB) {
-        CustomAlert.show('ALERTA', 'Límite Excedido', 'Solo se puede asignar un Técnico Agrónomo para esta etapa.');
-        return;
-      }
-    }
-
+    // Si pasa las validaciones, procedemos con el toggle
     setSelectedPersonnel(prev =>
-      prev.includes(id)
+      isAlreadySelected
         ? prev.filter(pId => pId !== id)
         : [...prev, id]
     );
   };
 
   const handleAssign = async () => {
-    if (!selectedLote || selectedPersonnel.length === 0) {
+    if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
       CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
       return;
     }
 
     try {
       setLoading(true);
-      await Promise.all(
-        selectedPersonnel.map(workerId =>
-          parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any)
-        )
-      );
+
+      const normalize = (str: string) => 
+        str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+
+      // 1. Identificar si estamos asignando un técnico en la selección actual
+      const tecnicoSeleccionado = selectedPersonnel.find(pId => {
+        const p = personnel.find(w => w.id === pId);
+        const rName = normalize(rolesMap[p?.role_id] || '');
+        return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
+      });
+
+      if (isEditMode) {
+        // MODO EDICIÓN: Estrategia de Reemplazo Total para Técnicos y Diff para el resto
+        
+        // A. Si hay un técnico seleccionado, barremos CUALQUIER técnico previo de la BD 
+        // para asegurar el reemplazo, sin importar IDs.
+        if (tecnicoSeleccionado) {
+          const idsTecnicosPosibles = personnel
+            .filter(p => {
+              const rName = normalize(rolesMap[p.role_id] || '');
+              return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
+            })
+            .map(p => p.id);
+          
+          await parcelasService.limpiarAsignacionesEspecificas(selectedLote.id, selectedEtapa, idsTecnicosPosibles);
+        }
+
+        // B. Calcular bajas (trabajadores que estaban y ya no están)
+        const toRemove = initialSelectedIds.filter(id => !selectedPersonnel.includes(id));
+        for (const workerId of toRemove) {
+          await parcelasService.desasignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
+        }
+
+        // C. Insertar los que quedaron seleccionados (la función asignarPersonal ya evita duplicados internos)
+        for (const workerId of selectedPersonnel) {
+          await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
+        }
+
+      } else {
+        // MODO NORMAL: Barrer técnicos previos si se está agregando uno nuevo
+        if (tecnicoSeleccionado) {
+           const idsTecnicosPosibles = personnel
+            .filter(p => {
+              const rName = normalize(rolesMap[p.role_id] || '');
+              return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
+            })
+            .map(p => p.id);
+          
+          await parcelasService.limpiarAsignacionesEspecificas(selectedLote.id, selectedEtapa, idsTecnicosPosibles);
+        }
+
+        for (const workerId of selectedPersonnel) {
+          await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
+        }
+      }
       
       // Disparar sincronización silenciosa en segundo plano
       syncWorker.syncPendingData();
       
-      CustomAlert.show('SUCCESS', 'Asignación Correcta', 'El personal ha sido asignado al lote exitosamente.', () => {
-        setSelectedPersonnel([]);
-        fetchData(); // Recargar datos para sombrear los nuevos asignados
+      CustomAlert.show('SUCCESS', 'Asignación Actualizada', 'Los cambios en la cuadrilla han sido guardados exitosamente.', () => {
+        if (!isEditMode) setSelectedPersonnel([]);
+        fetchData(); 
+        if (isEditMode) navigation.goBack();
       });
     } catch (error) {
       console.error('Error assigning personnel:', error);
@@ -260,28 +317,31 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
     const isAlreadyAssigned = alreadyAssignedIds.has(item.id);
     const roleName = rolesMap[item.role_id] || item.role_id || 'TRABAJADOR';
 
+    // En modo edición, el "sombreado" no bloquea si el usuario está en la lista de seleccionados actual
+    const shouldShade = !isEditMode && isAlreadyAssigned;
+
     return (
       <TouchableOpacity
         style={[
           styles.personnelCard,
           isSelected && { backgroundColor: Theme.colors.primaryFixed },
-          isAlreadyAssigned && { opacity: 0.6, backgroundColor: Theme.colors.surfaceContainerHighest }
+          shouldShade && { opacity: 0.6, backgroundColor: Theme.colors.surfaceContainerHighest }
         ]}
-        onPress={() => !isAlreadyAssigned && togglePersonnelSelection(item.id)}
-        activeOpacity={isAlreadyAssigned ? 1 : 0.7}
-        disabled={isAlreadyAssigned}
+        onPress={() => !shouldShade && togglePersonnelSelection(item.id)}
+        activeOpacity={shouldShade ? 1 : 0.7}
+        disabled={shouldShade}
       >
         <View style={styles.personnelAvatar}>
-          <User size={20} color={isAlreadyAssigned ? Theme.colors.outline : Theme.colors.primary} />
+          <User size={20} color={shouldShade ? Theme.colors.outline : Theme.colors.primary} />
         </View>
         <View style={styles.personnelInfo}>
-          <Text style={[styles.personnelName, isAlreadyAssigned && { color: Theme.colors.onSurfaceVariant }]}>{`${item.first_name} ${item.last_name}`}</Text>
+          <Text style={[styles.personnelName, shouldShade && { color: Theme.colors.onSurfaceVariant }]}>{`${item.first_name} ${item.last_name}`}</Text>
           <View style={styles.roleRow}>
-            <ShieldCheck size={12} color={isAlreadyAssigned ? Theme.colors.outline : Theme.colors.secondary} />
-            <Text style={[styles.roleText, isAlreadyAssigned && { color: Theme.colors.onSurfaceVariant }]}>{roleName}</Text>
+            <ShieldCheck size={12} color={shouldShade ? Theme.colors.outline : Theme.colors.secondary} />
+            <Text style={[styles.roleText, shouldShade && { color: Theme.colors.onSurfaceVariant }]}>{roleName}</Text>
           </View>
         </View>
-        {isAlreadyAssigned ? (
+        {shouldShade ? (
           <View style={{ alignItems: 'center' }}>
             <ShieldCheck size={24} color={Theme.colors.secondary} />
             <Text style={{ fontSize: 8, color: Theme.colors.secondary, fontWeight: '700' }}>ASIGNADO</Text>

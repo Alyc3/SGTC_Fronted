@@ -69,6 +69,20 @@ const DashboardScreen = ({ navigation }: any) => {
   const currentRole = getCleanRole();
   const displayRole = currentRole.trim().toUpperCase().replace(/_/g, ' ');
 
+  // Mapeo de roles técnicos a sus etapas correspondientes
+  const getAssignedStageForTechnician = (role: string): string | null => {
+    const r = role.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+    if (r.includes('tecnico_sembrado')) return 'Sembrado';
+    if (r.includes('tecnico_agronomo')) return 'Cosechado';
+    if (r.includes('tecnico_de_despulpado')) return 'Despulpado';
+    if (r.includes('encargado_de_secado')) return 'Secado';
+    if (r.includes('tostador')) return 'Tostado';
+    return null;
+  };
+
+  const assignedStage = getAssignedStageForTechnician(currentRole);
+  const isStrictTechnician = assignedStage !== null;
+
   const [stats, setStats] = useState({ activeLotsCount: 0, personalCount: 0 });
   const [activities, setActivities] = useState<ActivityItemData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,91 +180,104 @@ const DashboardScreen = ({ navigation }: any) => {
         </TouchableOpacity>
 
         {/* Overview Stats (Vista General) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vista General</Text>
-          <View style={styles.statsRow}>
-            <StatCard
-              label="Lotes Activos"
-              value={loading ? '...' : stats.activeLotsCount.toString()}
-              icon={<Boxes size={20} color={Theme.colors.primary} />}
-              onPress={() => navigation.navigate('Lotes')}
-            />
-            <StatCard
-              label="Personal"
-              value={loading ? '...' : stats.personalCount.toString()}
-              icon={<Users size={20} color={Theme.colors.primary} />}
-              onPress={() => navigation.navigate('Personal')}
-            />
+        {!isStrictTechnician && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Vista General</Text>
+            <View style={styles.statsRow}>
+              <StatCard
+                label="Lotes Activos"
+                value={loading ? '...' : stats.activeLotsCount.toString()}
+                icon={<Boxes size={20} color={Theme.colors.primary} />}
+                onPress={() => navigation.navigate('Lotes')}
+              />
+              <StatCard
+                label="Personal"
+                value={loading ? '...' : stats.personalCount.toString()}
+                icon={<Users size={20} color={Theme.colors.primary} />}
+                onPress={() => navigation.navigate('Personal')}
+              />
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Quick Actions (Acciones Rápidas) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
           <View style={styles.actionsGrid}>
-            <ActionCard
-              label="Semillas"
-              icon={<Sprout size={24} color={Theme.colors.onSecondaryContainer} />}
-              color={Theme.colors.secondary}
-              labelColor={Theme.colors.onPrimary}
-              onPress={() => navigation.navigate('InventarioSemillas')}
-            />
-            <ActionCard
-              label="Parcelas"
-              icon={<MapIcon size={24} color={Theme.colors.onSecondaryContainer} />}
-              color={Theme.colors.secondary}
-              labelColor={Theme.colors.onPrimary}
-              onPress={() => navigation.navigate('ListarParcela')}
-            />
+            {!isStrictTechnician && (
+              <>
+                <ActionCard
+                  label="Semillas"
+                  icon={<Sprout size={24} color={Theme.colors.onSecondaryContainer} />}
+                  color={Theme.colors.secondary}
+                  labelColor={Theme.colors.onPrimary}
+                  onPress={() => navigation.navigate('InventarioSemillas')}
+                />
+                <ActionCard
+                  label="Parcelas"
+                  icon={<MapIcon size={24} color={Theme.colors.onSecondaryContainer} />}
+                  color={Theme.colors.secondary}
+                  labelColor={Theme.colors.onPrimary}
+                  onPress={() => navigation.navigate('ListarParcela')}
+                />
+              </>
+            )}
+            
             <ActionCard
               label="Lotes"
               icon={<Boxes size={24} color={Theme.colors.onSecondaryContainer} />}
               color={Theme.colors.secondary}
               labelColor={Theme.colors.onPrimary}
+              style={isStrictTechnician ? { width: width - Theme.spacing.md * 2 } : null}
               onPress={() => navigation.navigate('Lotes')}
             />
-            <ActionCard
-              label="Personal"
-              icon={<Users size={24} color={Theme.colors.onSecondaryContainer} />}
-              color={Theme.colors.secondary}
-              labelColor={Theme.colors.onPrimary}
-              onPress={() => navigation.navigate('Personal')}
-            />
+
+            {!isStrictTechnician && (
+              <ActionCard
+                label="Personal"
+                icon={<Users size={24} color={Theme.colors.onSecondaryContainer} />}
+                color={Theme.colors.secondary}
+                labelColor={Theme.colors.onPrimary}
+                onPress={() => navigation.navigate('Personal')}
+              />
+            )}
           </View>
         </View>
 
         {/* Recent Activity (Actividad Reciente) */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Actividad Reciente</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>Ver todo</Text>
-            </TouchableOpacity>
-          </View>
+        {!isStrictTechnician && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Actividad Reciente</Text>
+              <TouchableOpacity>
+                <Text style={styles.viewAllText}>Ver todo</Text>
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.activityList}>
-            {loading ? (
-              <ActivityIndicator color={Theme.colors.primary} style={{ marginVertical: 20 }} />
-            ) : activities.length > 0 ? (
-              activities.map((item) => (
-                <ActivityItem
-                  key={item.id}
-                  icon={
-                    item.type === 'LOT_UPDATE' ? <FileText size={18} color={Theme.colors.primary} /> :
-                      item.type === 'NEW_PERSONAL' ? <UserPlus size={18} color={Theme.colors.primary} /> :
-                        item.type === 'INCIDENT' ? <AlertTriangle size={18} color={Theme.colors.error} /> :
-                          <RefreshCw size={18} color={Theme.colors.primary} />
-                  }
-                  title={item.title}
-                  meta={`${getTimeAgo(item.timestamp)} • ${item.isSynced ? 'Sincronizado' : 'Local'}`}
-                  isError={item.isError}
-                />
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No hay actividad reciente registrada.</Text>
-            )}
+            <View style={styles.activityList}>
+              {loading ? (
+                <ActivityIndicator color={Theme.colors.primary} style={{ marginVertical: 20 }} />
+              ) : activities.length > 0 ? (
+                activities.map((item) => (
+                  <ActivityItem
+                    key={item.id}
+                    icon={
+                      item.type === 'LOT_UPDATE' ? <FileText size={18} color={Theme.colors.primary} /> :
+                        item.type === 'NEW_PERSONAL' ? <UserPlus size={18} color={Theme.colors.primary} /> :
+                          item.type === 'INCIDENT' ? <AlertTriangle size={18} color={Theme.colors.error} /> :
+                            <RefreshCw size={18} color={Theme.colors.primary} />
+                    }
+                    title={item.title}
+                    meta={`${getTimeAgo(item.timestamp)} • ${item.isSynced ? 'Sincronizado' : 'Local'}`}
+                    isError={item.isError}
+                  />
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No hay actividad reciente registrada.</Text>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>STGC Módulo de Trazabilidad © 2026</Text>

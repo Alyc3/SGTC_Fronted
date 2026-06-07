@@ -200,5 +200,16 @@ export const lotesService = {
         trabajador: true
       }
     });
+  },
+
+  async updateEstadoLote(loteId: string, estado: typeof EstadoLoteValues[number]) {
+    return await db.update(lotes)
+      .set({
+        estado_lote: estado,
+        is_synced: false,
+        fecha_modificacion: new Date().toISOString()
+      })
+      .where(eq(lotes.id, loteId))
+      .returning();
   }
 };
