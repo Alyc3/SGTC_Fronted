@@ -1,6 +1,6 @@
 // Enums handled as text with type safety in Drizzle
 //Enums para lote
-export const EstadoLoteValues = ['Reservado', 'En_Produccion', 'Completada'] as const;
+export const EstadoLoteValues = ['Creado', 'Reservado', 'En_Produccion', 'Completada'] as const;
 //Enum para Parcela
 export const TexturaSueloValues = ['Franco-Arenosa', 'Franco-Arcillosa'] as const;
 export const OrientacionLaderaValues = ['NORTE', 'SUR'] as const;
@@ -22,6 +22,8 @@ export const CalidadFinalValues = ['Alta', 'Media', 'Baja'] as const;
 //Enum para Etapa
 export const EtapaActualValues = ['Pendiente', 'En_Proceso', 'Completada'] as const;
 //Enum para Trabajador
-export const RolTrabajadorValues = ['Capataz', 'Sembrador', 'Recolector', 'Clasificador'] as const;
-export const EtapaProcesoValues = ['Sembrado', 'Cosechado', 'Despulpado', 'Secado', 'Tostado', 'Molido', 'Empaquetado', 'Transporte'] as const;
+export const EtapaProcesoValues = ['Administración', 'Sembrado', 'Cosechado', 'Despulpado', 'Secado', 'Tostado', 'Molido', 'Empaquetado', 'Transporte'] as const;
+
+// Enum para Presencia de Hongos en Sembrado
+export const PresenciaHongosValues = ['Ninguna', 'Baja', 'Moderada'] as const;
 

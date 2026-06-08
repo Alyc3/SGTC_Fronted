@@ -123,7 +123,11 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        navigation.navigate('InventarioSemillas');
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('InventarioSemillas');
+        }
         return true; // Bloquea la acción por defecto
       };
 
@@ -133,7 +137,11 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
         // Capturamos cualquier intento de volver (gesto, botón o dispatch)
         if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
           e.preventDefault();
-          navigation.navigate('InventarioSemillas');
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('InventarioSemillas');
+          }
         }
       });
 
@@ -398,7 +406,11 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
           CustomAlert.show('SUCCESS', 'Éxito', 'Registro confirmado exitosamente.');
         }
         resetForm();
-        navigation.navigate('InventarioSemillas');
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('InventarioSemillas');
+        }
       } catch (error) {
         console.error('Save error:', error);
         CustomAlert.show('ERROR', 'Error', 'Fallo en la persistencia de datos.');
@@ -590,7 +602,11 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
                 style={styles.cancelButton} 
                 onPress={() => {
                   resetForm();
-                  navigation.navigate('InventarioSemillas');
+                  if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('InventarioSemillas');
+        }
                 }}
               >
                 <Text style={styles.cancelButtonText}>{readOnly ? 'Volver' : 'Cancel'}</Text>

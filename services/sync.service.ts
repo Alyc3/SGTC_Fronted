@@ -1,4 +1,3 @@
-import { EXPO_PUBLIC_DATABASE_URL } from '@env';
 import { 
   semillasSync, 
   parcelasSync, 
@@ -8,15 +7,13 @@ import {
 } from './online';
 import { networkService } from './network.service';
 
-/**
- * Orchestrator Sync Service
- * Coordina los servicios de sincronización modular de la carpeta /online
- */
 export const syncService = {
   async syncWithRemote() {
     console.log('--- Iniciando Sincronización Modular (App -> Neon) ---');
     
-    if (!EXPO_PUBLIC_DATABASE_URL) {
+    const dbUrl = process.env.EXPO_PUBLIC_DATABASE_URL;
+    
+    if (!dbUrl) {
       console.error('Error: EXPO_PUBLIC_DATABASE_URL no definida');
       return;
     }

@@ -47,10 +47,11 @@ export const DrawerNavigator = () => {
 
   // Definición de permisos por rol
   const canAccessLotes = true; // Acceso universal a lotes (filtrado internamente)
-  const canAccessParcelas = ['ADMIN', 'CAPATAZ'].includes(role) && !isTechnical;
-  const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO'].includes(role) && !isTechnical;
-  const canAccessPersonal = ['ADMIN', 'CAPATAZ'].includes(role) && !isTechnical;
-  const canAccessRoles = ['ADMIN'].includes(role);
+  const canAccessParcelas = ['ADMIN', 'CAPATAZ', 'GERENTE GENERAL'].includes(role);
+  const canAccessSemillas = ['ADMIN', 'GESTOR_INVENTARIO', 'GERENTE GENERAL', 'CAPATAZ'].includes(role);
+  const canAccessPersonal = ['ADMIN', 'CAPATAZ', 'GERENTE GENERAL'].includes(role);
+  const canAccessRoles = ['ADMIN', 'GERENTE GENERAL'].includes(role);
+  const canAccessControlSembrado = isTechnical || ['ADMIN', 'GERENTE GENERAL', 'CAPATAZ'].includes(role);
 
   return (
     <Drawer.Navigator
@@ -125,6 +126,57 @@ export const DrawerNavigator = () => {
       />
 
       <Drawer.Screen 
+        name="InventarioSemillas" 
+        component={InventarioSemillasScreen} 
+        options={{ 
+          title: 'Semillas',
+          drawerIcon: ({ color }) => <Sprout size={20} color={color} />,
+          drawerItemStyle: canAccessSemillas ? {} : { display: 'none' }
+        }}
+      />
+
+      <Drawer.Screen 
+        name="Personal" 
+        component={PersonalScreen} 
+        options={{ 
+          title: 'Personal',
+          drawerIcon: ({ color }) => <Users size={20} color={color} />,
+          drawerItemStyle: canAccessPersonal ? {} : { display: 'none' }
+        }}
+      />
+
+      <Drawer.Screen 
+        name="EtapaSembrados" 
+        component={EtapaSembradosScreen} 
+        options={{ 
+          title: 'Control de Sembrado',
+          drawerIcon: ({ color }) => <Flower size={20} color={color} />,
+          drawerItemStyle: canAccessControlSembrado ? {} : { display: 'none' },
+          headerShown: false
+        }}
+      />
+
+      <Drawer.Screen 
+        name="GestionRoles" 
+        component={GestionRolesScreen} 
+        options={{ 
+          title: 'Gestión de Roles',
+          drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />,
+          drawerItemStyle: canAccessRoles ? {} : { display: 'none' }
+        }}
+      />
+
+      <Drawer.Screen 
+        name="Configuracion" 
+        component={ConfiguracionScreen} 
+        options={{ 
+          title: 'Configuración',
+          drawerIcon: ({ color }) => <Settings size={20} color={color} />
+        }}
+      />
+
+      {/* Pantallas ocultas del Drawer pero registradas */}
+      <Drawer.Screen 
         name="GestionParcela" 
         component={GestionParcelaScreen} 
         options={{ 
@@ -153,22 +205,29 @@ export const DrawerNavigator = () => {
       />
 
       <Drawer.Screen 
-        name="Configuracion" 
-        component={ConfiguracionScreen} 
+        name="RegistroSemilla" 
+        component={RegistroSemillaScreen} 
         options={{ 
-          title: 'Configuración',
-          drawerIcon: ({ color }) => <Settings size={20} color={color} />
+          title: 'Registro de Semilla',
+          drawerItemStyle: { display: 'none' }
         }}
       />
 
       <Drawer.Screen 
-        name="EtapaSembrados" 
-        component={EtapaSembradosScreen} 
+        name="RegisterPersonal" 
+        component={RegisterPersonalScreen} 
         options={{ 
-          title: 'Control de Sembrado',
-          drawerIcon: ({ color }) => <Flower size={20} color={color} />,
-          drawerItemStyle: isTechnical ? {} : { display: 'none' },
-          headerShown: false
+          title: 'Registro de Personal',
+          drawerItemStyle: { display: 'none' }
+        }}
+      />
+
+      <Drawer.Screen 
+        name="AssignPersonal" 
+        component={AssignPersonalScreen} 
+        options={{ 
+          title: 'Asignar Personal',
+          drawerItemStyle: { display: 'none' }
         }}
       />
 
@@ -177,7 +236,6 @@ export const DrawerNavigator = () => {
         component={AssignCapatazScreen} 
         options={{ 
           title: 'Asignar Capataz',
-          drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />,
           drawerItemStyle: { display: 'none' }
         }}
       />

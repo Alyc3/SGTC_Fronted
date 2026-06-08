@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,10 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
-  Alert,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Search,
   Plus,
@@ -28,6 +29,38 @@ import { db } from '../db';
 import { CustomAlert } from '../components/GlobalAlert';
 
 const ListarParcelaScreen = ({ navigation }: any) => {
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Dashboard');
+        }
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Dashboard');
+          }
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
+
   const { data: parcelasRaw } = useLiveQuery(db.query.parcelas.findMany({
     with: { lotes: true }
   }));

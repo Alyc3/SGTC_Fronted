@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Animated,
+  BackHandler,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -56,6 +57,38 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
   const [isAssigning, setIsAssigning] = useState(false);
 
   const headerFade = React.useRef(new Animated.Value(0)).current;
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Lotes');
+        }
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Lotes');
+          }
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
 
   const fetchData = useCallback(async () => {
     try {
@@ -142,7 +175,11 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
 
       syncWorker.syncPendingData();
       CustomAlert.show('SUCCESS', 'Vinculación Exitosa', 'Los capataces han sido vinculados al lote correctamente.', () => {
-        navigation.goBack();
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Lotes');
+        }
       });
     } catch (error) {
       console.error('Error assigning capataz:', error);
@@ -203,7 +240,13 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Lotes');
+            }
+          }}
         >
           <ArrowLeft size={24} color={Theme.colors.onSurface} />
         </TouchableOpacity>

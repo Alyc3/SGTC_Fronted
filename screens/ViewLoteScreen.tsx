@@ -48,6 +48,8 @@ import {
   X,
   Camera,
   ClipboardCheck,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as DocumentPicker from 'expo-document-picker';
@@ -65,9 +67,38 @@ const DateTimePicker = require('@react-native-community/datetimepicker');
 const { width } = Dimensions.get('window');
 const GRAIN_TYPES = ['Verde', 'Rojo', 'Variado'];
 
-const SubFaseTimeline = ({ subFaseActual, isProduccion, stageStatus }: { subFaseActual: string, isProduccion: boolean, stageStatus: string }) => {
+const SubFaseTimeline = ({ subFaseActual, isProduccion, stageStatus, stages, loteId }: { subFaseActual: string, isProduccion: boolean, stageStatus: string, stages: any[], loteId: string }) => {
   const subFases = ['Germinacion', 'Vivero', 'Crecimiento', 'Floracion', 'Maduracion'];
-  const currentIndex = subFases.indexOf(subFaseActual);
+  const [actualSubPhase, setActualSubPhase] = useState(subFaseActual);
+
+  useEffect(() => {
+    // 1. Miramos el estado de etapa guardado
+    const sembradoStage = stages.find(s => s.etapa === 'Sembrado');
+    let baseFase = sembradoStage?.subFaseSiembra || subFaseActual;
+    
+    // 2. Comprobamos la BD directamente si no estamos seguros, o para asegurar la última activa
+    import('../services/sembrado_metricas.service').then(({ sembradoMetricasService }) => {
+      // Find the furthest phase that has at least a start date
+      Promise.all(
+        subFases.map(phase => sembradoMetricasService.getMetricas(loteId, phase))
+      ).then(results => {
+        let furthest = baseFase;
+        let furthestIndex = subFases.indexOf(baseFase);
+        
+        results.forEach((res, index) => {
+          if (res && res.fecha_inicio) { // Si existe en BD y tiene inicio
+            if (index > furthestIndex) {
+              furthest = subFases[index];
+              furthestIndex = index;
+            }
+          }
+        });
+        setActualSubPhase(furthest);
+      });
+    });
+  }, [stages, loteId, subFaseActual]);
+
+  const currentIndex = subFases.indexOf(actualSubPhase);
   const isCompleted = stageStatus === 'Completada';
 
   if (!isProduccion && currentIndex <= 0 && !isCompleted) return null;
@@ -95,7 +126,7 @@ const SubFaseTimeline = ({ subFaseActual, isProduccion, stageStatus }: { subFase
           );
         })}
       </View>
-      <Text style={styles.subFaseText}>{isCompleted ? 'COMPLETADA' : subFaseActual.toUpperCase()}</Text>
+      <Text style={styles.subFaseText}>{isCompleted ? 'COMPLETADA' : actualSubPhase.toUpperCase()}</Text>
     </View>
   );
 };
@@ -108,7 +139,11 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        navigation.navigate('Lotes');
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Lotes');
+        }
         return true; // Bloquea la acción por defecto
       };
 
@@ -118,7 +153,11 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         // Capturamos cualquier intento de volver (gesto, botón o dispatch)
         if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
           e.preventDefault();
-          navigation.navigate('Lotes');
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Lotes');
+          }
         }
       });
 
@@ -139,7 +178,9 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
 
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
   const isAdminOrManager = userRole === 'admin' || userRole === 'gerente general';
-  const canAssignCapataz =  (typeof isAdminOrManager !== "undefined" && isAdminOrManager);
+  const isCapatazOrManager = isAdminOrManager || userRole.includes('capataz');
+  const canAssignCapataz =  isAdminOrManager;
+  const canAssign = isCapatazOrManager;
 
   // Mapeo de roles técnicos a sus etapas correspondientes
   const getAssignedStageForTechnician = (role: string): string | null => {
@@ -156,6 +197,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   const isStrictTechnician = ! (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && assignedStage !== null;
 
   const [assignedPersonnel, setAssignedPersonnel] = useState<any[]>([]);
+  const [expandedWorkers, setExpandedWorkers] = useState<Record<string, boolean>>({});
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [stages, setStages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -623,7 +665,6 @@ const tarifaGeneral = pesoTotal > 0
     const stageInfo = stages.find(s => s.etapa === title);
     const status = stageInfo?.estado || 'Pendiente';
     
-    // Lógica de habilitación: Sembrado siempre, las demás si la anterior está Completada
     let isEnabled = title === 'Sembrado';
     if (!isEnabled && index > 0) {
       const prevStage = stages.find(s => s.etapa === EtapaProcesoValues[index - 1]);
@@ -633,84 +674,87 @@ const tarifaGeneral = pesoTotal > 0
     const isActive = status === 'En_Proceso';
     const isCompleted = status === 'Completada';
 
-    // Usuarios asignados a esta etapa específica, separados por rol y eliminando duplicados visuales
     const stagePersonnelRaw = assignedPersonnel.filter(p => p.etapa === title);
     const stagePersonnel = getUniquePersonnel(stagePersonnelRaw);
 
-    const technicalStaff = stagePersonnel.filter(p => {
+    const capataz = stagePersonnel.find(p => (rolesMap[p.trabajador?.role_id] || '').toLowerCase().includes('capataz'));
+    const otherWorkers = stagePersonnel.filter(p => p !== capataz);
 
-      const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
-      return rName.includes('tecnico') || rName.includes('técnico');
-    });
-    const operationalStaff = stagePersonnel.filter(p => {
-      const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
-      return !rName.includes('tecnico') && !rName.includes('técnico');
-    });
-
-    const isAssignedTechnical = technicalStaff.some(t => t.trabajador?.id === userId);
+    const isAssignedTechnical = stagePersonnel.some(t => t.trabajador?.id === userId);
     const canStart = isAssignedTechnical && isEnabled && status === 'Pendiente';
 
     return (
-      <TouchableOpacity 
-        key={title} 
-        activeOpacity={title === 'Sembrado' ? 0.9 : 1}
-        onPress={() => {
-          if (title === 'Sembrado') {
-            navigation.navigate('EtapaSembrados', { lote });
-          }
-        }}
-        style={[
+      <View key={title} style={[
           styles.stageCard, 
+          isEnabled && !isActive && !isCompleted && { backgroundColor: Theme.colors.secondaryContainer + '40' },
           isActive && styles.stageCardActive,
           !isEnabled && { opacity: 0.5 }
-        ]}
-      >
-        <View style={styles.stageHeader}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.stageTitleRow}>
-              <Text style={[styles.stageTitle, isActive && { color: Theme.colors.primary }]}>{title}</Text>
-              {isCompleted && <CheckCircle2 size={16} color={Theme.colors.secondary} />}
-              {isActive && <Activity size={16} color={Theme.colors.primary} />}
+        ]}>
+        <TouchableOpacity 
+          activeOpacity={0.9}
+          onPress={() => {
+            if (title === 'Sembrado') {
+              navigation.navigate('EtapaSembrados', { lote, readOnly: userRole.includes('capataz') });
+            }
+          }}
+        >
+          <View style={styles.stageHeader}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.stageTitleRow}>
+                <Text style={[styles.stageTitle, isActive && { color: Theme.colors.primary }]}>{title}</Text>
+                {isCompleted && <CheckCircle2 size={16} color={Theme.colors.secondary} />}
+                {isActive && <Activity size={16} color={Theme.colors.primary} />}
+              </View>
+              {stageInfo?.fecha_inicio && (
+                <Text style={styles.stageDate}>
+                  {isCompleted ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}` : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
+                </Text>
+              )}
             </View>
-            {stageInfo?.fecha_inicio && (
-              <Text style={styles.stageDate}>
-                {isCompleted ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}` : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
-              </Text>
+            
+            {title === 'Sembrado' && (
+              <SubFaseTimeline 
+                subFaseActual={stageInfo?.subFaseSiembra || 'Germinacion'} 
+                isProduccion={lote?.estado_lote === 'En_Produccion'} 
+                stageStatus={status}
+                stages={stages}
+                loteId={lote.id}
+              />
             )}
           </View>
-          
-          {title === 'Sembrado' && (
-            <SubFaseTimeline 
-              subFaseActual={stageInfo?.subFaseSiembra || 'Germinacion'} 
-              isProduccion={lote?.estado_lote === 'En_Produccion'} 
-              stageStatus={status}
-            />
-          )}
-        </View>
+        </TouchableOpacity>
 
-        <Text style={styles.stageDescription}>
-          {isCompleted ? 'Etapa finalizada exitosamente.' : isActive ? 'Etapa en ejecución actual.' : 'Esperando inicio de fase.'}
-        </Text>
+        {capataz && (
+          <View style={styles.personnelGroupItem}>
+            <ShieldCheck size={14} color={Theme.colors.secondary} />
+            <Text style={styles.operationalStaffText}>
+              Capataz: {capataz.trabajador?.first_name} {capataz.trabajador?.last_name}
+            </Text>
+          </View>
+        )}
 
-        {/* Separación de Personal: Técnico vs Equipo */}
-        <View style={styles.personnelGroups}>
-          {technicalStaff.length > 0 && (
-            <View style={styles.personnelGroupItem}>
-              <ShieldCheck size={14} color={Theme.colors.secondary} />
-              <Text style={styles.technicalStaffText}>
-                RESPONSABLE: {technicalStaff.map(p => `${p.trabajador?.first_name} ${p.trabajador?.last_name}`).join(', ')}
-              </Text>
-            </View>
-          )}
-          {operationalStaff.length > 0 && (
-            <View style={styles.personnelGroupItem}>
-              <Users size={14} color={Theme.colors.outline} />
-              <Text style={styles.operationalStaffText}>
-                EQUIPO: {operationalStaff.map(p => `${p.trabajador?.first_name}`).join(', ')}
-              </Text>
-            </View>
-          )}
-        </View>
+        {otherWorkers.length > 0 && (
+          <View style={{ marginTop: 8 }}>
+            <TouchableOpacity 
+              style={[styles.personnelGroupItem, { flexDirection: 'row', justifyContent: 'space-between', width: '100%' }]}
+              onPress={() => setExpandedWorkers(prev => ({ ...prev, [title]: !prev[title] }))}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Users size={14} color={Theme.colors.outline} />
+                <Text style={styles.operationalStaffText}>Equipo ({otherWorkers.length})</Text>
+              </View>
+              {expandedWorkers[title] ? <ChevronUp size={14} color={Theme.colors.outline} /> : <ChevronDown size={14} color={Theme.colors.outline} />}
+            </TouchableOpacity>
+            
+            {expandedWorkers[title] && (
+              <View style={{ marginTop: 8, paddingLeft: 12 }}>
+                {otherWorkers.map(p => (
+                  <Text key={p.id} style={styles.operationalStaffText}>• {p.trabajador?.first_name} {p.trabajador?.last_name}</Text>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
         
         <View style={styles.stageFooter}>
           {canStart && (
@@ -734,31 +778,10 @@ const tarifaGeneral = pesoTotal > 0
               </TouchableOpacity>
             )}
 
-            {status === 'Pendiente' && stagePersonnel.length > 0 && !isStrictTechnician && (
-              <TouchableOpacity 
-                style={[styles.editPersonnelButton, !isEnabled && { opacity: 0.5 }]}
-                onPress={() => isEnabled && navigation.navigate('AssignPersonal', { lote, etapa: title, isEditMode: true })}
-                disabled={!isEnabled}
-              >
-                <Edit2 size={14} color={Theme.colors.primary} />
-              </TouchableOpacity>
-            )}
-
-            {!isStrictTechnician && (
-              <TouchableOpacity 
-                style={[styles.addPersonnelMiniButton, !isEnabled && { backgroundColor: Theme.colors.surfaceVariant }]}
-                onPress={() => isEnabled && navigation.navigate('AssignPersonal', { lote, etapa: title })}
-                disabled={!isEnabled}
-              >
-                <UserPlus size={14} color={isEnabled ? Theme.colors.onSecondaryContainer : Theme.colors.outline} />
-                <Text style={[styles.addPersonnelMiniText, !isEnabled && { color: Theme.colors.outline }]}>Personal</Text>
-              </TouchableOpacity>
-            )}
-
             {title === 'Sembrado' && (status === 'En_Proceso' || status === 'Completada') && (
               <TouchableOpacity 
                 style={styles.monitorStageButton}
-                onPress={() => navigation.navigate('EtapaSembrados', { lote })}
+                onPress={() => navigation.navigate('EtapaSembrados', { lote, readOnly: userRole.includes('capataz') })}
               >
                 <Eye size={14} color={Theme.colors.white} />
                 <Text style={styles.monitorStageText}>Monitorear</Text>
@@ -766,7 +789,7 @@ const tarifaGeneral = pesoTotal > 0
             )}
           </View>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -803,7 +826,13 @@ const tarifaGeneral = pesoTotal > 0
         <View style={styles.topSection}>
           <TouchableOpacity 
             style={styles.circleBackButton}
-            onPress={() => navigation.navigate('Lotes')}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('Lotes');
+              }
+            }}
           >
             <ArrowLeft size={24} color={Theme.colors.primary} />
           </TouchableOpacity>
@@ -926,6 +955,16 @@ const tarifaGeneral = pesoTotal > 0
               </TouchableOpacity>
             </View>
           </View>
+          
+          {canAssign && (
+            <TouchableOpacity 
+              style={styles.mainActionBtn}
+              onPress={() => navigation.navigate('AssignPersonal', { lote })}
+            >
+              <Users size={16} color={Theme.colors.white} />
+              <Text style={styles.mainActionBtnText}>ASIGNACIÓN PERSONAL</Text>
+            </TouchableOpacity>
+          )}
           
           <View style={styles.stagesList}>
             {EtapaProcesoValues
@@ -1320,6 +1359,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
     gap: 12,
+  },
+  mainActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    gap: 8,
+    marginBottom: 20,
+    elevation: 2,
+  },
+  mainActionBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Theme.colors.white,
+    letterSpacing: 0.5,
   },
   startStageButton: {
     flexDirection: 'row',

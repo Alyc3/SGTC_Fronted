@@ -144,6 +144,7 @@ export const lotesService = {
           subFaseSiembra: subFase,
           estado: estado,
           is_synced: false,
+          fecha_inicio: existing.fecha_inicio || new Date().toISOString(),
         })
         .where(eq(estado_etapa.id, existing.id))
         .returning();

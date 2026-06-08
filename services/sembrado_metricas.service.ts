@@ -30,40 +30,43 @@ export const sembradoMetricasService = {
     try {
       const { lote_id, subfase, tecnico_id, id: metricId } = data;
       
+      let returnData;
+
       if (metricId) {
         // Explicitly update existing record
-        await db.update(metricas_subetapa_sembrado)
+        returnData = await db.update(metricas_subetapa_sembrado)
           .set({
             ...data,
             is_synced: false,
           })
-          .where(eq(metricas_subetapa_sembrado.id, metricId));
-        return metricId;
-      }
-
-      // Check if an open record already exists for this sub-phase
-      const existing = await this.getMetricas(lote_id, subfase);
-
-      if (existing && !existing.fecha_fin) {
-        // Update existing open record
-        await db.update(metricas_subetapa_sembrado)
-          .set({
-            ...data,
-            is_synced: false,
-          })
-          .where(eq(metricas_subetapa_sembrado.id, existing.id));
-        return existing.id;
+          .where(eq(metricas_subetapa_sembrado.id, metricId))
+          .returning();
       } else {
-        // Create new record
-        const id = uuidv4();
-        await db.insert(metricas_subetapa_sembrado).values({
-          id,
-          ...data,
-          fecha_inicio: data.fecha_inicio || new Date().toISOString(),
-          is_synced: false,
-        });
-        return id;
+        // Check if an open record already exists for this sub-phase
+        const existing = await this.getMetricas(lote_id, subfase);
+
+        if (existing && !existing.fecha_fin) {
+          // Update existing open record
+          returnData = await db.update(metricas_subetapa_sembrado)
+            .set({
+              ...data,
+              is_synced: false,
+            })
+            .where(eq(metricas_subetapa_sembrado.id, existing.id))
+            .returning();
+        } else {
+          // Create new record
+          const { id: _, ...insertData } = data; // quitamos ID potencial por si venía de un mock
+          const id = uuidv4();
+          returnData = await db.insert(metricas_subetapa_sembrado).values({
+            ...insertData,
+            id,
+            fecha_inicio: data.fecha_inicio || new Date().toISOString(),
+            is_synced: false,
+          }).returning();
+        }
       }
+      return returnData[0];
     } catch (error) {
       console.error('Error saving sembrado metrics:', error);
       throw error;

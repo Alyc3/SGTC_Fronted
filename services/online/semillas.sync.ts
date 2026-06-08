@@ -2,9 +2,7 @@ import { db } from '../../db';
 import { semillas } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { neon } from '@neondatabase/serverless';
-import { EXPO_PUBLIC_DATABASE_URL } from '@env';
-
-const sql = neon(EXPO_PUBLIC_DATABASE_URL);
+const sql = neon(process.env.EXPO_PUBLIC_DATABASE_URL!);
 
 export const semillasSync = {
   async sync() {

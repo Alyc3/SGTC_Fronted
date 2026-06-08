@@ -3,10 +3,9 @@ import { semillas } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { neon } from '@neondatabase/serverless';
-import { EXPO_PUBLIC_DATABASE_URL } from '@env';
 import { networkService } from './network.service';
 
-const sql = neon(EXPO_PUBLIC_DATABASE_URL);
+const sql = neon(process.env.EXPO_PUBLIC_DATABASE_URL!);
 
 export const semillasService = {
   async getAll() {
@@ -21,7 +20,8 @@ export const semillasService = {
 
     // 2. Obtener semillas online con JOINs para variedad y país
     let onlineSeeds: any[] = [];
-    if (EXPO_PUBLIC_DATABASE_URL && await networkService.isOnline()) {
+    const dbUrl = process.env.EXPO_PUBLIC_DATABASE_URL;
+    if (dbUrl && await networkService.isOnline()) {
       try {
         onlineSeeds = await sql`
           SELECT s.*, 

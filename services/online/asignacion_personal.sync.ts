@@ -2,9 +2,8 @@ import { db } from '../../db';
 import { asignacion_personal } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { neon } from '@neondatabase/serverless';
-import { EXPO_PUBLIC_DATABASE_URL } from '@env';
 
-const sql = neon(EXPO_PUBLIC_DATABASE_URL);
+const sql = neon(process.env.EXPO_PUBLIC_DATABASE_URL!);
 
 /**
  * Servicio de sincronización para la tabla asignacion_personal.

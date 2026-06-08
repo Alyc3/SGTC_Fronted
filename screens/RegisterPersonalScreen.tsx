@@ -42,7 +42,11 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        navigation.navigate('Personal');
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Personal');
+        }
         return true; 
       };
 
@@ -52,7 +56,11 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
         // Capturamos cualquier intento de volver (gesto, botón o dispatch)
         if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
           e.preventDefault();
-          navigation.navigate('Personal');
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Personal');
+          }
         }
       });
 
@@ -249,7 +257,13 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
       <StatusBar barStyle="dark-content" />
       
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.navigate('Personal')} style={styles.iconButton}>
+        <TouchableOpacity onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('Personal');
+          }
+        }} style={styles.iconButton}>
           <ArrowLeft size={24} color={Theme.colors.onSurface} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>{isEditMode ? 'Editar Perfil' : 'Nuevo Registro'}</Text>

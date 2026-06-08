@@ -120,7 +120,11 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     useCallback(() => {
       const onBackPress = () => {
         resetForm();
-        navigation.navigate('ListarParcela');
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('ListarParcela');
+        }
         return true; // Bloquea la acción por defecto
       };
 
@@ -131,7 +135,11 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
         if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
           e.preventDefault();
           resetForm();
-          navigation.navigate('ListarParcela');
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('ListarParcela');
+          }
         }
       });
 
@@ -324,13 +332,21 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
         await parcelasService.update(parcelId, data);
         CustomAlert.show('SUCCESS', 'Éxito', 'Parcela actualizada.', () => {
           resetForm();
-          navigation.navigate('ListarParcela');
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('ListarParcela');
+          }
         });
       } else {
         await parcelasService.create(data);
         CustomAlert.show('SUCCESS', 'Éxito', 'Parcela registrada.', () => {
           resetForm();
-          navigation.navigate('ListarParcela');
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('ListarParcela');
+          }
         });
       }
     } catch (error) {

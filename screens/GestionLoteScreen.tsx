@@ -116,8 +116,8 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        if (parcelaId) {
-          navigation.navigate('GestionParcela', { id: parcelaId });
+        if (navigation.canGoBack()) {
+          navigation.goBack();
         } else {
           navigation.navigate('Lotes');
         }
@@ -130,8 +130,8 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
         // Capturamos cualquier intento de volver (gesto, botón o dispatch)
         if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
           e.preventDefault();
-          if (parcelaId) {
-            navigation.navigate('GestionParcela', { id: parcelaId });
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
           } else {
             navigation.navigate('Lotes');
           }
@@ -300,10 +300,10 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
       }
       
       CustomAlert.show('SUCCESS', 'Éxito', isEditing ? 'Lote actualizado correctamente.' : `${numLotes} lote(s) registrado(s).`, () => {
-        if (parcelaId) {
-          navigation.navigate('GestionParcela', { id: parcelaId });
-        } else {
+        if (navigation.canGoBack()) {
           navigation.goBack();
+        } else {
+          navigation.navigate('Lotes');
         }
       });
     } catch (error) {
@@ -329,8 +329,8 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
           <View style={styles.heroOverlay}>
             <TouchableOpacity 
               onPress={() => {
-                if (parcelaId) {
-                  navigation.navigate('GestionParcela', { id: parcelaId });
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
                 } else {
                   navigation.navigate('Lotes');
                 }

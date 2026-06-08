@@ -10,8 +10,13 @@ import {
   StatusBar,
   Alert,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  BackHandler,
+  Modal,
+  Animated,
+  Platform
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ArrowLeft,
   Users,
@@ -22,7 +27,9 @@ import {
   User,
   ShieldCheck,
   Calendar,
-  Layers
+  Layers,
+  ChevronUp,
+  X
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { lotesService } from '../services/lotes.service';
@@ -35,7 +42,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CustomAlert } from '../components/GlobalAlert';
 import { useAuthStore } from '../store/authStore';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const ALLOWED_ROLES = [
   'ADMIN',
@@ -76,6 +83,8 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   };
 
   const currentRole = getCleanRole();
+  const normalizedUserRole = currentRole.trim().toLowerCase().replace(/\s+/g, '_');
+  const isAuthorized = normalizedUserRole === 'gerente_general' || normalizedUserRole === 'capataz' || normalizedUserRole === 'admin';
   const displayRole = currentRole.trim().toUpperCase().replace(/_/g, ' ');
 
   const [lotes, setLotes] = useState<any[]>([]);
@@ -87,8 +96,56 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   const [existingAssignments, setExistingAssignments] = useState<any[]>([]);
   const [initialSelectedIds, setInitialSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Modal State
+  const [isModalVisible, setModalVisible] = useState(false);
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      // Verificar autorización primero
+      if (!isAuthorized) {
+        CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para asignar personal.', () => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('Lotes');
+          }
+        });
+        return;
+      }
+
+      const onBackPress = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Lotes');
+        }
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Lotes');
+          }
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation, isAuthorized])
+  );
 
   const fetchData = useCallback(async () => {
+    if (!isAuthorized) return;
     try {
       setLoading(true);
       const [lotesData, personnelData, rolesData, assignmentsData] = await Promise.all([
@@ -138,7 +195,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedLote, selectedEtapa, isAuthorized]);
 
   useEffect(() => {
     fetchData();
@@ -162,24 +219,10 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   }, [selectedEtapa]); // Escuchamos solo el cambio de etapa
 
   const filteredPersonnel = useMemo(() => {
-    return personnel.filter(worker => {
-      const roleNameRaw = rolesMap[worker.role_id] || '';
-      const roleName = roleNameRaw.trim().toLowerCase().replace(/\s+/g, '_');
-      
-      if (selectedEtapa === 'Sembrado') {
-        // Para Sembrado: Sembrador o Técnico Sembrado
-        return roleName === 'sembrador' || roleName === 'tecnico_sembrado' || roleName === 'técnico_sembrado';
-      }
-      
-      if (selectedEtapa === 'Cosechado') {
-        // Para Cosechado: Recolector, Clasificador o Técnico Agrónomo
-        return roleName === 'recolector' || roleName === 'clasificador' || roleName === 'tecnico_agronomo' || roleName === 'técnico_agrónomo';
-      }
-      
-      // Para otras etapas, mostrar todo el personal permitido por defecto
-      return true;
-    });
-  }, [personnel, selectedEtapa, rolesMap]);
+    // Para Gerente General, Capataz y ADMIN, se permite asignar a cualquier fase 
+    // sin restricciones de rol por fase, mostrando todo el personal permitido.
+    return personnel;
+  }, [personnel]);
 
   const alreadyAssignedIds = useMemo(() => {
     return new Set(
@@ -232,6 +275,11 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   };
 
   const handleAssign = async () => {
+    if (!isAuthorized) {
+      CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para realizar esta acción.');
+      return;
+    }
+
     if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
       CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
       return;
@@ -301,7 +349,11 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       CustomAlert.show('SUCCESS', 'Asignación Actualizada', 'Los cambios en la cuadrilla han sido guardados exitosamente.', () => {
         if (!isEditMode) setSelectedPersonnel([]);
         fetchData(); 
-        if (isEditMode) navigation.goBack();
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Lotes');
+        }
       });
     } catch (error) {
       console.error('Error assigning personnel:', error);
@@ -371,7 +423,13 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => navigation.navigate('ViewLote', { lote: selectedLote })}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Lotes');
+            }
+          }}
         >
           <ArrowLeft size={24} color={Theme.colors.primary} />
         </TouchableOpacity>
@@ -380,7 +438,11 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
         <Text style={styles.subtitle}>Configure el equipo de trabajo para la etapa actual.</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Static Lote Info */}
         <View style={styles.staticLoteContainer}>
           <View style={styles.loteInfoContent}>
@@ -444,33 +506,104 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           </ScrollView>
         </View>
 
-        {/* Personnel List Section */}
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>Seleccionar Personal</Text>
-          <Text style={styles.listCounter}>{selectedPersonnel.length} seleccionados</Text>
+        {/* Personnel Selection Trigger Button */}
+        <View style={styles.triggerContainer}>
+          <TouchableOpacity 
+            style={styles.triggerButton}
+            onPress={() => setModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.triggerIconWrapper}>
+              <Users size={20} color={Theme.colors.primary} />
+            </View>
+            <View style={styles.triggerInfo}>
+              <Text style={styles.triggerTitle}>Personal Asignado</Text>
+              <Text style={styles.triggerSubtitle}>
+                {selectedPersonnel.length === 0 
+                  ? 'Toca para asignar trabajadores' 
+                  : `${selectedPersonnel.length} trabajador(es) seleccionado(s)`}
+              </Text>
+            </View>
+            <ChevronUp size={24} color={Theme.colors.outline} />
+          </TouchableOpacity>
         </View>
 
-        <FlatList
-          data={filteredPersonnel}
-          renderItem={renderPersonnelItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Users size={48} color={Theme.colors.surfaceVariant} />
-              <Text style={styles.emptyText}>No hay personal registrado.</Text>
+        {/* Selected Personnel Preview */}
+        {selectedPersonnel.length > 0 && (
+          <View style={styles.previewContainer}>
+            <Text style={styles.previewHeader}>Resumen de Cuadrilla</Text>
+            {selectedPersonnel.map(id => {
+              const worker = personnel.find(p => p.id === id);
+              if (!worker) return null;
+              const roleName = rolesMap[worker.role_id] || worker.role_id || 'TRABAJADOR';
+              return (
+                <View key={worker.id} style={styles.previewCard}>
+                  <View style={styles.previewAvatar}>
+                    <User size={16} color={Theme.colors.primary} />
+                  </View>
+                  <View>
+                    <Text style={styles.previewName}>{`${worker.first_name} ${worker.last_name}`}</Text>
+                    <Text style={styles.previewRole}>{roleName}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Bottom Sheet Modal for Personnel Selection */}
+      <Modal
+        visible={isModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.bottomSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Seleccionar Personal</Text>
+                <Text style={styles.sheetSubtitle}>Para etapa: {selectedEtapa}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                <X size={24} color={Theme.colors.onSurface} />
+              </TouchableOpacity>
             </View>
-          }
-        />
-      </View>
+
+            <FlatList
+              data={filteredPersonnel}
+              renderItem={renderPersonnelItem}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.sheetListContent}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Users size={48} color={Theme.colors.surfaceVariant} />
+                  <Text style={styles.emptyText}>No hay personal registrado para esta etapa.</Text>
+                </View>
+              }
+            />
+
+            <View style={styles.sheetFooter}>
+               <TouchableOpacity 
+                style={styles.sheetConfirmButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.sheetConfirmText}>Listo ({selectedPersonnel.length})</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Floating Action Button / Assignment Button */}
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={styles.assignButton}
+          style={[styles.assignButton, !isAuthorized && { opacity: 0.5 }]}
           onPress={handleAssign}
-          disabled={loading}
+          disabled={loading || !isAuthorized}
         >
           <LinearGradient
             colors={[Theme.colors.primary, Theme.colors.primaryContainer]}
@@ -487,7 +620,6 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
-
     </SafeAreaView>
   );
 };
@@ -537,6 +669,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 120,
   },
   staticLoteContainer: {
     flexDirection: 'row',
@@ -724,12 +859,13 @@ const styles = StyleSheet.create({
     right: 0,
     padding: Theme.spacing.lg,
     backgroundColor: 'transparent',
+    zIndex: 10,
   },
   assignButton: {
     borderRadius: Theme.roundness.xl,
     overflow: 'hidden',
     ...Theme.shadows.ambient,
-    elevation: 5,
+    elevation: 10,
   },
   gradientButton: {
     flexDirection: 'row',
@@ -739,6 +875,151 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   assignButtonText: {
+    ...Theme.typography.headline,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Theme.colors.onPrimary,
+  },
+  // New Styles for Bottom Sheet and Triggers
+  triggerContainer: {
+    paddingHorizontal: Theme.spacing.lg,
+    marginBottom: Theme.spacing.lg,
+  },
+  triggerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    padding: 16,
+    borderRadius: Theme.roundness.xl,
+    borderWidth: 1,
+    borderColor: Theme.colors.primary + '20',
+  },
+  triggerIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: Theme.roundness.lg,
+    backgroundColor: Theme.colors.surfaceContainerLowest,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  triggerInfo: {
+    flex: 1,
+  },
+  triggerTitle: {
+    ...Theme.typography.headline,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Theme.colors.onSurface,
+  },
+  triggerSubtitle: {
+    ...Theme.typography.label,
+    fontSize: 12,
+    color: Theme.colors.secondary,
+  },
+  previewContainer: {
+    paddingHorizontal: Theme.spacing.lg,
+    marginTop: Theme.spacing.md,
+  },
+  previewHeader: {
+    ...Theme.typography.labelSm,
+    letterSpacing: 1.5,
+    color: Theme.colors.outline,
+    marginBottom: 12,
+  },
+  previewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    padding: 12,
+    borderRadius: Theme.roundness.lg,
+    marginBottom: 8,
+  },
+  previewAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  previewName: {
+    ...Theme.typography.body,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.onSurface,
+  },
+  previewRole: {
+    ...Theme.typography.labelSm,
+    fontSize: 10,
+    color: Theme.colors.outline,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(31, 27, 20, 0.6)',
+  },
+  bottomSheet: {
+    backgroundColor: Theme.colors.background,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    height: height * 0.75, // Ocupa el 75% de la pantalla
+    ...Theme.shadows.ambient,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Theme.colors.surfaceVariant,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.surfaceContainerHigh,
+  },
+  sheetTitle: {
+    ...Theme.typography.headline,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+  },
+  sheetSubtitle: {
+    ...Theme.typography.labelSm,
+    fontSize: 12,
+    color: Theme.colors.secondary,
+    marginTop: 2,
+  },
+  closeButton: {
+    padding: 8,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 20,
+  },
+  sheetListContent: {
+    padding: 24,
+    paddingBottom: 40,
+  },
+  sheetFooter: {
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.surfaceContainerHigh,
+    backgroundColor: Theme.colors.background,
+  },
+  sheetConfirmButton: {
+    backgroundColor: Theme.colors.primary,
+    paddingVertical: 16,
+    borderRadius: Theme.roundness.xl,
+    alignItems: 'center',
+  },
+  sheetConfirmText: {
     ...Theme.typography.headline,
     fontSize: 16,
     fontWeight: '700',

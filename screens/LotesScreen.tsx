@@ -19,7 +19,7 @@ import { db } from '../db';
 import { asignacion_personal } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { Theme } from '../theme';
-import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck, CheckCircle2, Clock } from 'lucide-react-native';
+import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck, CheckCircle2, Clock, ChevronDown, ChevronUp, User, Users, Sprout } from 'lucide-react-native';
 import { lotesService, parcelasService, rolesService } from '../services';
 import { useNavigation } from '@react-navigation/native';
 import { CustomAlert } from '../components/GlobalAlert';
@@ -46,6 +46,7 @@ const StatCard = ({ label, value, type = 'normal' }: any) => (
 const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
   const navigation = useNavigation<any>();
   const role = useAuthStore((state) => state.role);
+  const [showWorkers, setShowWorkers] = useState(false);
   
   // Normalización ultra-robusta del rol para evitar fallos si el rol es un objeto o null
   const getCleanRole = () => {
@@ -56,13 +57,20 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
   };
 
   const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
-  const isAdminOrManager = (userRole === 'admin' || userRole === 'gerente general' || userRole.includes('capataz') || userRole.includes('tecnico'));/* DEFINED_HERE */
-  const canAssignCapataz = (typeof isAdminOrManager !== "undefined" && isAdminOrManager);
+  const isCapataz = userRole.includes('capataz');
+  const isAdminOrManager = (userRole === 'admin' || userRole === 'gerente general' || isCapataz || userRole.includes('tecnico'));
+  const canAssign = (userRole === 'admin' || userRole === 'gerente general' || isCapataz);
 
-  // Filtrar solo asignaciones que sean de Capataces para el Responsable Técnico
-  const capatacesAsignados = (item.asignaciones || []).filter((a: any) => {
+  // Filtrar asignaciones
+  const asignaciones = item.asignaciones || [];
+  const capatacesAsignados = asignaciones.filter((a: any) => {
     const roleName = (rolesMap[a.trabajador?.role_id] || '').toLowerCase();
-    return roleName === 'capataz';
+    return roleName.includes('capataz');
+  });
+
+  const trabajadoresAsignados = asignaciones.filter((a: any) => {
+    const roleName = (rolesMap[a.trabajador?.role_id] || '').toLowerCase();
+    return !roleName.includes('capataz');
   });
 
   const getStatusStyle = (status: string) => {
@@ -80,27 +88,42 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
   const statusStyle = getStatusStyle(item.estado_lote);
   const isProduccion = item.estado_lote === 'En_Produccion';
 
+  // Verificar si hay una etapa de Sembrado activa para el bloqueo de Capataz
+  const isSembradoActive = item.estados_etapas?.some((e: any) => 
+    e.etapa === 'Sembrado' && e.estado === 'En_Proceso'
+  );
+
+  const handlePress = () => {
+    // Si es capataz y la etapa activa es Sembrado, se pasa flag de solo lectura
+    const readOnly = isCapataz && isSembradoActive;
+    onView(item, readOnly);
+  };
+
   return (
     <TouchableOpacity 
       activeOpacity={0.9} 
-      onPress={() => onView(item)}
+      onPress={handlePress}
       style={styles.premiumCard}
     >
       <View style={styles.cardFlex}>
-        {/* Left: Image Placeholder/Thumbnail - More compact */}
+        {/* Left: Thumbnail Section */}
         <View style={styles.cardImageContainer}>
           <Image 
             source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBcfuG7uzT2CHmYiUp7XJSeemG84u-VwAPvB4Abwe8FW6a68cQ3Lv6SWkZeDt6cuUCqgyJpKQKLaPBfmLlk3kHwTjyBjjaroxRHjZR2dTvPNsCERxZ6uwyTG8m9lZNqJAUTpcREAO4apD6RsRjXbO6tWOWJJLAJgvFvXdajoi-wyb7gcOc8VMx2wChz2lO3MU3E2ZimeUUPTbdUloNqk9r961v-MGdCdE4t_q2N5KIYPclHdf1uU-q_zYUjyrtIq82sSNmEjuI2t0Wv' }} 
             style={styles.cardImage}
           />
           <View style={styles.cardImageOverlay} />
+          {isSembradoActive && (
+            <View style={styles.stageIndicator}>
+              <Sprout size={10} color={Theme.colors.onPrimary} />
+            </View>
+          )}
         </View>
 
-        {/* Right: Content */}
+        {/* Right: Content Section */}
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
-            <View>
-              {/* Status above code */}
+            <View style={{ flex: 1 }}>
               <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, alignSelf: 'flex-start', marginBottom: 4 }]}>
                 <Text style={[styles.statusText, { color: statusStyle.text }]}>
                   {item.estado_lote.replace('_', ' ').toUpperCase()}
@@ -109,20 +132,21 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
               <Text style={styles.lotCode}>{item.codigo}</Text>
               <Text style={styles.lotVariety}>{item.semilla?.variedad?.valor || 'Sin variedad'}</Text>
             </View>
+            <TouchableOpacity onPress={handlePress} style={styles.viewIcon}>
+              <Eye size={20} color={Theme.colors.primary} />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.cardMeta}>
-            <Text style={styles.metaText}>
-              {item.hectareas_lote} Hectáreas
-            </Text>
+            <Text style={styles.metaText}>{item.hectareas_lote} Hectáreas</Text>
           </View>
 
           {/* Sección de Responsable Técnico */}
           <View style={styles.technicalSection}>
-            <ShieldCheck size={12} color={Theme.colors.secondary} />
-            <Text style={styles.technicalLabel}>RESPONSABLE TÉCNICO ({capatacesAsignados.length})</Text>
-          </View>
-          <View style={styles.capatacesList}>
+            <View style={styles.technicalHeader}>
+              <ShieldCheck size={12} color={Theme.colors.secondary} />
+              <Text style={styles.technicalLabel}>RESPONSABLE TÉCNICO</Text>
+            </View>
             {capatacesAsignados.length > 0 ? (
               capatacesAsignados.map((a: any) => (
                 <Text key={a.id} style={styles.capatazName} numberOfLines={1}>
@@ -130,52 +154,82 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
                 </Text>
               ))
             ) : (
-              <Text style={styles.noCapataz}>Sin capataces asignados</Text>
+              <Text style={styles.noCapataz}>Sin responsable asignado</Text>
+            )}
+          </View>
+
+          {/* Sección de Trabajadores con Dropdown */}
+          <View style={styles.workersSection}>
+            <TouchableOpacity 
+              style={styles.workersHeader} 
+              onPress={() => setShowWorkers(!showWorkers)}
+              activeOpacity={0.7}
+            >
+              <Users size={12} color={Theme.colors.primary} />
+              <Text style={styles.workersLabel}>TRABAJADORES ({trabajadoresAsignados.length})</Text>
+              {trabajadoresAsignados.length > 0 && (
+                showWorkers ? <ChevronUp size={12} color={Theme.colors.outline} /> : <ChevronDown size={12} color={Theme.colors.outline} />
+              )}
+            </TouchableOpacity>
+            
+            {showWorkers && trabajadoresAsignados.length > 0 && (
+              <View style={styles.workersList}>
+                {trabajadoresAsignados.map((a: any) => (
+                  <View key={a.id} style={styles.workerItem}>
+                    <User size={10} color={Theme.colors.outline} />
+                    <Text style={styles.workerName}>{a.trabajador?.first_name} {a.trabajador?.last_name}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {!showWorkers && trabajadoresAsignados.length > 0 && (
+              <Text style={styles.helperText}>Toca para ver equipo</Text>
+            )}
+            {trabajadoresAsignados.length === 0 && (
+              <Text style={styles.noCapataz}>Sin personal asignado</Text>
             )}
           </View>
 
           <View style={styles.cardActions}>
-            { (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && (
+            {canAssign && (
               <TouchableOpacity 
                 onPress={(e) => {
                   e.stopPropagation();
-                  onEdit(item.id, item.parcela_id, isProduccion);
+                  navigation.navigate('AssignPersonal', { lote: item });
                 }} 
-                style={[styles.actionBtn, isProduccion && { opacity: 0.5 }]}
+                style={styles.mainActionBtn}
               >
-                <Edit size={16} color={isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant} />
-                <Text style={[styles.actionBtnText, { color: isProduccion ? Theme.colors.outline : Theme.colors.onSurfaceVariant }]}>
-                  {isProduccion ? 'BLOQUEADO' : 'MODIFICAR'}
-                </Text>
+                <Users size={16} color={Theme.colors.onPrimary} />
+                <Text style={styles.mainActionBtnText}>ASIGNACIÓN PERSONAL</Text>
               </TouchableOpacity>
             )}
 
-            {canAssignCapataz && (
-              <TouchableOpacity 
-                onPress={(e) => {
-                  e.stopPropagation();
-                  navigation.navigate('AssignCapataz', { lote: item });
-                }} 
-                style={styles.actionBtn}
-              >
-                <ShieldCheck size={16} color={Theme.colors.secondary} />
-                <Text style={[styles.actionBtnText, { color: Theme.colors.secondary }]}>
-                  CAPATAZ
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            { (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && (
-              <TouchableOpacity 
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onDelete(item.id, item.codigo, isProduccion);
-                }} 
-                style={[styles.archiveBtn, isProduccion && { opacity: 0.5 }]}
-              >
-                <Archive size={14} color={isProduccion ? Theme.colors.outline : Theme.colors.outline} />
-              </TouchableOpacity>
-            )}
+            <View style={styles.secondaryActions}>
+              {isAdminOrManager && (
+                <TouchableOpacity 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onEdit(item.id, item.parcela_id, isProduccion);
+                  }} 
+                  style={[styles.smallActionBtn, isProduccion && { opacity: 0.5 }]}
+                  disabled={isProduccion}
+                >
+                  <Edit size={16} color={Theme.colors.primary} />
+                </TouchableOpacity>
+              )}
+              {isAdminOrManager && (
+                <TouchableOpacity 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onDelete(item.id, item.codigo, isProduccion);
+                  }} 
+                  style={[styles.smallActionBtn, isProduccion && { opacity: 0.5 }]}
+                  disabled={isProduccion}
+                >
+                  <Archive size={16} color={Theme.colors.outline} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </View>
@@ -186,12 +240,16 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
 const LotesScreen = () => {
   const navigation = useNavigation<any>();
 
-  // Control de gestos y botón físico de atrás
+  // Manejo robusto del botón "Atrás" (Hardware y Gestos)
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        navigation.navigate('Dashboard');
-        return true; // Bloquea la acción por defecto
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Dashboard');
+        }
+        return true; 
       };
 
       const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
@@ -199,7 +257,11 @@ const LotesScreen = () => {
       const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
         if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
           e.preventDefault();
-          navigation.navigate('Dashboard');
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Dashboard');
+          }
         }
       });
 
@@ -346,8 +408,8 @@ const LotesScreen = () => {
     navigation.navigate('GestionLote', { id, parcelaId });
   };
 
-  const handleView = (item: any) => {
-    navigation.navigate('ViewLote', { lote: item });
+  const handleView = (item: any, readOnly: boolean = false) => {
+    navigation.navigate('ViewLote', { lote: item, readOnly });
   };
 
   return (
@@ -550,6 +612,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 2,
   },
+  viewIcon: {
+    padding: 4,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 8,
+  },
   lotCode: {
     fontSize: 14,
     fontWeight: '900',
@@ -572,18 +639,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   cardMeta: {
-    marginBottom: 6,
+    marginBottom: 8,
   },
   metaText: {
     fontSize: 10,
     color: Theme.colors.onSurfaceVariant,
     fontWeight: '500',
   },
+  stageIndicator: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: Theme.colors.primary,
+    borderRadius: 6,
+    padding: 2,
+  },
   technicalSection: {
+    marginTop: 4,
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 195, 190, 0.1)',
+  },
+  technicalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 8,
     marginBottom: 4,
   },
   technicalLabel: {
@@ -592,42 +673,92 @@ const styles = StyleSheet.create({
     color: Theme.colors.secondary,
     letterSpacing: 0.5,
   },
-  capatacesList: {
-    marginBottom: 8,
+  workersSection: {
+    marginBottom: 12,
+  },
+  workersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  workersLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+    letterSpacing: 0.5,
+  },
+  workersList: {
+    marginTop: 4,
+    gap: 4,
+  },
+  workerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingLeft: 4,
+  },
+  workerName: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Theme.colors.onSurface,
   },
   capatazName: {
     fontSize: 11,
     fontWeight: '700',
     color: Theme.colors.onSurface,
     lineHeight: 14,
+    paddingLeft: 4,
   },
-  noCapataz: {
+  emptyText: {
     fontSize: 10,
     color: Theme.colors.outline,
     fontStyle: 'italic',
+    paddingLeft: 4,
+  },
+  helperText: {
+    fontSize: 9,
+    color: Theme.colors.secondary,
+    fontStyle: 'italic',
+    paddingLeft: 4,
   },
   cardActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingTop: 6,
+    justifyContent: 'space-between',
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(212, 195, 190, 0.2)',
   },
-  actionBtn: {
+  mainActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+    elevation: 2,
+    shadowColor: Theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
-  actionBtnText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: Theme.colors.primary,
+  mainActionBtnText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: Theme.colors.onPrimary,
     letterSpacing: 0.5,
   },
-  archiveBtn: {
-    marginLeft: 'auto',
+  secondaryActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  smallActionBtn: {
+    padding: 6,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 6,
   },
   emptyContainer: {
     alignItems: 'center',

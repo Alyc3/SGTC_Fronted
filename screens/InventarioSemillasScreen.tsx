@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -7,8 +7,10 @@ import {
   TouchableOpacity, 
   TextInput,
   StatusBar,
-  ScrollView
+  ScrollView,
+  BackHandler
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   Search, 
   ChevronRight, 
@@ -29,6 +31,38 @@ import { CustomAlert } from '../components/GlobalAlert';
 import { Alert } from 'react-native';
 
 const InventarioSemillasScreen = ({ navigation }: any) => {
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Dashboard');
+        }
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Dashboard');
+          }
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
+
   const [searchQuery, setSearchQuery] = useState('');
 
   const { data: rawSemillas } = useLiveQuery(db.query.semillas.findMany({

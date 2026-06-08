@@ -13,8 +13,10 @@ import {
   Switch,
   Platform,
   Modal,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ArrowLeft,
   Check,
@@ -44,14 +46,30 @@ const { width } = Dimensions.get('window');
 
 const EtapaSembradosScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
+  const readOnly = route.params?.readOnly || false;
   const userId = useAuthStore((state) => state.userId);
+  const userRoleRaw = useAuthStore((state) => state.role);
+  
+  const getCleanRole = () => {
+    if (!userRoleRaw) return '';
+    if (typeof userRoleRaw === 'string') return userRoleRaw;
+    if (typeof userRoleRaw === 'object') return (userRoleRaw as any).name || (userRoleRaw as any).role || '';
+    return String(userRoleRaw);
+  };
+
+  const userRole = getCleanRole().trim().toLowerCase().replace(/_/g, ' ');
+  const isTecnicoSembrado = !readOnly && (userRole.includes('tecnico sembrado') || userRole.includes('técnico de sembrado') || userRole === 'tecnico_sembrado');
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaveLoading] = useState(false);
   const [currentSubFase, setCurrentSubFase] = useState<string>('Floracion'); // Default from prototype
   const [stagesData, setStagesData] = useState<any[]>([]);
+  // metricsForm stores the current UI state (editable)
   const [metricsForm, setMetricsForm] = useState<Record<string, any>>({});
+  // dbMetrics stores the EXACT state fetched from the DB (used for locking)
+  const [dbMetrics, setDbMetrics] = useState<Record<string, any>>({});
   const [editModes, setEditModes] = useState<Record<string, boolean>>({});
+  const [hasSembradoPersonnel, setHasSembradoPersonnel] = useState<boolean>(false);
   
   // Modal for selects
   const [pickerModal, setPickerModal] = useState<{ visible: boolean; field: string; options: string[] }>({
@@ -59,6 +77,30 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     field: '',
     options: [],
   });
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('ViewLote', { lote });
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          navigation.navigate('ViewLote', { lote });
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation, lote])
+  );
 
   const subFases = [
     { id: 'Germinacion', label: 'Germinación', icon: <Check size={20} color="white" /> },
@@ -72,9 +114,16 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     if (!lote?.id) return;
     try {
       setLoading(true);
-      const data = await lotesService.getStages(lote.id);
-      const sembradoStage = data.find(s => s.etapa === 'Sembrado');
+      const [data, personnel] = await Promise.all([
+        lotesService.getStages(lote.id),
+        lotesService.getAssignedPersonnel(lote.id)
+      ]);
       
+      const sembradoStage = data.find(s => s.etapa === 'Sembrado');
+      const isPersonnelAssigned = personnel.some(p => p.etapa === 'Sembrado');
+      // Store this flag to block starting the phase
+      setHasSembradoPersonnel(isPersonnelAssigned);
+
       let subfase = 'Germinacion';
       if (sembradoStage?.subFaseSiembra) {
         subfase = sembradoStage.subFaseSiembra;
@@ -83,13 +132,16 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
 
       // Fetch metrics for all sub-phases to pre-fill the timeline
       const allMetrics: Record<string, any> = {};
+      const allDbMetrics: Record<string, any> = {};
       for (const phase of subFases) {
         const metrics = await sembradoMetricasService.getMetricas(lote.id, phase.id);
         if (metrics) {
           allMetrics[phase.id] = metrics;
+          allDbMetrics[phase.id] = metrics; // Snapshot of what is actually saved
         }
       }
       setMetricsForm(allMetrics);
+      setDbMetrics(allDbMetrics);
       setStagesData(data);
     } catch (error) {
       console.error('Error fetching stage data:', error);
@@ -102,17 +154,43 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     fetchData();
   }, [fetchData]);
 
-  const handleUpdateField = (phaseId: string, field: string, value: any) => {
+  const handleUpdateField = (phaseId: string, field: string, value: string) => {
+    // Permitir vacío para borrar campos
     setMetricsForm((prev) => ({
       ...prev,
       [phaseId]: {
         ...(prev[phaseId] || {}),
-        [field]: value,
+        [field]: value === 'Seleccionar...' ? '' : value,
       },
     }));
   };
 
   const handleConfirmStart = (phaseId: string, phaseLabel: string) => {
+    // Validar asignación de personal antes de iniciar cualquier fase de sembrado
+    if (!hasSembradoPersonnel) {
+      CustomAlert.show(
+        'ALERTA', 
+        'Personal No Asignado', 
+        'No se puede iniciar el proceso de sembrado. Solicite a un Capataz que asigne el personal técnico y operativo a la etapa de Sembrado en este lote.'
+      );
+      return;
+    }
+
+    // Validar que la fase anterior esté finalizada
+    const phaseIndex = subFases.findIndex(f => f.id === phaseId);
+    if (phaseIndex > 0) {
+      const prevPhaseId = subFases[phaseIndex - 1].id;
+      const prevMetrics = metricsForm[prevPhaseId];
+      if (!prevMetrics?.fecha_fin) {
+        CustomAlert.show(
+          'ALERTA', 
+          'Acción Requerida', 
+          `Debe finalizar la etapa de ${subFases[phaseIndex - 1].label.toLowerCase()} antes de iniciar la siguiente.`
+        );
+        return;
+      }
+    }
+
     CustomAlert.show(
       'ALERTA',
       'Iniciar Fase',
@@ -134,6 +212,15 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
   };
 
   const handleConfirmEnd = (phaseId: string, phaseLabel: string) => {
+    const phaseMetrics = metricsForm[phaseId] || {};
+    
+    // Validar que todos los campos estén llenos antes de finalizar
+    const errorMsg = validateForm(phaseId, phaseMetrics);
+    if (errorMsg) {
+      CustomAlert.show('ALERTA', 'Datos Incompletos', `Para finalizar esta fase debe completar todos los registros técnicos: \n\n${errorMsg}`);
+      return;
+    }
+
     CustomAlert.show(
       'ALERTA',
       'Finalizar Fase',
@@ -161,6 +248,8 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
            return 'La tasa de germinación debe estar entre 0.0 y 100.0%';
         if (!data.dias_emergencia || parseInt(data.dias_emergencia) < 1 || parseInt(data.dias_emergencia) > 120)
            return 'Los días de emergencia deben estar entre 1 y 120';
+        if (!data.presencia_hongos || data.presencia_hongos === 'Seleccionar...')
+           return 'Debe registrar la presencia de hongos';
         break;
       case 'Vivero':
         if (data.pares_hojas_verdaderas === undefined || data.pares_hojas_verdaderas === '' || parseInt(data.pares_hojas_verdaderas) < 0 || parseInt(data.pares_hojas_verdaderas) > 15)
@@ -195,30 +284,33 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
            return 'La homogeneidad de maduración es obligatoria';
         if (data.incidencia_broca === undefined || data.incidencia_broca === '' || parseFloat(data.incidencia_broca) < 0 || parseFloat(data.incidencia_broca) > 100)
            return 'La incidencia de broca debe estar entre 0.0 y 100.0%';
+        if (data.grados_brix === undefined || data.grados_brix === '' || parseFloat(data.grados_brix) < 1.0)
+           return 'Los grados Brix prematuros son obligatorios';
         break;
     }
     return null;
   };
 
   const handleSavePhase = async (phaseId: string, customStart?: string | null, customEnd?: string | null, keepEditMode: boolean = false) => {
-    // Si se está intentando FINALIZAR o Guardar Avance, validamos los datos
+    if (readOnly) return;
     const phaseMetrics = { ...(metricsForm[phaseId] || {}) };
     
-    if (customEnd || (!customStart && !customEnd)) {
+    // VALIDACIÓN ESTRICTA: Solo requerimos todos los datos llenos si estamos FINALIZANDO la fase.
+    if (customEnd) {
       const errorMsg = validateForm(phaseId, phaseMetrics);
       if (errorMsg) {
         CustomAlert.show('ALERTA', 'Datos Incompletos', errorMsg);
         return;
       }
+    }
 
-      // Regla de Negocio: Broca > 5.0%
-      if (phaseId === 'Maduracion' && parseFloat(phaseMetrics.incidencia_broca) > 5.0) {
-        CustomAlert.show(
-          'ALERTA', 
-          'Alerta de Plaga', 
-          'La incidencia de Broca es superior al 5.0%. Se requiere la creación de una incidencia técnica obligatoria.'
-        );
-      }
+    // Regla de Negocio: Broca > 5.0% (Validamos siempre que se intente guardar o finalizar)
+    if (phaseId === 'Maduracion' && phaseMetrics.incidencia_broca && parseFloat(phaseMetrics.incidencia_broca) > 5.0) {
+      CustomAlert.show(
+        'ALERTA', 
+        'Alerta de Plaga', 
+        'La incidencia de Broca es superior al 5.0%. Se requiere la creación de una incidencia técnica obligatoria.'
+      );
     }
 
     try {
@@ -239,12 +331,24 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
       if (customEnd) phaseMetrics.fecha_fin = customEnd;
 
       // 4. Save quality metrics for this specific phase
-      await sembradoMetricasService.saveMetricas({
-        ...phaseMetrics,
+      const savedMetrics = await sembradoMetricasService.saveMetricas({
+        ...phaseMetrics, // Incluye la posible ID si ya existe
         lote_id: lote.id,
         subfase: phaseId,
         tecnico_id: userId || 'UNKNOWN_TECH',
       });
+
+      // Update local state with the returned DB metrics (which includes the ID)
+      if (savedMetrics) {
+        setMetricsForm((prev) => ({
+          ...prev,
+          [phaseId]: savedMetrics
+        }));
+        setDbMetrics((prev) => ({
+          ...prev,
+          [phaseId]: savedMetrics
+        }));
+      }
 
       if (!customStart && !customEnd) {
         CustomAlert.show('SUCCESS', 'Avance Guardado', `Los datos de la fase de ${phaseId} han sido actualizados.`);
@@ -252,7 +356,7 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
       
       await fetchData(); // Refresh to ensure sync (gets the ID)
       
-      // Manage lock state
+      // Manage lock state: if we just saved, we lock it (keepEditMode = false) unless explicitly requested otherwise.
       setEditModes(prev => ({ ...prev, [phaseId]: keepEditMode }));
       
     } catch (error) {
@@ -296,7 +400,7 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
       
       {/* Custom NavBar to match prototype background */}
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => navigation.navigate('ViewLote', { lote })} style={styles.backButton}>
           <ArrowLeft size={24} color={Theme.colors.terroirBrown} />
         </TouchableOpacity>
         <CheckCircle2 size={24} color={Theme.colors.terroirBrown} />
@@ -327,8 +431,21 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
              const status = getPhaseStatus(phase.id);
              const isLast = index === subFases.length - 1;
              const phaseMetrics = metricsForm[phase.id] || {};
-             const isLocked = !!phaseMetrics.id && !editModes[phase.id];
-             const isReadOnly = status === 'pending' || isLocked;
+             // isPhaseGloballyLocked indicates the phase has been fully completed AND we are not explicitly editing it.
+             // If a phase only has a start date, it is 'active' and thus NOT fully locked, 
+             // allowing users to see the save button and do incremental saves.
+             const hasDbRecord = !!phaseMetrics.id;
+             const isCompletedInDB = !!(dbMetrics[phase.id]?.fecha_fin);
+             const isEditing = !!editModes[phase.id];
+             
+             // A phase is only globally locked if it's completed and we're not editing.
+             // Field-level locking (for partial saves) is handled inside `renderPhaseMetrics`.
+             const isPhaseGloballyLocked = isCompletedInDB && !isEditing;
+             const isReadOnly = !isTecnicoSembrado || status === 'pending' || isPhaseGloballyLocked;
+
+             // Bloqueo de botones de fase futura
+             const prevPhaseFinished = index === 0 || (metricsForm[subFases[index - 1].id]?.fecha_fin);
+             const canInteractWithPhase = isTecnicoSembrado && status !== 'pending' && prevPhaseFinished;
 
              return (
                <View key={phase.id} style={styles.phaseRow}>
@@ -338,7 +455,8 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
                      styles.circle, 
                      status === 'completed' && styles.circleCompleted,
                      status === 'active' && styles.circleActive,
-                     status === 'pending' && styles.circlePending
+                     status === 'pending' && styles.circlePending,
+                     !prevPhaseFinished && { opacity: 0.5 }
                    ]}>
                      {status === 'completed' ? <Check size={20} color="white" strokeWidth={3} /> : phase.icon}
                    </View>
@@ -346,7 +464,7 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
                  </View>
 
                  {/* Phase Content */}
-                 <View style={styles.phaseContent}>
+                 <View style={[styles.phaseContent, !canInteractWithPhase && status !== 'completed' && { opacity: 0.6 }]}>
                    <View style={styles.phaseHeaderRow}>
                      <View>
                         <Text style={[
@@ -364,7 +482,7 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
                      </View>
 
                      {/* Edit Button */}
-                     {!!phaseMetrics.id && !editModes[phase.id] && status !== 'pending' && (
+                     {isTecnicoSembrado && hasDbRecord && !editModes[phase.id] && status !== 'pending' && (
                        <TouchableOpacity 
                          style={styles.editPhaseBtn}
                          onPress={() => setEditModes(prev => ({ ...prev, [phase.id]: true }))}
@@ -389,17 +507,18 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
                          {phaseMetrics.fecha_inicio ? (
                            <View style={styles.dateDisplay}>
                              <Text style={styles.dateText}>{phaseMetrics.fecha_inicio.split('T')[0]}</Text>
-                             <Text style={styles.timeText}>{phaseMetrics.fecha_inicio.split('T')[1]?.substring(0, 5)}</Text>
                            </View>
                          ) : (
-                           <TouchableOpacity 
-                             style={[styles.dateButton, status === 'pending' && styles.btnDisabled]} 
-                             onPress={() => handleConfirmStart(phase.id, phase.label)}
-                             disabled={status === 'pending'}
-                           >
-                             <Play size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
-                             <Text style={styles.dateButtonText}>INICIAR</Text>
-                           </TouchableOpacity>
+                           isTecnicoSembrado && (
+                             <TouchableOpacity 
+                               style={[styles.dateButton, !canInteractWithPhase && styles.btnDisabled]} 
+                               onPress={() => handleConfirmStart(phase.id, phase.label)}
+                               disabled={!canInteractWithPhase}
+                             >
+                               <Play size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
+                               <Text style={styles.dateButtonText}>INICIAR</Text>
+                             </TouchableOpacity>
+                           )
                          )}
                        </View>
 
@@ -408,26 +527,27 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
                          {phaseMetrics.fecha_fin ? (
                            <View style={styles.dateDisplay}>
                              <Text style={styles.dateText}>{phaseMetrics.fecha_fin.split('T')[0]}</Text>
-                             <Text style={styles.timeText}>{phaseMetrics.fecha_fin.split('T')[1]?.substring(0, 5)}</Text>
                            </View>
                          ) : (
-                           <TouchableOpacity 
-                             style={[styles.dateButton, (!phaseMetrics.fecha_inicio || status === 'pending') && styles.btnDisabled]} 
-                             onPress={() => handleConfirmEnd(phase.id, phase.label)}
-                             disabled={!phaseMetrics.fecha_inicio || status === 'pending'}
-                           >
-                             <Square size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
-                             <Text style={styles.dateButtonText}>FINALIZAR</Text>
-                           </TouchableOpacity>
+                           isTecnicoSembrado && (
+                             <TouchableOpacity 
+                               style={[styles.dateButton, (!phaseMetrics.fecha_inicio || !canInteractWithPhase) && styles.btnDisabled]} 
+                               onPress={() => handleConfirmEnd(phase.id, phase.label)}
+                               disabled={!phaseMetrics.fecha_inicio || !canInteractWithPhase}
+                             >
+                               <Square size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
+                               <Text style={styles.dateButtonText}>FINALIZAR</Text>
+                             </TouchableOpacity>
+                           )
                          )}
                        </View>
                      </View>
 
                      {/* Phase Specific Metrics */}
-                     {renderPhaseMetrics(phase.id, phaseMetrics, status, isReadOnly)}
+                     {renderPhaseMetrics(phase.id, phaseMetrics, status, isPhaseGloballyLocked, editModes[phase.id])}
 
                      {/* Action Button - Only show if not locked or explicitly editing */}
-                     {(!isLocked || editModes[phase.id]) && status !== 'pending' && (
+                     {isTecnicoSembrado && canInteractWithPhase && phaseMetrics.fecha_inicio && (!isPhaseGloballyLocked || editModes[phase.id]) && (
                        <TouchableOpacity 
                          style={[
                            styles.actionButton,
@@ -483,31 +603,51 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     </SafeAreaView>
   );
 
-  function renderPhaseMetrics(phaseId: string, metrics: any, status: string, isReadOnly: boolean) {
+  function renderPhaseMetrics(phaseId: string, metrics: any, status: string, isPhaseGloballyLocked: boolean, isEditing: boolean) {
+    const isFieldReadOnly = (fieldName: string) => {
+      // 1. Si la fase ni siquiera ha empezado, no se puede editar nada
+      if (readOnly || status === 'pending') return true;
+      // 2. Si estamos explícitamente en modo edición (botón EDITAR presionado), todo es editable
+      if (isEditing) return false;
+      
+      // 3. Bloqueo a nivel de campo BASADO EN LA BD:
+      // Verificamos si ESTE campo específico ya tiene un valor guardado en dbMetrics. 
+      // Si lo tiene, se bloquea (para que un Guardado Parcial bloquee lo guardado).
+      const dbSavedPhase = dbMetrics[phaseId] || {};
+      const savedValue = dbSavedPhase[fieldName];
+      
+      if (savedValue !== undefined && savedValue !== null && savedValue !== '') {
+        return true; // Ya se guardó en la BD previamente
+      }
+
+      // 4. Si el campo está vacío en la BD (o recién lo está escribiendo en metricsForm), es editable
+      return false;
+    };
+
     switch (phaseId) {
       case 'Germinacion':
         return (
           <View style={styles.metricsList}>
-            <MetricRow label="Tasa germinación (%)" value={metrics.tasa_germinacion} onChange={(v: string) => handleUpdateField(phaseId, 'tasa_germinacion', v)} isReadOnly={isReadOnly} />
-            <MetricRow label="Emergencia (días)" value={metrics.dias_emergencia} onChange={(v: string) => handleUpdateField(phaseId, 'dias_emergencia', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Tasa germinación (%)" value={metrics.tasa_germinacion} onChange={(v: string) => handleUpdateField(phaseId, 'tasa_germinacion', v)} isReadOnly={isFieldReadOnly('tasa_germinacion')} />
+            <MetricRow label="Emergencia (días)" value={metrics.dias_emergencia} onChange={(v: string) => handleUpdateField(phaseId, 'dias_emergencia', v)} isReadOnly={isFieldReadOnly('dias_emergencia')} />
             <MetricSelect 
               label="Hongos" 
-              value={metrics.presencia_hongos || 'Ninguna'} 
-              onPress={() => !isReadOnly && openPicker(phaseId, 'presencia_hongos', ['Ninguna', 'Baja', 'Moderada'])}
-              isReadOnly={isReadOnly}
+              value={metrics.presencia_hongos || 'Seleccionar...'} 
+              onPress={() => openPicker(phaseId, 'presencia_hongos', ['Ninguna', 'Baja', 'Moderada'])}
+              isReadOnly={isFieldReadOnly('presencia_hongos')}
             />
           </View>
         );
       case 'Vivero':
         return (
           <View style={styles.metricsList}>
-            <MetricRow label="Hojas verdaderas" value={metrics.pares_hojas_verdaderas} onChange={(v: string) => handleUpdateField(phaseId, 'pares_hojas_verdaderas', v)} isReadOnly={isReadOnly} />
-            <MetricRow label="Altura (cm)" value={metrics.altura_plantula} onChange={(v: string) => handleUpdateField(phaseId, 'altura_plantula', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Hojas verdaderas" value={metrics.pares_hojas_verdaderas} onChange={(v: string) => handleUpdateField(phaseId, 'pares_hojas_verdaderas', v)} isReadOnly={isFieldReadOnly('pares_hojas_verdaderas')} />
+            <MetricRow label="Altura (cm)" value={metrics.altura_plantula} onChange={(v: string) => handleUpdateField(phaseId, 'altura_plantula', v)} isReadOnly={isFieldReadOnly('altura_plantula')} />
             <MetricSelect 
               label="Vigor radicular" 
               value={metrics.vigor_radicular || 'Seleccionar...'} 
-              onPress={() => !isReadOnly && openPicker(phaseId, 'vigor_radicular', ['Óptimo', 'Bueno', 'Regular'])}
-              isReadOnly={isReadOnly}
+              onPress={() => openPicker(phaseId, 'vigor_radicular', ['Óptimo', 'Bueno', 'Regular'])}
+              isReadOnly={isFieldReadOnly('vigor_radicular')}
               highlight={true}
             />
           </View>
@@ -515,10 +655,10 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
       case 'Crecimiento':
         return (
           <View style={styles.metricsList}>
-            <MetricRow label="Índice Altura (m)" value={metrics.indice_crecimiento} onChange={(v: string) => handleUpdateField(phaseId, 'indice_crecimiento', v)} isReadOnly={isReadOnly} />
-            <MetricRow label="Grosor tallo (mm)" value={metrics.grosor_tallo} onChange={(v: string) => handleUpdateField(phaseId, 'grosor_tallo', v)} isReadOnly={isReadOnly} />
-            <MetricRow label="Bandolas" value={metrics.formacion_bandolas} onChange={(v: string) => handleUpdateField(phaseId, 'formacion_bandolas', v)} isReadOnly={isReadOnly} />
-            <MetricRow label="Incidencia foliar (%)" value={metrics.incidencia_foliar} onChange={(v: string) => handleUpdateField(phaseId, 'incidencia_foliar', v)} isReadOnly={isReadOnly} color="#EA580C" />
+            <MetricRow label="Índice Altura (m)" value={metrics.indice_crecimiento} onChange={(v: string) => handleUpdateField(phaseId, 'indice_crecimiento', v)} isReadOnly={isFieldReadOnly('indice_crecimiento')} />
+            <MetricRow label="Grosor tallo (mm)" value={metrics.grosor_tallo} onChange={(v: string) => handleUpdateField(phaseId, 'grosor_tallo', v)} isReadOnly={isFieldReadOnly('grosor_tallo')} />
+            <MetricRow label="Bandolas" value={metrics.formacion_bandolas} onChange={(v: string) => handleUpdateField(phaseId, 'formacion_bandolas', v)} isReadOnly={isFieldReadOnly('formacion_bandolas')} />
+            <MetricRow label="Incidencia foliar (%)" value={metrics.incidencia_foliar} onChange={(v: string) => handleUpdateField(phaseId, 'incidencia_foliar', v)} isReadOnly={isFieldReadOnly('incidencia_foliar')} color="#EA580C" />
           </View>
         );
       case 'Floracion':
@@ -527,20 +667,20 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
             <MetricSelect 
               label="Intensidad de Floración" 
               value={metrics.intensidad_floracion || 'Seleccionar...'} 
-              onPress={() => !isReadOnly && openPicker(phaseId, 'intensidad_floracion', ['Abundante', 'Media', 'Escasa'])}
-              isReadOnly={isReadOnly}
+              onPress={() => openPicker(phaseId, 'intensidad_floracion', ['Abundante', 'Media', 'Escasa'])}
+              isReadOnly={isFieldReadOnly('intensidad_floracion')}
             />
             <MetricSelect 
               label="Uniformidad" 
               value={metrics.uniformidad_floracion || 'Seleccionar...'} 
-              onPress={() => !isReadOnly && openPicker(phaseId, 'uniformidad_floracion', ['Homogénea', 'Irregular'])}
-              isReadOnly={isReadOnly}
+              onPress={() => openPicker(phaseId, 'uniformidad_floracion', ['Homogénea', 'Irregular'])}
+              isReadOnly={isFieldReadOnly('uniformidad_floracion')}
             />
             <MetricSelect 
               label="Estrés Hídrico Post-Floración" 
               value={metrics.estres_hidrico || 'Seleccionar...'} 
-              onPress={() => !isReadOnly && openPicker(phaseId, 'estres_hidrico', ['Seco (Ideal)', 'Lluvia ligera', 'Tormenta (Pérdida)'])}
-              isReadOnly={isReadOnly}
+              onPress={() => openPicker(phaseId, 'estres_hidrico', ['Seco (Ideal)', 'Lluvia ligera', 'Tormenta (Pérdida)'])}
+              isReadOnly={isFieldReadOnly('estres_hidrico')}
               highlight={true}
             />
           </View>
@@ -548,15 +688,15 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
       case 'Maduracion':
         return (
           <View style={styles.metricsList}>
-            <MetricRow label="Porcentaje de Cuajado (%)" value={metrics.porcentaje_cuajado} onChange={(v: string) => handleUpdateField(phaseId, 'porcentaje_cuajado', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Porcentaje de Cuajado (%)" value={metrics.porcentaje_cuajado} onChange={(v: string) => handleUpdateField(phaseId, 'porcentaje_cuajado', v)} isReadOnly={isFieldReadOnly('porcentaje_cuajado')} />
             <MetricSelect 
               label="Homogeneidad de Maduración" 
               value={metrics.homogeneidad_maduracion || 'Seleccionar...'} 
-              onPress={() => !isReadOnly && openPicker(phaseId, 'homogeneidad_maduracion', ['Uniforme', 'Irregular'])}
-              isReadOnly={isReadOnly}
+              onPress={() => openPicker(phaseId, 'homogeneidad_maduracion', ['Uniforme', 'Irregular'])}
+              isReadOnly={isFieldReadOnly('homogeneidad_maduracion')}
             />
-            <MetricRow label="Incidencia de Broca (%)" value={metrics.incidencia_broca} onChange={(v: string) => handleUpdateField(phaseId, 'incidencia_broca', v)} isReadOnly={isReadOnly} color="#EA580C" />
-            <MetricRow label="Grados Brix Prematuros" value={metrics.grados_brix} onChange={(v: string) => handleUpdateField(phaseId, 'grados_brix', v)} isReadOnly={isReadOnly} />
+            <MetricRow label="Incidencia de Broca (%)" value={metrics.incidencia_broca} onChange={(v: string) => handleUpdateField(phaseId, 'incidencia_broca', v)} isReadOnly={isFieldReadOnly('incidencia_broca')} color="#EA580C" />
+            <MetricRow label="Grados Brix Prematuros" value={metrics.grados_brix} onChange={(v: string) => handleUpdateField(phaseId, 'grados_brix', v)} isReadOnly={isFieldReadOnly('grados_brix')} />
           </View>
         );
       default:
@@ -572,7 +712,8 @@ const MetricRow = ({ label, value, onChange, isReadOnly, color }: any) => (
       <TextInput
         style={[
           styles.standardInput, 
-          color && { color, fontWeight: '700' }
+          color && { color, fontWeight: '700' },
+          isReadOnly && { color: '#9CA3AF' }
         ]}
         keyboardType="numeric"
         value={value?.toString() || ''}

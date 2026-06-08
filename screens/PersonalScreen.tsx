@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   ScrollView,
+  BackHandler,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { 
@@ -76,6 +77,38 @@ const PersonalScreen = ({ navigation }: any) => {
   // Estados para el modal de detalle
   const [selectedWorker, setSelectedWorker] = useState<any>(null);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
+
+  // Control de gestos y botón físico de atrás
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Dashboard');
+        }
+        return true; 
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+        if (e.data.action.type === 'GO_BACK' || e.data.action.type === 'POP') {
+          e.preventDefault();
+          if (navigation.canGoBack()) {
+            navigation.dispatch(e.data.action);
+          } else {
+            navigation.navigate('Dashboard');
+          }
+        }
+      });
+
+      return () => {
+        backHandler.remove();
+        unsubscribe();
+      };
+    }, [navigation])
+  );
 
   const fetchWorkersAndRoles = useCallback(async () => {
     try {
