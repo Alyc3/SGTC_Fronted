@@ -30,7 +30,7 @@ export default function App() {
 
     // Disparador: Sincronización al iniciar o volver del segundo plano
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
+      if (nextAppState === 'active' && isAuthenticated) {
         syncWorker.syncPendingData();
       }
     });

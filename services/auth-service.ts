@@ -68,17 +68,23 @@ authApi.interceptors.response.use(
       try {
         const { useAuthStore } = require('../store/authStore');
         const { CustomAlert } = require('../components/GlobalAlert');
+        const authStore = useAuthStore.getState();
 
-        // Solo lanzamos la alerta si no hay una ya visible (para evitar duplicados)
-        CustomAlert.show(
-          'ERROR',
-          'Sesión Caducada',
-          'Tu sesión ha expirado o es inválida. Por favor, inicia sesión nuevamente.',
-          async () => {
-            await useAuthStore.getState().logout();
-            console.log('401 detectado y aceptado. Usuario redirigido a login.');
-          }
-        );
+        if (authStore.isAuthenticated) {
+          // Solo lanzamos la alerta si no hay una ya visible (para evitar duplicados)
+          CustomAlert.show(
+            'ERROR',
+            'Sesión Caducada',
+            'Tu sesión ha expirado o es inválida. Por favor, inicia sesión nuevamente.',
+            async () => {
+              await authStore.logout();
+              console.log('401 detectado y aceptado. Usuario redirigido a login.');
+            }
+          );
+        } else {
+          // Aseguramos que el token se limpie si falló por 401 sin estar autenticado
+          await authStore.logout();
+        }
       } catch (logoutError) {
         console.error('Error crítico en interceptor 401:', logoutError);
       }
