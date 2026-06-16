@@ -103,13 +103,13 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
 
   const checkIncidenceAlerts = (phaseId: string, metrics: any) => {
     if (phaseId === 'Germinacion' && metrics.presencia_hongos && metrics.presencia_hongos !== 'Ninguna') {
-      CustomAlert.show('ALERTA FITOSANITARIA', 'Presencia de Hongos', `Se ha detectado una presencia ${metrics.presencia_hongos.toLowerCase()} de hongos. Se recomienda aplicar tratamiento fungicida preventivo.`);
+      CustomAlert.show('ALERTA', 'Presencia de Hongos', `Se ha detectado una presencia ${metrics.presencia_hongos.toLowerCase()} de hongos. Se recomienda aplicar tratamiento fungicida preventivo.`);
     }
     if (phaseId === 'Crecimiento' && metrics.incidencia_foliar && parseFloat(metrics.incidencia_foliar) > 10.0) {
       CustomAlert.show('ALERTA', 'Alta Incidencia Foliar', 'La incidencia foliar supera el 10%. Revise el estado nutricional y sanitario de las hojas.');
     }
     if (phaseId === 'Maduracion' && metrics.incidencia_broca && parseFloat(metrics.incidencia_broca) > 5.0) {
-      CustomAlert.show('ALERTA DE PLAGA', 'Incidencia de Broca Crítica', 'La incidencia de Broca es superior al 5.0%. Se requiere la creación de una incidencia técnica obligatoria.');
+      CustomAlert.show('ALERTA', 'Incidencia de Broca Crítica', 'La incidencia de Broca es superior al 5.0%. Se requiere la creación de una incidencia técnica obligatoria.');
     }
   };
 
@@ -658,10 +658,10 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
             {pickerModal.options.map((opt) => (
               <TouchableOpacity 
                 key={opt} 
-                style={styles.modalOption}
+                style={styles.optionItem}
                 onPress={() => selectOption(opt)}
               >
-                <Text style={styles.modalOptionText}>{opt}</Text>
+                <Text style={styles.optionText}>{opt}</Text>
               </TouchableOpacity>
             ))}
           </View>
