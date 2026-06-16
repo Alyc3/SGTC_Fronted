@@ -313,6 +313,18 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'En_Produccion':
+        return { bg: '#E67E22', text: '#ffffff' }; // Orange for En Produccion
+      case 'Completada':
+        return { bg: '#3a6843', text: '#ffffff' }; // Green for Completada
+      case 'Reservado':
+      default:
+        return { bg: '#827470', text: '#ffffff' }; // Gray for Reservado
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -391,9 +403,9 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
                     >
                       <View style={styles.existingLotHeader}>
                         <Text style={styles.existingLotCode}>{lote.codigo}</Text>
-                        <View style={[styles.statusBadgeSmall, lote.estado_lote === 'En_Produccion' && { backgroundColor: Theme.colors.secondaryContainer }]}>
-                          <Text style={[styles.statusTextSmall, lote.estado_lote === 'En_Produccion' && { color: Theme.colors.secondary }]}>
-                            {lote.estado_lote.toUpperCase()}
+                        <View style={[styles.statusBadgeSmall, { backgroundColor: getStatusStyle(lote.estado_lote).bg }]}>
+                          <Text style={[styles.statusTextSmall, { color: getStatusStyle(lote.estado_lote).text }]}>
+                            {lote.estado_lote.replace('_', ' ').toUpperCase()}
                           </Text>
                         </View>
                       </View>
@@ -764,8 +776,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fabText: {
-    color: Theme.colors.white,
     ...Theme.typography.label,
+    color: Theme.colors.white,
     fontSize: 18,
     fontWeight: '800',
   },

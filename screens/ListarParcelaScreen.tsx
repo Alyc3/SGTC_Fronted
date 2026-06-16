@@ -80,7 +80,7 @@ const ListarParcelaScreen = ({ navigation }: any) => {
       CustomAlert.show(
         'ALERTA',
         'Restricción de Baja',
-        `No se puede eliminar la parcela "${nombre}" porque tiene lotes en producción activa. Finalice los ciclos de cosecha antes de eliminar la parcela.`
+        `No se puede eliminar la parcela "${nombre}" porque tiene lotes en producción activa.`
       );
       return;
     }

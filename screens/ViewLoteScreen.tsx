@@ -28,6 +28,7 @@ import {
   PlayCircle,
   PauseCircle,
   CheckCircle2,
+  Clock,
   AlertCircle,
   FileText,
   Map,
@@ -659,6 +660,24 @@ const tarifaGeneral = pesoTotal > 0
     </Modal>
   );
 
+  // Mapeo de colores para estados
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Completada':
+      case 'Completado':
+        return '#3a6843'; // Plantation Green
+      case 'En_Proceso':
+      case 'En_Produccion':
+      case 'En producción':
+        return '#E67E22'; // Orange
+      case 'Pendiente':
+      case 'Reservado':
+      case 'Creado':
+      default:
+        return '#827470'; // Gray
+    }
+  };
+
   const renderStageCard = (title: string, index: number) => {
     if (title === 'Administración') return null;
 
@@ -673,6 +692,9 @@ const tarifaGeneral = pesoTotal > 0
 
     const isActive = status === 'En_Proceso';
     const isCompleted = status === 'Completada';
+    const isPending = status === 'Pendiente';
+
+    const statusColor = getStatusColor(status);
 
     const stagePersonnelRaw = assignedPersonnel.filter(p => p.etapa === title);
     const stagePersonnel = getUniquePersonnel(stagePersonnelRaw);
@@ -702,11 +724,18 @@ const tarifaGeneral = pesoTotal > 0
             <View style={{ flex: 1 }}>
               <View style={styles.stageTitleRow}>
                 <Text style={[styles.stageTitle, isActive && { color: Theme.colors.primary }]}>{title}</Text>
-                {isCompleted && <CheckCircle2 size={16} color={Theme.colors.secondary} />}
-                {isActive && <Activity size={16} color={Theme.colors.primary} />}
+                {isCompleted && <CheckCircle2 size={16} color={statusColor} />}
+                {isActive && <Activity size={16} color={statusColor} />}
+                {isPending && isEnabled && <Clock size={16} color={statusColor} />}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor, width: 8, height: 8 }]} />
+                <Text style={[styles.stageDate, { color: statusColor, fontWeight: '800' }]}>
+                  {status.replace('_', ' ').toUpperCase()}
+                </Text>
               </View>
               {stageInfo?.fecha_inicio && (
-                <Text style={styles.stageDate}>
+                <Text style={[styles.stageDate, { marginTop: 2 }]}>
                   {isCompleted ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}` : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
                 </Text>
               )}
@@ -803,11 +832,9 @@ const tarifaGeneral = pesoTotal > 0
           <View style={styles.stickyStatus}>
             <View style={[
               styles.statusDot, 
-              lote?.estado_lote === 'En_Produccion' ? { backgroundColor: Theme.colors.secondary } : 
-              lote?.estado_lote === 'Completada' ? { backgroundColor: Theme.colors.primary } :
-              { backgroundColor: Theme.colors.tertiary }
+              { backgroundColor: getStatusColor(lote?.estado_lote || 'Reservado') }
             ]} />
-            <Text style={styles.stickyStatusText}>
+            <Text style={[styles.stickyStatusText, { color: getStatusColor(lote?.estado_lote || 'Reservado') }]}>
               {(lote?.estado_lote || 'RESERVADO').replace('_', ' ').toUpperCase()}
             </Text>
           </View>
@@ -848,9 +875,7 @@ const tarifaGeneral = pesoTotal > 0
             <View style={styles.heroBadgeRow}>
               <View style={[
                 styles.heroStatusBadge, 
-                lote?.estado_lote === 'En_Produccion' ? styles.bgSuccess : 
-                lote?.estado_lote === 'Completada' ? { backgroundColor: Theme.colors.primary } :
-                styles.bgTertiary
+                { backgroundColor: getStatusColor(lote?.estado_lote || 'Reservado') }
               ]}>
                 <Text style={styles.heroStatusText}>
                   {(lote?.estado_lote || 'RESERVADO').replace('_', ' ').toUpperCase()}

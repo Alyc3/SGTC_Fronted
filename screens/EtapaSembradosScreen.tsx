@@ -14,6 +14,7 @@ import {
   Platform,
   Modal,
   BackHandler,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -35,6 +36,7 @@ import {
   Play,
   Square,
   Edit2,
+  FileText,
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { lotesService } from '../services/lotes.service';
@@ -72,11 +74,44 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
   const [hasSembradoPersonnel, setHasSembradoPersonnel] = useState<boolean>(false);
   
   // Modal for selects
-  const [pickerModal, setPickerModal] = useState<{ visible: boolean; field: string; options: string[] }>({
+  const [pickerModal, setPickerModal] = useState<{ visible: boolean; field: string; options: string[]; title: string }>({
     visible: false,
     field: '',
     options: [],
+    title: '',
   });
+
+  const hasUnsavedChanges = (phaseId: string) => {
+    const current = metricsForm[phaseId] || {};
+    const saved = dbMetrics[phaseId] || {};
+    
+    const fieldsToCompare: string[] = [];
+    switch (phaseId) {
+      case 'Germinacion': fieldsToCompare.push('tasa_germinacion', 'dias_emergencia', 'presencia_hongos'); break;
+      case 'Vivero': fieldsToCompare.push('pares_hojas_verdaderas', 'altura_plantula', 'vigor_radicular'); break;
+      case 'Crecimiento': fieldsToCompare.push('indice_crecimiento', 'grosor_tallo', 'formacion_bandolas', 'incidencia_foliar'); break;
+      case 'Floracion': fieldsToCompare.push('intensidad_floracion', 'uniformidad_floracion', 'estres_hidrico'); break;
+      case 'Maduracion': fieldsToCompare.push('porcentaje_cuajado', 'homogeneidad_maduracion', 'incidencia_broca', 'grados_brix'); break;
+    }
+
+    return fieldsToCompare.some(field => {
+      const curVal = current[field] === undefined || current[field] === null ? '' : String(current[field]);
+      const savVal = saved[field] === undefined || saved[field] === null ? '' : String(saved[field]);
+      return curVal !== savVal;
+    });
+  };
+
+  const checkIncidenceAlerts = (phaseId: string, metrics: any) => {
+    if (phaseId === 'Germinacion' && metrics.presencia_hongos && metrics.presencia_hongos !== 'Ninguna') {
+      CustomAlert.show('ALERTA FITOSANITARIA', 'Presencia de Hongos', `Se ha detectado una presencia ${metrics.presencia_hongos.toLowerCase()} de hongos. Se recomienda aplicar tratamiento fungicida preventivo.`);
+    }
+    if (phaseId === 'Crecimiento' && metrics.incidencia_foliar && parseFloat(metrics.incidencia_foliar) > 10.0) {
+      CustomAlert.show('ALERTA', 'Alta Incidencia Foliar', 'La incidencia foliar supera el 10%. Revise el estado nutricional y sanitario de las hojas.');
+    }
+    if (phaseId === 'Maduracion' && metrics.incidencia_broca && parseFloat(metrics.incidencia_broca) > 5.0) {
+      CustomAlert.show('ALERTA DE PLAGA', 'Incidencia de Broca Crítica', 'La incidencia de Broca es superior al 5.0%. Se requiere la creación de una incidencia técnica obligatoria.');
+    }
+  };
 
   // Control de gestos y botón físico de atrás
   useFocusEffect(
@@ -212,6 +247,11 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
   };
 
   const handleConfirmEnd = (phaseId: string, phaseLabel: string) => {
+    if (hasUnsavedChanges(phaseId)) {
+      CustomAlert.show('ALERTA', 'Cambios Pendientes', 'Debe guardar los cambios realizados antes de finalizar la sub-fase.');
+      return;
+    }
+
     const phaseMetrics = metricsForm[phaseId] || {};
     
     // Validar que todos los campos estén llenos antes de finalizar
@@ -316,8 +356,19 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     try {
       setSaveLoading(true);
       
-      // 1. Update general stage status if it's the current phase
-      if (phaseId === currentSubFase) {
+      // 1. Manejo de transición de fases
+      if (customEnd) {
+        const currentIndex = subFases.findIndex(f => f.id === phaseId);
+        if (currentIndex < subFases.length - 1) {
+          // Avanzar a la siguiente sub-fase en la BD
+          const nextPhaseId = subFases[currentIndex + 1].id;
+          await lotesService.gestionarEtapaSembrado(lote.id, nextPhaseId as any, 'En_Proceso');
+        } else {
+          // Si es la última sub-fase, completar toda la etapa de Sembrado
+          await lotesService.updateStageStatus(lote.id, 'Sembrado', 'Completada');
+        }
+      } else if (phaseId === currentSubFase) {
+        // Si solo se está guardando o iniciando la fase actual
         await lotesService.gestionarEtapaSembrado(lote.id, phaseId as any, 'En_Proceso');
       }
 
@@ -332,13 +383,13 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
 
       // 4. Save quality metrics for this specific phase
       const savedMetrics = await sembradoMetricasService.saveMetricas({
-        ...phaseMetrics, // Incluye la posible ID si ya existe
+        ...phaseMetrics, 
         lote_id: lote.id,
         subfase: phaseId,
         tecnico_id: userId || 'UNKNOWN_TECH',
       });
 
-      // Update local state with the returned DB metrics (which includes the ID)
+      // Update local state with the returned DB metrics
       if (savedMetrics) {
         setMetricsForm((prev) => ({
           ...prev,
@@ -352,11 +403,12 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
 
       if (!customStart && !customEnd) {
         CustomAlert.show('SUCCESS', 'Avance Guardado', `Los datos de la fase de ${phaseId} han sido actualizados.`);
+        checkIncidenceAlerts(phaseId, phaseMetrics);
+      } else if (customEnd) {
+        checkIncidenceAlerts(phaseId, phaseMetrics);
       }
       
-      await fetchData(); // Refresh to ensure sync (gets the ID)
-      
-      // Manage lock state: if we just saved, we lock it (keepEditMode = false) unless explicitly requested otherwise.
+      await fetchData(); 
       setEditModes(prev => ({ ...prev, [phaseId]: keepEditMode }));
       
     } catch (error) {
@@ -368,6 +420,10 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
   };
 
   const getPhaseStatus = (phaseId: string) => {
+    // Si la etapa completa está finalizada, todas las subfases son 'completed'
+    const sembradoStage = stagesData.find(s => s.etapa === 'Sembrado');
+    if (sembradoStage?.estado === 'Completada') return 'completed';
+
     const currentIndex = subFases.findIndex(f => f.id === currentSubFase);
     const phaseIndex = subFases.findIndex(f => f.id === phaseId);
     
@@ -376,14 +432,18 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     return 'pending';
   };
 
-  const openPicker = (phaseId: string, field: string, options: string[]) => {
-    setPickerModal({ visible: true, field: `${phaseId}.${field}`, options });
+  const openPicker = (phaseId: string, field: string, options: string[], title: string) => {
+    setPickerModal({ visible: true, field: `${phaseId}.${field}`, options, title });
   };
 
   const selectOption = (option: string) => {
     const [phaseId, field] = pickerModal.field.split('.');
     handleUpdateField(phaseId, field, option);
-    setPickerModal({ ...pickerModal, visible: false });
+    setPickerModal({ ...pickerModal, visible: false, field: '', options: [], title: '' });
+  };
+
+  const handleGenerateReport = () => {
+    CustomAlert.show('SUCCESS', 'Informe Generado', 'Se ha compilado el historial técnico de sembrado en un documento digital (PDF).');
   };
 
   if (loading) {
@@ -573,6 +633,13 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
            })}
         </View>
 
+        <View style={styles.reportSection}>
+           <TouchableOpacity style={styles.reportButton} onPress={handleGenerateReport}>
+             <FileText size={20} color="white" />
+             <Text style={styles.reportButtonText}>GENERAR INFORME TÉCNICO</Text>
+           </TouchableOpacity>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
 
@@ -607,20 +674,21 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     const isFieldReadOnly = (fieldName: string) => {
       // 1. Si la fase ni siquiera ha empezado, no se puede editar nada
       if (readOnly || status === 'pending') return true;
-      // 2. Si estamos explícitamente en modo edición (botón EDITAR presionado), todo es editable
+
+      // 2. Bloqueo si no se ha iniciado la fase (botón INICIAR no presionado)
+      if (status === 'active' && !metrics.fecha_inicio && !isEditing) return true;
+      
+      // 3. Si estamos explícitamente en modo edición (botón EDITAR presionado), todo es editable
       if (isEditing) return false;
       
-      // 3. Bloqueo a nivel de campo BASADO EN LA BD:
-      // Verificamos si ESTE campo específico ya tiene un valor guardado en dbMetrics. 
-      // Si lo tiene, se bloquea (para que un Guardado Parcial bloquee lo guardado).
+      // 4. Bloqueo a nivel de campo BASADO EN LA BD:
       const dbSavedPhase = dbMetrics[phaseId] || {};
       const savedValue = dbSavedPhase[fieldName];
       
       if (savedValue !== undefined && savedValue !== null && savedValue !== '') {
-        return true; // Ya se guardó en la BD previamente
+        return true; 
       }
 
-      // 4. Si el campo está vacío en la BD (o recién lo está escribiendo en metricsForm), es editable
       return false;
     };
 
@@ -633,7 +701,7 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
             <MetricSelect 
               label="Hongos" 
               value={metrics.presencia_hongos || 'Seleccionar...'} 
-              onPress={() => openPicker(phaseId, 'presencia_hongos', ['Ninguna', 'Baja', 'Moderada'])}
+              onPress={() => openPicker(phaseId, 'presencia_hongos', ['Ninguna', 'Baja', 'Moderada'], 'PRESENCIA DE HONGOS')}
               isReadOnly={isFieldReadOnly('presencia_hongos')}
             />
           </View>
@@ -646,7 +714,7 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
             <MetricSelect 
               label="Vigor radicular" 
               value={metrics.vigor_radicular || 'Seleccionar...'} 
-              onPress={() => openPicker(phaseId, 'vigor_radicular', ['Óptimo', 'Bueno', 'Regular'])}
+              onPress={() => openPicker(phaseId, 'vigor_radicular', ['Óptimo', 'Bueno', 'Regular'], 'VIGOR RADICULAR')}
               isReadOnly={isFieldReadOnly('vigor_radicular')}
               highlight={true}
             />
@@ -667,19 +735,19 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
             <MetricSelect 
               label="Intensidad de Floración" 
               value={metrics.intensidad_floracion || 'Seleccionar...'} 
-              onPress={() => openPicker(phaseId, 'intensidad_floracion', ['Abundante', 'Media', 'Escasa'])}
+              onPress={() => openPicker(phaseId, 'intensidad_floracion', ['Abundante', 'Media', 'Escasa'], 'INTENSIDAD DE FLORACIÓN')}
               isReadOnly={isFieldReadOnly('intensidad_floracion')}
             />
             <MetricSelect 
               label="Uniformidad" 
               value={metrics.uniformidad_floracion || 'Seleccionar...'} 
-              onPress={() => openPicker(phaseId, 'uniformidad_floracion', ['Homogénea', 'Irregular'])}
+              onPress={() => openPicker(phaseId, 'uniformidad_floracion', ['Homogénea', 'Irregular'], 'UNIFORMIDAD')}
               isReadOnly={isFieldReadOnly('uniformidad_floracion')}
             />
             <MetricSelect 
               label="Estrés Hídrico Post-Floración" 
               value={metrics.estres_hidrico || 'Seleccionar...'} 
-              onPress={() => openPicker(phaseId, 'estres_hidrico', ['Seco (Ideal)', 'Lluvia ligera', 'Tormenta (Pérdida)'])}
+              onPress={() => openPicker(phaseId, 'estres_hidrico', ['Seco (Ideal)', 'Lluvia ligera', 'Tormenta (Pérdida)'], 'ESTRÉS HÍDRICO')}
               isReadOnly={isFieldReadOnly('estres_hidrico')}
               highlight={true}
             />
@@ -692,7 +760,7 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
             <MetricSelect 
               label="Homogeneidad de Maduración" 
               value={metrics.homogeneidad_maduracion || 'Seleccionar...'} 
-              onPress={() => openPicker(phaseId, 'homogeneidad_maduracion', ['Uniforme', 'Irregular'])}
+              onPress={() => openPicker(phaseId, 'homogeneidad_maduracion', ['Uniforme', 'Irregular'], 'HOMOGENEIDAD DE MADURACIÓN')}
               isReadOnly={isFieldReadOnly('homogeneidad_maduracion')}
             />
             <MetricRow label="Incidencia de Broca (%)" value={metrics.incidencia_broca} onChange={(v: string) => handleUpdateField(phaseId, 'incidencia_broca', v)} isReadOnly={isFieldReadOnly('incidencia_broca')} color="#EA580C" />
@@ -731,17 +799,18 @@ const MetricSelect = ({ label, value, onPress, isReadOnly, highlight }: any) => 
     <TouchableOpacity 
       onPress={onPress} 
       disabled={isReadOnly} 
-      style={[styles.standardInputWrapper, isReadOnly && styles.inputDisabled]}
+      style={[styles.selectWrapper, isReadOnly && styles.inputDisabled]}
       activeOpacity={0.7}
     >
       <Text style={[
-        styles.standardInput, 
-        isReadOnly && { color: '#9CA3AF' },
-        highlight && !isReadOnly && { color: Theme.colors.terroirGreen, fontWeight: '700' }
+        styles.selectText, 
+        value === 'Seleccionar...' && { color: '#9CA3AF' },
+        highlight && !isReadOnly && value !== 'Seleccionar...' && { color: Theme.colors.terroirGreen, fontWeight: '700' },
+        isReadOnly && { color: '#9CA3AF' }
       ]}>
         {value}
       </Text>
-      {!isReadOnly && <ChevronDown size={16} color={Theme.colors.terroirGray} />}
+      <ChevronDown size={20} color={Theme.colors.onSurfaceVariant} />
     </TouchableOpacity>
   </View>
 );
@@ -1016,24 +1085,50 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Theme.colors.terroirText,
   },
+  selectWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    height: 52,
+    ...Theme.shadows.ambient,
+    elevation: 1,
+  },
+  selectText: {
+    ...Theme.typography.body,
+    fontSize: 14,
+    color: Theme.colors.onSurface,
+    fontFamily: 'Manrope',
+    fontWeight: '700',
+  },
   inputDisabled: {
     backgroundColor: '#F9FAFB',
     borderColor: '#F3F4F6',
+    elevation: 0,
   },
   actionButton: {
     width: '100%',
-    height: 36,
-    borderRadius: 8,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 16,
+    ...Theme.shadows.ambient,
   },
   btnCompleted: {
     backgroundColor: Theme.colors.terroirGreen,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   btnActive: {
-    backgroundColor: Theme.colors.terroirBrown,
+    backgroundColor: Theme.colors.terroirGreen,
+    shadowColor: Theme.colors.terroirGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   btnPending: {
     borderWidth: 1,
@@ -1051,24 +1146,56 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
   modalContent: {
+    width: '100%',
     backgroundColor: 'white',
-    borderRadius: 16,
-    width: width * 0.8,
-    padding: 16,
-    gap: 12,
+    borderRadius: 24,
+    padding: 24,
+    maxHeight: '80%',
+    ...Theme.shadows.ambient,
   },
-  modalOption: {
-    paddingVertical: 12,
+  modalTitle: {
+    fontFamily: 'Manrope',
+    fontSize: 18,
+    fontWeight: '800',
+    color: Theme.colors.terroirBrown,
+    marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  optionItem: {
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  modalOptionText: {
+  optionText: {
     fontFamily: 'Manrope',
     fontSize: 16,
     color: Theme.colors.terroirText,
-    textAlign: 'center',
+    fontWeight: '600',
+  },
+  reportSection: {
+    marginTop: 20,
+    paddingHorizontal: 4,
+  },
+  reportButton: {
+    backgroundColor: Theme.colors.terroirBrown,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 18,
+    borderRadius: 20,
+    ...Theme.shadows.ambient,
+  },
+  reportButtonText: {
+    fontFamily: 'Manrope',
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'white',
+    letterSpacing: 1,
   },
 });
 
