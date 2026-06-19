@@ -875,6 +875,12 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     paddingLeft: 4,
   },
+  noCapataz: {
+    fontSize: 10,
+    color: Theme.colors.outline,
+    fontStyle: 'italic',
+    paddingLeft: 4,
+  },
   emptyText: {
     fontSize: 10,
     color: Theme.colors.outline,
