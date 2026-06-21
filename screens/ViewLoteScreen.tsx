@@ -18,6 +18,9 @@ import {
   Calendar,
   Activity,
   CheckCircle2,
+  Clock,
+  AlertCircle,
+  FileText,
   Map,
   Users,
   Eye,
@@ -38,7 +41,6 @@ import { CustomAlert } from '../components/GlobalAlert';
 import { EtapaProcesoValues } from '../db/schema/enums';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuthStore } from '../store/authStore';
-import { HarvestModal } from './HarvestModal';
 
 const { width } = Dimensions.get('window');
 
@@ -175,8 +177,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   const [expandedWorkers, setExpandedWorkers] = useState<Record<string, boolean>>({});
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [stages, setStages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [harvestModalVisible, setHarvestModalVisible] = useState(false); // ← único estado de cosecha que queda
+  const [loading, setLoading] = useState(true); // ← único estado de cosecha que queda
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = scrollY.interpolate({
@@ -250,7 +251,9 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
 );
 
 
-  const openHarvestModal = () => setHarvestModalVisible(true); // ← simplificado
+  const openHarvestModal = () => {
+    navigation.navigate('EtapaCosecha', { lote, harvestPersonnel, assignedPersonnel });
+  };// ← simplificado
 
   const renderSensor = (icon: any, label: string, value: string, color: string) => (
     <View style={styles.sensorCard}>
@@ -263,6 +266,24 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
       </View>
     </View>
   );
+
+  // Mapeo de colores para estados
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Completada':
+      case 'Completado':
+        return '#3a6843'; // Plantation Green
+      case 'En_Proceso':
+      case 'En_Produccion':
+      case 'En producción':
+        return '#E67E22'; // Orange
+      case 'Pendiente':
+      case 'Reservado':
+      case 'Creado':
+      default:
+        return '#827470'; // Gray
+    }
+  };
 
   const renderStageCard = (title: string, index: number) => {
     if (title === 'Administración') return null;
@@ -278,6 +299,9 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
 
     const isActive = status === 'En_Proceso';
     const isCompleted = status === 'Completada';
+    const isPending = status === 'Pendiente';
+
+    const statusColor = getStatusColor(status);
 
     const stagePersonnelRaw = assignedPersonnel.filter(p => p.etapa === title);
     const stagePersonnel = getUniquePersonnel(stagePersonnelRaw);
@@ -307,14 +331,19 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
             <View style={{ flex: 1 }}>
               <View style={styles.stageTitleRow}>
                 <Text style={[styles.stageTitle, isActive && { color: Theme.colors.primary }]}>{title}</Text>
-                {isCompleted && <CheckCircle2 size={16} color={Theme.colors.secondary} />}
-                {isActive && <Activity size={16} color={Theme.colors.primary} />}
+                {isCompleted && <CheckCircle2 size={16} color={statusColor} />}
+                {isActive && <Activity size={16} color={statusColor} />}
+                {isPending && isEnabled && <Clock size={16} color={statusColor} />}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor, width: 8, height: 8 }]} />
+                <Text style={[styles.stageDate, { color: statusColor, fontWeight: '800' }]}>
+                  {status.replace('_', ' ').toUpperCase()}
+                </Text>
               </View>
               {stageInfo?.fecha_inicio && (
-                <Text style={styles.stageDate}>
-                  {isCompleted
-                    ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}`
-                    : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
+                <Text style={[styles.stageDate, { marginTop: 2 }]}>
+                  {isCompleted ? `Fin: ${new Date(stageInfo.fecha_final).toLocaleDateString()}` : `Inicio: ${new Date(stageInfo.fecha_inicio).toLocaleDateString()}`}
                 </Text>
               )}
             </View>
@@ -411,8 +440,9 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
               lote?.estado_lote === 'En_Produccion' ? { backgroundColor: Theme.colors.secondary } :
               lote?.estado_lote === 'Completada' ? { backgroundColor: Theme.colors.primary } :
               { backgroundColor: Theme.colors.tertiary },
+              { backgroundColor: getStatusColor(lote?.estado_lote || 'Reservado') }
             ]} />
-            <Text style={styles.stickyStatusText}>
+            <Text style={[styles.stickyStatusText, { color: getStatusColor(lote?.estado_lote || 'Reservado') }]}>
               {(lote?.estado_lote || 'RESERVADO').replace('_', ' ').toUpperCase()}
             </Text>
           </View>
@@ -453,6 +483,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
                 lote?.estado_lote === 'En_Produccion' ? styles.bgSuccess :
                 lote?.estado_lote === 'Completada' ? { backgroundColor: Theme.colors.primary } :
                 styles.bgTertiary,
+                { backgroundColor: getStatusColor(lote?.estado_lote || 'Reservado') }
               ]}>
                 <Text style={styles.heroStatusText}>
                   {(lote?.estado_lote || 'RESERVADO').replace('_', ' ').toUpperCase()}
@@ -586,17 +617,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         </View>
       </Animated.ScrollView>
 
-      {/* ← Modal de cosecha ahora es un componente externo */}
-      <HarvestModal
-        visible={harvestModalVisible}
-        onClose={() => setHarvestModalVisible(false)}
-        onSuccess={fetchData}
-        loteId={lote.id}
-        harvestPersonnel={harvestPersonnel}
-        assignedPersonnel={assignedPersonnel}
-        rolesMap={rolesMap}
-        navigation={navigation}
-      />
+      
     </View>
   );
 };

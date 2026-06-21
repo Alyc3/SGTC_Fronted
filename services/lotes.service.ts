@@ -213,5 +213,73 @@ export const lotesService = {
       })
       .where(eq(lotes.id, loteId))
       .returning();
+  },
+
+  /**
+   * Filtra una lista de lotes basada en criterios técnicos y permisos de usuario.
+   */
+  filterLotes(
+    lotesList: any[],
+    filters: {
+      search?: string;
+      variedad?: string;
+      etapa?: string;
+      estado?: string;
+      capataz?: string;
+    },
+    userContext: {
+      userId: string | null;
+      isSuperUser: boolean;
+    }
+  ) {
+    let result = [...lotesList];
+
+    // 1. Control de Acceso: Si no es SuperUser, solo ve lo que tiene asignado
+    if (!userContext.isSuperUser && userContext.userId) {
+      result = result.filter(l => 
+        l.asignaciones?.some((a: any) => a.trabajador_id === userContext.userId)
+      );
+    }
+
+    // 2. Filtro por Búsqueda General (Código o Variedad)
+    if (filters.search) {
+      const query = filters.search.toLowerCase();
+      result = result.filter(l => 
+        l.codigo.toLowerCase().includes(query) ||
+        (l.semilla?.variedad?.valor || "").toLowerCase().includes(query)
+      );
+    }
+
+    // 3. Filtro por Variedad de Semilla
+    if (filters.variedad) {
+      result = result.filter(l => 
+        l.semilla?.variedad?.valor === filters.variedad
+      );
+    }
+
+    // 4. Filtro por Etapa del Proceso (Etapa activa en 'En_Proceso')
+    if (filters.etapa) {
+      result = result.filter(l => 
+        l.estados_etapas?.some((e: any) => e.etapa === filters.etapa && e.estado === 'En_Proceso')
+      );
+    }
+
+    // 5. Filtro por Estado de Lote
+    if (filters.estado) {
+      result = result.filter(l => l.estado_lote === filters.estado);
+    }
+
+    // 6. Filtro por Capataz (Solo permitido para Gerencia/Admin)
+    if (userContext.isSuperUser && filters.capataz) {
+      const capatazQuery = filters.capataz.toLowerCase();
+      result = result.filter(l => 
+        l.asignaciones?.some((a: any) => {
+          const fullName = `${a.trabajador?.first_name || ""} ${a.trabajador?.last_name || ""}`.toLowerCase();
+          return fullName.includes(capatazQuery);
+        })
+      );
+    }
+
+    return result;
   }
 };

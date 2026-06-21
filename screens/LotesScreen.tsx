@@ -19,13 +19,39 @@ import { db } from '../db';
 import { asignacion_personal } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { Theme } from '../theme';
-import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck, CheckCircle2, Clock, ChevronDown, ChevronUp, User, Users, Sprout } from 'lucide-react-native';
+import { Trash2, Edit, Search, Eye, Archive, Plus, Info, MapPin, Layers, ShieldCheck, CheckCircle2, Clock, ChevronDown, ChevronUp, User, Users, Sprout, Filter, X } from 'lucide-react-native';
 import { lotesService, parcelasService, rolesService } from '../services';
 import { useNavigation } from '@react-navigation/native';
 import { CustomAlert } from '../components/GlobalAlert';
 import { useAuthStore } from '../store/authStore';
 
 const { width } = Dimensions.get('window');
+
+const ETAPAS = ['Sembrado', 'Cosechado', 'Despulpado', 'Secado', 'Tostado', 'Empaquetado', 'Transporte'];
+const ESTADOS = [
+  { label: 'Reservado', value: 'Reservado' },
+  { label: 'En producción', value: 'En_Produccion' },
+  { label: 'Completado', value: 'Completada' }
+];
+
+const FilterChip = ({ label, active, onPress, onClear }: any) => (
+  <TouchableOpacity 
+    onPress={onPress}
+    style={[
+      styles.filterChip, 
+      active && { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary }
+    ]}
+  >
+    <Text style={[styles.filterChipText, active && { color: Theme.colors.onPrimary }]}>
+      {label}
+    </Text>
+    {active && onClear && (
+      <TouchableOpacity onPress={onClear} style={{ marginLeft: 4 }}>
+        <X size={12} color={Theme.colors.onPrimary} />
+      </TouchableOpacity>
+    )}
+  </TouchableOpacity>
+);
 
 const StatCard = ({ label, value, type = 'normal' }: any) => (
   <View style={[
@@ -76,12 +102,12 @@ const LoteCard = ({ item, onDelete, onEdit, onView, rolesMap }: any) => {
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'En_Produccion':
-        return { bg: Theme.colors.secondaryContainer, text: Theme.colors.onSecondaryContainer };
+        return { bg: '#E67E22', text: '#ffffff' }; // Orange for En Produccion
       case 'Completada':
-        return { bg: Theme.colors.surfaceContainerHigh, text: Theme.colors.onSurfaceVariant };
+        return { bg: '#3a6843', text: '#ffffff' }; // Green for Completada
       case 'Reservado':
       default:
-        return { bg: Theme.colors.tertiaryFixed, text: Theme.colors.onTertiaryFixedVariant };
+        return { bg: '#827470', text: '#ffffff' }; // Gray for Reservado
     }
   };
 
@@ -273,6 +299,11 @@ const LotesScreen = () => {
   );
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterEtapa, setFilterEtapa] = useState('');
+  const [filterEstado, setFilterEstado] = useState('');
+  const [filterVariedad, setFilterVariedad] = useState('');
+  const [filterCapataz, setFilterCapataz] = useState('');
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   
   // Selectores reactivos
@@ -331,31 +362,24 @@ const LotesScreen = () => {
     }
   }));
 
-  // Obtener asignaciones específicas del usuario para el filtrado de no-admins
-  const { data: userAssignments = [] } = useLiveQuery(
-    db.query.asignacion_personal.findMany({
-      where: userId ? eq(asignacion_personal.trabajador_id, userId) : undefined
-    }),
-    [userId]
-  );
-
   const sections = useMemo(() => {
-    // 1. Filtrado por Privilegios y Asignación
-    let filteredByAssignment = lotes || [];
-    
-    if (!isSuperUser) {
-      // Si no es Admin/Gerente, solo mostramos lo que tiene asignado
-      const assignedLotIds = (userAssignments || []).map(a => a.lote_id);
-      filteredByAssignment = (lotes || []).filter(l => assignedLotIds.includes(l.id));
-    }
-
-    // 2. Filtrado por Búsqueda (sobre el set ya filtrado por seguridad)
-    const filtered = filteredByAssignment.filter(l => 
-      l.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (l.semilla as any)?.variedad?.valor?.toLowerCase().includes(searchQuery.toLowerCase())
+    // 1. Filtrado usando el servicio (incluye lógica de permisos)
+    const filtered = lotesService.filterLotes(
+      lotes || [],
+      {
+        search: searchQuery,
+        etapa: filterEtapa,
+        estado: filterEstado,
+        variedad: filterVariedad,
+        capataz: filterCapataz
+      },
+      {
+        userId,
+        isSuperUser
+      }
     );
 
-    // 3. Agrupación por Parcelas
+    // 2. Agrupación por Parcelas
     const grouped = filtered.reduce((acc: any[], lot: any) => {
       const parcelaNombre = lot.parcela?.nombre || 'General';
       const section = acc.find(s => s.title === parcelaNombre);
@@ -368,12 +392,20 @@ const LotesScreen = () => {
     }, []);
 
     return grouped.sort((a, b) => a.title.localeCompare(b.title));
-  }, [lotes, userAssignments, isSuperUser, searchQuery]);
+  }, [lotes, userId, isSuperUser, searchQuery, filterEtapa, filterEstado, filterVariedad, filterCapataz]);
 
   const stats = {
     total: lotes.length,
     produccion: lotes.filter(l => l.estado_lote === 'En_Produccion').length,
     hectareas: lotes.reduce((sum, l) => sum + (l.hectareas_lote || 0), 0).toFixed(1)
+  };
+
+  const clearFilters = () => {
+    setFilterEtapa('');
+    setFilterEstado('');
+    setFilterVariedad('');
+    setFilterCapataz('');
+    setSearchQuery('');
   };
 
   const handleDelete = (id: string, codigo: string, isProduccion: boolean) => {
@@ -441,16 +473,81 @@ const LotesScreen = () => {
             <Text style={styles.title}>Inventario de Lotes</Text>
 
             {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <Search size={20} color={Theme.colors.outline} style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Buscar por código o nombre..."
-                placeholderTextColor={Theme.colors.outline}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
+            <View style={styles.searchRow}>
+              <View style={styles.searchContainer}>
+                <Search size={20} color={Theme.colors.outline} style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Código o variedad..."
+                  placeholderTextColor={Theme.colors.outline}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {(searchQuery !== '' || filterEtapa !== '' || filterEstado !== '' || filterVariedad !== '' || filterCapataz !== '') && (
+                  <TouchableOpacity onPress={clearFilters}>
+                    <X size={18} color={Theme.colors.outline} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <TouchableOpacity 
+                style={[styles.filterToggle, showFilters && { backgroundColor: Theme.colors.primaryContainer }]} 
+                onPress={() => setShowFilters(!showFilters)}
+              >
+                <Filter size={20} color={showFilters ? Theme.colors.primary : Theme.colors.outline} />
+              </TouchableOpacity>
             </View>
+
+            {/* Advanced Filters Panel */}
+            {showFilters && (
+              <View style={styles.filtersPanel}>
+                <Text style={styles.filterGroupLabel}>ETAPA ACTUAL</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+                  {ETAPAS.map(etapa => (
+                    <FilterChip 
+                      key={etapa} 
+                      label={etapa} 
+                      active={filterEtapa === etapa} 
+                      onPress={() => setFilterEtapa(filterEtapa === etapa ? '' : etapa)} 
+                    />
+                  ))}
+                </ScrollView>
+
+                <Text style={styles.filterGroupLabel}>ESTADO DEL LOTE</Text>
+                <View style={styles.filterRow}>
+                  {ESTADOS.map(estado => (
+                    <FilterChip 
+                      key={estado.value} 
+                      label={estado.label} 
+                      active={filterEstado === estado.value} 
+                      onPress={() => setFilterEstado(filterEstado === estado.value ? '' : estado.value)} 
+                    />
+                  ))}
+                </View>
+
+                <View style={styles.extraFiltersRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.filterGroupLabel}>VARIEDAD</Text>
+                    <TextInput
+                      style={styles.filterInput}
+                      placeholder="Ej: Geisha..."
+                      value={filterVariedad}
+                      onChangeText={setFilterVariedad}
+                    />
+                  </View>
+                  {isSuperUser && (
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.filterGroupLabel}>CAPATAZ</Text>
+                      <TextInput
+                        style={styles.filterInput}
+                        placeholder="Nombre..."
+                        value={filterCapataz}
+                        onChangeText={setFilterCapataz}
+                      />
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
 
             {/* Stats Scroll */}
             { (typeof isAdminOrManager !== "undefined" && isAdminOrManager) && (
@@ -529,14 +626,82 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     marginBottom: 16,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Theme.colors.surfaceContainerHigh,
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
+  },
+  filterToggle: {
+    width: 44,
+    height: 44,
+    backgroundColor: Theme.colors.surfaceContainerHigh,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filtersPanel: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: 16,
+    padding: 12,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 195, 190, 0.1)',
+  },
+  filterGroupLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.outline,
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  filterScroll: {
+    marginHorizontal: -4,
+    marginBottom: 12,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 195, 190, 0.2)',
+    marginHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Theme.colors.onSurfaceVariant,
+  },
+  extraFiltersRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterInput: {
+    backgroundColor: Theme.colors.surfaceContainerHighest,
+    borderRadius: 8,
+    height: 36,
+    paddingHorizontal: 10,
+    fontSize: 12,
+    color: Theme.colors.onSurface,
   },
   searchIcon: {
     marginRight: 10,
@@ -708,6 +873,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Theme.colors.onSurface,
     lineHeight: 14,
+    paddingLeft: 4,
+  },
+  noCapataz: {
+    fontSize: 10,
+    color: Theme.colors.outline,
+    fontStyle: 'italic',
     paddingLeft: 4,
   },
   emptyText: {
