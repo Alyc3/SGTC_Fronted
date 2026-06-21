@@ -20,10 +20,12 @@ const DateTimePicker = require('@react-native-community/datetimepicker').default
 const GRAIN_TYPES = ['Verde', 'Rojo', 'Variado'];
 
 /** Valor exacto del rol en la BD / JWT */
-const ROL_TECNICO = 'tecnico_sembrado';
+const ROL_TECNICO = 'TECNICO_AGRONOMO';
 
 /** Valor exacto del estado_lote cuando no hay cosecha aún */
 const ESTADO_EN_PRODUCCION = 'en_produccion';
+
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 * 1024; 
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -441,6 +443,9 @@ const [workerHarvestData, setWorkerHarvestData] = useState(
           tipo_grano: p.tipo_grano ?? 'Rojo',
           pago_calculado: p.pago_calculado ?? 0,
         }));
+
+        
+
         setWorkersRegistrados(resumen);
 
         if (cosecha) {
@@ -568,18 +573,32 @@ const [workerHarvestData, setWorkerHarvestData] = useState(
 };
 
   const handlePickHarvestEvidence = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'image/*',
-        copyToCacheDirectory: true,
-      });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setHarvestEvidenceUri(result.assets[0].uri);
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'image/*',
+      copyToCacheDirectory: true,
+    });
+
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+
+      if (asset.size !== undefined && asset.size > MAX_IMAGE_SIZE_BYTES) {
+        const maxSizeReadable = (MAX_IMAGE_SIZE_BYTES / (1024 * 1024 * 1024)).toFixed(1);
+        const fileSizeReadable = (asset.size / (1024 * 1024 * 1024)).toFixed(2);
+        CustomAlert.show(
+          'ALERTA',
+          'Imagen demasiado pesada',
+          `El archivo seleccionado pesa ${fileSizeReadable} GB. El máximo permitido es ${maxSizeReadable} GB.`
+        );
+        return;
       }
-    } catch {
-      CustomAlert.show('ERROR', 'Error', 'No se pudo seleccionar la imagen de evidencia.');
+
+      setHarvestEvidenceUri(asset.uri);
     }
-  };
+  } catch {
+    CustomAlert.show('ERROR', 'Error', 'No se pudo seleccionar la imagen de evidencia.');
+  }
+};
 
   const handleConfirmHarvest = async () => {
     // Validaciones
@@ -620,8 +639,8 @@ const [workerHarvestData, setWorkerHarvestData] = useState(
     }
 
     const brixValue = parseFloat(harvestBrix);
-    if (brixValue < 1 || brixValue > 30) {
-      CustomAlert.show('ALERTA', 'Grados Brix Inválidos', 'Los grados Brix deben estar entre 1 y 30.');
+    if (brixValue < 0.1 || brixValue > 50) {
+      CustomAlert.show('ALERTA', 'Grados Brix Inválidos', 'Los grados Brix deben estar entre 0.1 y 50.');
       return;
     }
 
@@ -717,7 +736,14 @@ const [workerHarvestData, setWorkerHarvestData] = useState(
                 <TextInput
                   style={styles.harvestInput}
                   value={harvestBrix}
-                  onChangeText={(text) => { if (text.length <= 10) setHarvestBrix(text); }}
+                  onChangeText={(text) => {
+                    if (text.length > 10) return;
+                    // Permitir solo números y un punto decimal (o vacío mientras escribe)
+                    if (text !== '' && !/^\d*\.?\d*$/.test(text)) return;
+                    const numeric = parseFloat(text);
+                    if (!isNaN(numeric) && numeric > 50) return;
+                    setHarvestBrix(text);
+                  }}
                   keyboardType="numeric"
                   placeholder="18.5"
                   maxLength={10}

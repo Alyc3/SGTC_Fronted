@@ -195,13 +195,16 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         lotesService.getStages(lote.id),
       ]);
 
+
       const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.roles || rolesData.data || []);
       const newRolesMap: Record<string, string> = {};
       rolesArray.forEach((r: any) => {
         newRolesMap[r.id] = (r.name || r.nombre || r.role_name || '').trim().toLowerCase();
       });
       setRolesMap(newRolesMap);
+      
       setAssignedPersonnel(personnelData);
+
       setStages(stagesData);
     } catch (error) {
       console.error('Error fetching lote details:', error);
@@ -237,8 +240,15 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // Personal de cosecha — se calcula aquí para pasarlo como prop al modal
-  const harvestPersonnel = assignedPersonnel.filter(p => p.etapa === 'Cosechado');
+  const ROLE_ID_CLASIFICADOR = '4777c479-e907-4d81-bf19-9a6c2c963bc0';
+  const ROLE_ID_RECOLECTOR = '54982b58-db99-4c80-809f-8e3fde952743';
+  const ROLES_COSECHA_IDS = [ROLE_ID_CLASIFICADOR, ROLE_ID_RECOLECTOR];
+  const ROLE_ID_TECNICO_COSECHA = 'b289b63e-5169-42fe-8ec3-75dec868f5ce';
+
+  const harvestPersonnel = assignedPersonnel.filter(
+  p => p.etapa === 'Cosechado' && ROLES_COSECHA_IDS.includes(p.trabajador?.role_id)
+);
+
 
   const openHarvestModal = () => setHarvestModalVisible(true); // ← simplificado
 

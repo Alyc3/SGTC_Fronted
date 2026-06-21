@@ -1,8 +1,7 @@
 import { db } from '../db';
 import { users, asignacion_personal } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
-import { v4 as uuidv4 } from
- 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 export const personalService = {
   async getAll() {
