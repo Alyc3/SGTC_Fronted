@@ -15,33 +15,38 @@ export const catalogoSync = {
     if (pending.length === 0) return;
 
     for (const record of pending) {
-      if (!record.categoria || !record.valor) continue;
       try {
-        // Asegurar formato ISO para las fechas de PostgreSQL (Neon)
-        const fechaCreacion = record.fecha_creacion ? new Date(record.fecha_creacion).toISOString() : new Date().toISOString();
-        const fechaModificacion = record.fecha_modificacion ? new Date(record.fecha_modificacion).toISOString() : new Date().toISOString();
-
-        await sql`
-          INSERT INTO catalogo (
-            id, categoria, valor, activo, origen_local, 
-            fecha_creacion, fecha_modificacion, is_synced
-          )
-          VALUES (
-            ${record.id}, ${record.categoria}, ${record.valor}, ${record.activo ? true : false}, 
-            ${record.origen_local ? true : false}, ${fechaCreacion}, ${fechaModificacion}, true
-          )
-          ON CONFLICT (id) DO UPDATE SET 
-            categoria = EXCLUDED.categoria,
-            valor = EXCLUDED.valor,
-            activo = EXCLUDED.activo,
-            fecha_modificacion = EXCLUDED.fecha_modificacion,
-            is_synced = true
-        `;
-        await db.update(catalogo).set({ is_synced: true }).where(eq(catalogo.id, record.id));
+        await this.pushRecord(record);
       } catch (err) {
         console.error(`Sync error catalogo ${record.id}:`, err);
       }
     }
+  },
+
+  async pushRecord(record: any) {
+    if (!record.categoria || !record.valor) return;
+    
+    // Asegurar formato ISO para las fechas de PostgreSQL (Neon)
+    const fechaCreacion = record.fecha_creacion ? new Date(record.fecha_creacion).toISOString() : new Date().toISOString();
+    const fechaModificacion = record.fecha_modificacion ? new Date(record.fecha_modificacion).toISOString() : new Date().toISOString();
+
+    await sql`
+      INSERT INTO catalogo (
+        id, categoria, valor, activo, origen_local, 
+        fecha_creacion, fecha_modificacion, is_synced
+      )
+      VALUES (
+        ${record.id}, ${record.categoria}, ${record.valor}, ${record.activo ? true : false}, 
+        ${record.origen_local ? true : false}, ${fechaCreacion}, ${fechaModificacion}, true
+      )
+      ON CONFLICT (id) DO UPDATE SET 
+        categoria = EXCLUDED.categoria,
+        valor = EXCLUDED.valor,
+        activo = EXCLUDED.activo,
+        fecha_modificacion = EXCLUDED.fecha_modificacion,
+        is_synced = true
+    `;
+    await db.update(catalogo).set({ is_synced: true }).where(eq(catalogo.id, record.id));
   },
 
   async pull() {

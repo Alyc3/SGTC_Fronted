@@ -596,56 +596,56 @@ const EtapaSembradosScreen = ({ navigation, route }: any) => {
     const phaseMetrics = { ...(metricsForm[phaseId] || {}) };
     
     if (phaseId === 'Germinacion') {
-      if (phaseMetrics.tasa_germinacion !== undefined && phaseMetrics.tasa_germinacion !== '' && !sembradoMetricasService.validarTasaGerminacion(phaseMetrics.tasa_germinacion)) {
+      if (phaseMetrics.tasa_germinacion !== undefined && phaseMetrics.tasa_germinacion !== null && phaseMetrics.tasa_germinacion !== '' && !sembradoMetricasService.validarTasaGerminacion(phaseMetrics.tasa_germinacion)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'La tasa de germinación debe ser un número entero entre 0 y 100%');
         return;
       }
-      if (phaseMetrics.dias_emergencia !== undefined && phaseMetrics.dias_emergencia !== '' && !sembradoMetricasService.validarDiasEmergencia(phaseMetrics.dias_emergencia)) {
+      if (phaseMetrics.dias_emergencia !== undefined && phaseMetrics.dias_emergencia !== null && phaseMetrics.dias_emergencia !== '' && !sembradoMetricasService.validarDiasEmergencia(phaseMetrics.dias_emergencia)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'Los dias ingresados estan fuera del rango');
         return;
       }
     }
     
     if (phaseId === 'Vivero') {
-      if (phaseMetrics.pares_hojas_verdaderas !== undefined && phaseMetrics.pares_hojas_verdaderas !== '' && !sembradoMetricasService.validarHojasVerdaderas(phaseMetrics.pares_hojas_verdaderas)) {
+      if (phaseMetrics.pares_hojas_verdaderas !== undefined && phaseMetrics.pares_hojas_verdaderas !== null && phaseMetrics.pares_hojas_verdaderas !== '' && !sembradoMetricasService.validarHojasVerdaderas(phaseMetrics.pares_hojas_verdaderas)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'La cantidad de pares ingresados estan fuera del rango');
         return;
       }
-      if (phaseMetrics.altura_plantula !== undefined && phaseMetrics.altura_plantula !== '' && !sembradoMetricasService.validarAlturaPlantula(phaseMetrics.altura_plantula)) {
+      if (phaseMetrics.altura_plantula !== undefined && phaseMetrics.altura_plantula !== null && phaseMetrics.altura_plantula !== '' && !sembradoMetricasService.validarAlturaPlantula(phaseMetrics.altura_plantula)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'La altura ingresada está fuera de los parámetros permitidos para vivero');
         return;
       }
     }
     
     if (phaseId === 'Crecimiento') {
-      if (phaseMetrics.indice_crecimiento !== undefined && phaseMetrics.indice_crecimiento !== '' && !sembradoMetricasService.validarIndiceCrecimiento(phaseMetrics.indice_crecimiento)) {
+      if (phaseMetrics.indice_crecimiento !== undefined && phaseMetrics.indice_crecimiento !== null && phaseMetrics.indice_crecimiento !== '' && !sembradoMetricasService.validarIndiceCrecimiento(phaseMetrics.indice_crecimiento)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'El índice de altura no corresponde a un rango válido de crecimiento');
         return;
       }
-      if (phaseMetrics.grosor_tallo !== undefined && phaseMetrics.grosor_tallo !== '' && !sembradoMetricasService.validarGrosorTallo(phaseMetrics.grosor_tallo)) {
+      if (phaseMetrics.grosor_tallo !== undefined && phaseMetrics.grosor_tallo !== null && phaseMetrics.grosor_tallo !== '' && !sembradoMetricasService.validarGrosorTallo(phaseMetrics.grosor_tallo)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'El diámetro del tallo está fuera de los límites de medición estándar');
         return;
       }
-      if (phaseMetrics.formacion_bandolas !== undefined && phaseMetrics.formacion_bandolas !== '' && !sembradoMetricasService.validarBandolas(phaseMetrics.formacion_bandolas)) {
+      if (phaseMetrics.formacion_bandolas !== undefined && phaseMetrics.formacion_bandolas !== null && phaseMetrics.formacion_bandolas !== '' && !sembradoMetricasService.validarBandolas(phaseMetrics.formacion_bandolas)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'La cantidad de bandolas ingresada es inconsistente');
         return;
       }
-      if (phaseMetrics.incidencia_foliar !== undefined && phaseMetrics.incidencia_foliar !== '' && !sembradoMetricasService.validarIncidenciaFoliar(phaseMetrics.incidencia_foliar)) {
+      if (phaseMetrics.incidencia_foliar !== undefined && phaseMetrics.incidencia_foliar !== null && phaseMetrics.incidencia_foliar !== '' && !sembradoMetricasService.validarIncidenciaFoliar(phaseMetrics.incidencia_foliar)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'El porcentaje de incidencia foliar debe ser un valor real entre 0 y 100');
         return;
       }
     }
     
     if (phaseId === 'Maduracion') {
-      if (phaseMetrics.porcentaje_cuajado !== undefined && phaseMetrics.porcentaje_cuajado !== '' && !sembradoMetricasService.validarPorcentajeCuajado(phaseMetrics.porcentaje_cuajado)) {
+      if (phaseMetrics.porcentaje_cuajado !== undefined && phaseMetrics.porcentaje_cuajado !== null && phaseMetrics.porcentaje_cuajado !== '' && !sembradoMetricasService.validarPorcentajeCuajado(phaseMetrics.porcentaje_cuajado)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'El porcentaje de cuajado debe ser un valor real entre 0 y 100');
         return;
       }
-      if (phaseMetrics.incidencia_broca !== undefined && phaseMetrics.incidencia_broca !== '' && !sembradoMetricasService.validarIncidenciaBroca(phaseMetrics.incidencia_broca)) {
+      if (phaseMetrics.incidencia_broca !== undefined && phaseMetrics.incidencia_broca !== null && phaseMetrics.incidencia_broca !== '' && !sembradoMetricasService.validarIncidenciaBroca(phaseMetrics.incidencia_broca)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'El porcentaje de incidencia de broca ingresado no es válido');
         return;
       }
-      if (phaseMetrics.grados_brix !== undefined && phaseMetrics.grados_brix !== '' && !sembradoMetricasService.validarGradosBrix(phaseMetrics.grados_brix)) {
+      if (phaseMetrics.grados_brix !== undefined && phaseMetrics.grados_brix !== null && phaseMetrics.grados_brix !== '' && !sembradoMetricasService.validarGradosBrix(phaseMetrics.grados_brix)) {
         CustomAlert.show('ERROR', 'Error de Validación', 'El valor de grados brix se encuentra fuera de los parámetros reales de medición');
         return;
       }
@@ -1198,7 +1198,7 @@ const MetricRow = ({ label, value, onChange, isReadOnly, color, isPercentage }: 
         value={value?.toString() || ''}
         onChangeText={onChange}
         editable={!isReadOnly}
-        placeholder={isPercentage ? "0" : "0.00"}
+        placeholder={isPercentage ? "0" : "0"}
       />
       {isPercentage && (
         <Text style={[
