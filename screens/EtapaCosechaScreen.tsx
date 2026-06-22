@@ -8,7 +8,9 @@ import {
   StatusBar,
   ActivityIndicator,
   TextInput,
+  Image as RNImage,
   BackHandler,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -32,6 +34,7 @@ const DateTimePicker = require('@react-native-community/datetimepicker').default
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { asignacionPersonalService, cosechaService } from '../services/cosecha.service';
+import { lotesService } from '../services/lotes.service';
 import { CustomAlert } from '../components/GlobalAlert';
 
 // ─── Constantes (mismas reglas que el HarvestModal original) ─────────────────
@@ -40,6 +43,10 @@ const GRAIN_TYPES = ['Verde', 'Rojo', 'Variado'];
 const ROL_TECNICO = 'TECNICO_AGRONOMO';
 const ESTADO_EN_PRODUCCION = 'en_produccion';
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
+
+const ROLE_ID_CLASIFICADOR = '4777c479-e907-4d81-bf19-9a6c2c963bc0';
+const ROLE_ID_RECOLECTOR = '54982b58-db99-4c80-809f-8e3fde952743';
+const ROLES_COSECHA_IDS = [ROLE_ID_CLASIFICADOR, ROLE_ID_RECOLECTOR];
 
 const getTarifaByGrano = (tipoGrano: string): number => {
   switch (tipoGrano) {
@@ -78,6 +85,9 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [harvestPersonnelLive, setHarvestPersonnelLive] = useState<any[]>(harvestPersonnel);
+  const [previewVisible, setPreviewVisible] = useState(false);
 
   // 'form' = técnico asignado puede registrar; 'readonly_cosecha' = ya existe;
   // 'readonly_nopermiso' = sin permiso / sin asignación
@@ -124,9 +134,19 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     if (!lote?.id) return;
     try {
       setLoading(true);
-      const cosecha = await cosechaService.getByLoteId(lote.id);
+      const [cosecha, personnelFresh] = await Promise.all([
+        cosechaService.getByLoteId(lote.id),
+        lotesService.getAssignedPersonnel(lote.id),
+      ]);
 
-      const resumen = harvestPersonnel.map((p: any, index: number) => ({
+      // Reemplazamos la lista "congelada" que llegó por route.params
+      // con los datos actualizados (cantidad_cosechada, pago_calculado, tipo_grano)
+      const cosechaPersonnel = (personnelFresh || []).filter(
+        (p: any) => p.etapa === 'Cosechado' && ROLES_COSECHA_IDS.includes(p.trabajador?.role_id)
+      );
+      setHarvestPersonnelLive(cosechaPersonnel.length > 0 ? cosechaPersonnel : harvestPersonnel);
+
+      const resumen = (cosechaPersonnel.length > 0 ? cosechaPersonnel : harvestPersonnel).map((p: any, index: number) => ({
         id: p.id || p.trabajador_id || p.trabajador?.id || String(index),
         nombre: `${p.trabajador?.first_name || 'Trabajador'} ${p.trabajador?.last_name || ''}`.trim(),
         cantidad_cosechada: p.cantidad_cosechada ?? 0,
@@ -222,7 +242,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     if (brixValue < 0.1 || brixValue > 50) {
       return 'Los grados Brix deben estar entre 0.1 y 50.';
     }
-    if (harvestPersonnel.length === 0) {
+    if (harvestPersonnelLive.length === 0) {
       return 'No hay trabajadores asignados a la etapa de cosecha.';
     }
     const hasInvalidWorkerAmount = harvestPersonnel.some((p: any, index: number) => {
@@ -264,7 +284,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
 
   const handleConfirmHarvest = async () => {
     const brix = parseFloat(harvestBrix);
-    const workersResumen = harvestPersonnel.map((p: any, index: number) => {
+    const workersResumen = harvestPersonnelLive.map((p: any, index: number) => {
       const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
       const data = workerHarvestData[key];
       const tipoGrano = data?.tipoGrano || 'Rojo';
@@ -299,7 +319,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
       setSaving(true);
 
       await Promise.all(
-        harvestPersonnel.map((p: any, index: number) => {
+        harvestPersonnelLive.map((p: any, index: number) => {
           const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
           const resumen = workersResumen.find((w: any) => w.key === key);
           if (!resumen) return Promise.resolve();
@@ -505,10 +525,10 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
                   <Text style={styles.standardLabel}>TRABAJADORES ASIGNADOS*</Text>
                 </View>
 
-                {harvestPersonnel.length === 0 ? (
+                {harvestPersonnelLive.length === 0 ? (
                   <Text style={styles.emptyText}>Sin personal asignado en Cosechado</Text>
                 ) : (
-                  harvestPersonnel.map((p: any, index: number) => {
+                  harvestPersonnelLive.map((p: any, index: number) => {
                     const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
                     const workerName = `${p.trabajador?.first_name || 'Trabajador'} ${p.trabajador?.last_name || ''}`.trim();
                     const workerData = workerHarvestData[key] || { cantidad: '', tipoGrano: 'Rojo' };
@@ -584,20 +604,61 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
                   <Text style={styles.standardLabel}>EVIDENCIA</Text>
                 </View>
                 {hayDatos && !editMode ? (
-                  <View style={[styles.standardInputWrapper, styles.inputDisabled]}>
-                    <Text numberOfLines={1} style={styles.evidenceReadonlyText}>
-                      {cosechaExistente?.imagen_evidencia_uri || 'Sin imagen registrada'}
-                    </Text>
-                  </View>
+                  cosechaExistente?.imagen_evidencia_uri ? (
+                    <TouchableOpacity onPress={() => setPreviewVisible(true)} activeOpacity={0.85}>
+                      <RNImage
+                        source={{ uri: cosechaExistente.imagen_evidencia_uri }}
+                        style={styles.evidenceImage}
+                        resizeMode="contain"
+                      />
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.standardInputWrapper, styles.inputDisabled]}>
+                      <Text numberOfLines={1} style={styles.evidenceReadonlyText}>
+                        Sin imagen registrada
+                      </Text>
+                    </View>
+                  )
                 ) : (
-                  <TouchableOpacity style={styles.evidencePickerButton} onPress={handlePickHarvestEvidence}>
-                    <Camera size={15} color="white" />
-                    <Text style={styles.evidencePickerText}>
-                      {harvestEvidenceUri ? 'Cambiar imagen' : 'Seleccionar imagen'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View>
+                    {harvestEvidenceUri ? (
+                      <TouchableOpacity onPress={() => setPreviewVisible(true)} activeOpacity={0.85}>
+                        <RNImage
+                          source={{ uri: harvestEvidenceUri }}
+                          style={styles.evidenceImage}
+                          resizeMode="contain"
+                        />
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity style={styles.evidencePickerButton} onPress={handlePickHarvestEvidence}>
+                      <Camera size={15} color="white" />
+                      <Text style={styles.evidencePickerText}>
+                        {harvestEvidenceUri ? 'Cambiar imagen' : 'Seleccionar imagen'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
+
+              {/* Modal de preview a pantalla completa */}
+              <Modal
+                visible={previewVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setPreviewVisible(false)}
+              >
+                <TouchableOpacity
+                  style={styles.previewOverlay}
+                  activeOpacity={1}
+                  onPress={() => setPreviewVisible(false)}
+                >
+                  <RNImage
+                    source={{ uri: hayDatos && !editMode ? cosechaExistente?.imagen_evidencia_uri : harvestEvidenceUri }}
+                    style={styles.previewImage}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              </Modal>
 
               {/* Observaciones */}
               <View style={styles.metricInputGroup}>
@@ -701,8 +762,6 @@ const styles = StyleSheet.create({
   grainOptionActive: { backgroundColor: 'rgba(62, 102, 65, 0.1)', borderColor: Theme.colors.terroirGreen },
   grainOptionText: { fontSize: 10, fontWeight: '800', color: Theme.colors.terroirGray },
   grainOptionTextActive: { color: Theme.colors.terroirGreen },
-  evidenceReadonlyText: { fontFamily: 'Manrope', fontSize: 12, color: Theme.colors.terroirGray },
-  evidencePickerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Theme.colors.terroirBrown, height: 44, borderRadius: 12, gap: 8 },
   evidencePickerText: { fontFamily: 'Manrope', fontSize: 12, fontWeight: '800', color: 'white' },
   lockedBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#FFF8E1', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FFE082' },
   lockedBannerTitle: { fontFamily: 'Manrope', fontSize: 13, fontWeight: '900', color: '#E65100', marginBottom: 2 },
@@ -713,6 +772,11 @@ const styles = StyleSheet.create({
   estadoBadgeText: { fontFamily: 'Manrope', fontSize: 11, fontWeight: '800', color: Theme.colors.terroirGray, letterSpacing: 0.5 },
   actionButton: { width: '100%', height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 4, backgroundColor: Theme.colors.terroirGreen, shadowColor: Theme.colors.terroirGreen, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
   actionButtonText: { fontFamily: 'Manrope', fontSize: 10, fontWeight: '800', color: 'white', letterSpacing: 1 },
+  evidenceReadonlyText: { fontFamily: 'Manrope', fontSize: 12, color: Theme.colors.terroirGray },
+  evidencePickerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Theme.colors.terroirBrown, height: 44, borderRadius: 12, gap: 8 },
+  evidenceImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 10, backgroundColor: '#F3F4F6' },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  previewImage: { width: '100%', height: '100%' },
 });
 
 export default EtapaCosechaScreen;
