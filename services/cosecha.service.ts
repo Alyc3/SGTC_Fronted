@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { lotes, asignacion_personal, cosecha } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as Location from 'expo-location';
 
@@ -8,6 +8,19 @@ export const cosechaService = {
   async create(data: typeof cosecha.$inferInsert) {
     return await db.insert(cosecha).values({ ...data, id: data.id ?? uuidv4() }).returning();
   },
+
+  async update(id: string, data: Partial<typeof cosecha.$inferInsert>) {
+    return await db
+      .update(cosecha)
+      .set({
+        ...data,
+        is_synced: false,
+        sync_status: 'pending',
+        fecha_modificacion: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(cosecha.id, id))
+      .returning();
+  }, // 👈 verifica que esta coma esté
 
   async getByLoteId(loteId: string): Promise<any | null> {
     const result = await db
@@ -18,7 +31,7 @@ export const cosechaService = {
 
     return result.length > 0 ? result[0] : null;
   },
-};
+}; // 👈 y que este cierre exista
 
 export const asignacionPersonalService = {
   async updateCosecha(

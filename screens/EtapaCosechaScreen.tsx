@@ -42,7 +42,7 @@ import { CustomAlert } from '../components/GlobalAlert';
 const GRAIN_TYPES = ['Verde', 'Rojo', 'Variado'];
 const ROL_TECNICO = 'TECNICO_AGRONOMO';
 const ESTADO_EN_PRODUCCION = 'en_produccion';
-const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
 const ROLE_ID_CLASIFICADOR = '4777c479-e907-4d81-bf19-9a6c2c963bc0';
 const ROLE_ID_RECOLECTOR = '54982b58-db99-4c80-809f-8e3fde952743';
@@ -192,29 +192,29 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
       ...prev,
       [id]: {
         cantidad: prev[id]?.cantidad || '',
-        tipoGrano: prev[id]?.tipoGrano || 'Rojo',
+        tipoGrano: prev[id]?.tipoGrano || '',
         [field]: value,
       },
     }));
   };
 
   const handlePickHarvestEvidence = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true });
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        if (asset.size !== undefined && asset.size > MAX_IMAGE_SIZE_BYTES) {
-          const maxSizeReadable = (MAX_IMAGE_SIZE_BYTES / (1024 * 1024 * 1024)).toFixed(1);
-          const fileSizeReadable = (asset.size / (1024 * 1024 * 1024)).toFixed(2);
-          CustomAlert.show('ALERTA', 'Imagen demasiado pesada', `El archivo seleccionado pesa ${fileSizeReadable} GB. El máximo permitido es ${maxSizeReadable} GB.`);
-          return;
-        }
-        setHarvestEvidenceUri(asset.uri);
+  try {
+    const result = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      if (asset.size !== undefined && asset.size > MAX_IMAGE_SIZE_BYTES) {
+        const maxSizeReadable = (MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(1);
+        const fileSizeReadable = (asset.size / (1024 * 1024)).toFixed(2);
+        CustomAlert.show('ALERTA', 'Imagen demasiado pesada', `El archivo seleccionado pesa ${fileSizeReadable} MB. El máximo permitido es ${maxSizeReadable} MB.`);
+        return;
       }
-    } catch {
-      CustomAlert.show('ERROR', 'Error', 'No se pudo seleccionar la imagen de evidencia.');
+      setHarvestEvidenceUri(asset.uri);
     }
-  };
+  } catch {
+    CustomAlert.show('ERROR', 'Error', 'No se pudo seleccionar la imagen de evidencia.');
+  }
+};
 
   // ── INICIAR (igual que handleConfirmStart de Sembrado) ────────────────────
 
@@ -239,20 +239,27 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
       return 'Ingresa un valor numérico para Grados Brix.';
     }
     const brixValue = parseFloat(harvestBrix);
-    if (brixValue < 0.1 || brixValue > 50) {
-      return 'Los grados Brix deben estar entre 0.1 y 50.';
+    if (brixValue < 0 || brixValue > 30) {
+      return 'Los grados Brix deben estar entre 0 y 30.';
     }
     if (harvestPersonnelLive.length === 0) {
       return 'No hay trabajadores asignados a la etapa de cosecha.';
     }
-    const hasInvalidWorkerAmount = harvestPersonnel.some((p: any, index: number) => {
+    const hasInvalidWorkerAmount = harvestPersonnelLive.some((p: any, index: number) => {
       const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
       const amount = workerHarvestData[key]?.cantidad;
       return !amount || Number.isNaN(Number(amount)) || Number(amount) <= 0;
     });
-    if (hasInvalidWorkerAmount) return 'Ingresa la cantidad recolectada para cada trabajador.';
+    if (hasInvalidWorkerAmount) return 'la cantidad recolectada deben ser mayor a 0 y menor a 100 kg';
 
-    const hasExceededLimit = harvestPersonnel.some((p: any, index: number) => {
+    const hasInvalidWorkerGrano = harvestPersonnelLive.some((p: any, index: number) => {
+      const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+      const tipoGrano = workerHarvestData[key]?.tipoGrano;
+      return !tipoGrano;
+    });
+    if (hasInvalidWorkerGrano) return 'Selecciona el tipo de grano para cada trabajador.';
+
+    const hasExceededLimit = harvestPersonnelLive.some((p: any, index: number) => {
       const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
       return Number(workerHarvestData[key]?.cantidad) > 100;
     });
@@ -265,7 +272,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
   const handleFinalizar = () => {
     const errorMsg = validarFormulario();
     if (errorMsg) {
-      CustomAlert.show('ALERTA', 'Datos Incompletos', errorMsg);
+      CustomAlert.show('ALERTA', 'Datos Incorrectos', errorMsg);
       return;
     }
 
@@ -281,70 +288,99 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
       'CANCELAR'
     );
   };
-
+  
   const handleConfirmHarvest = async () => {
-    const brix = parseFloat(harvestBrix);
-    const workersResumen = harvestPersonnelLive.map((p: any, index: number) => {
-      const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
-      const data = workerHarvestData[key];
-      const tipoGrano = data?.tipoGrano || 'Rojo';
-      const cantidad = parseFloat(data?.cantidad || '0');
-      const tarifa = getTarifaByGrano(tipoGrano);
-      const calidad = getCalidadByCosecha(brix, tipoGrano);
-      return { key, tipoGrano, cantidad, tarifa, calidad };
-    });
+  const brix = parseFloat(harvestBrix);
+  const workersResumen = harvestPersonnelLive.map((p: any, index: number) => {
+    const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+    const data = workerHarvestData[key];
+    const tipoGrano = data?.tipoGrano || 'Rojo';
+    const cantidad = parseFloat(data?.cantidad || '0');
+    const tarifa = getTarifaByGrano(tipoGrano);
+    const calidad = getCalidadByCosecha(brix, tipoGrano);
+    return { key, tipoGrano, cantidad, tarifa, calidad };
+  });
 
-    const pesoTotal = workersResumen.reduce((sum: number, w: any) => sum + w.cantidad, 0);
-    const calidadGeneral = getCalidadGeneral(workersResumen.map((w: any) => ({ brix, tipoGrano: w.tipoGrano })));
-    const tarifaGeneral = pesoTotal > 0
-      ? workersResumen.reduce((sum: number, w: any) => sum + w.tarifa * w.cantidad, 0) / pesoTotal
-      : 0.25;
+  const pesoTotal = workersResumen.reduce((sum: number, w: any) => sum + w.cantidad, 0);
+  const calidadGeneral = getCalidadGeneral(workersResumen.map((w: any) => ({ brix, tipoGrano: w.tipoGrano })));
+  const tarifaGeneral = pesoTotal > 0
+    ? workersResumen.reduce((sum: number, w: any) => sum + w.tarifa * w.cantidad, 0) / pesoTotal
+    : 0.25;
 
-    const cosechaData = {
-      id: `cosecha_${Date.now()}`,
-      lote_id: lote.id,
-      responsable_id: userId ?? '',
-      grados_brix: brix,
-      peso_kilos: pesoTotal,
-      calidad_cosecha: calidadGeneral,
-      tarifa_por_kilo: parseFloat(tarifaGeneral.toFixed(2)),
-      imagen_evidencia_uri: harvestEvidenceUri,
-      observaciones: harvestObservations,
-      fecha_inicio: fechaInicio || new Date().toISOString(),
-      fecha_final: harvestDate,
-      duracion_horas: harvestDuration ? parseFloat(harvestDuration) : undefined,
-    };
+  const esEdicion = !!cosechaExistente?.id;
 
-    try {
-      setSaving(true);
-
-      await Promise.all(
-        harvestPersonnelLive.map((p: any, index: number) => {
-          const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
-          const resumen = workersResumen.find((w: any) => w.key === key);
-          if (!resumen) return Promise.resolve();
-          const pagoCalculado = parseFloat((resumen.cantidad * resumen.tarifa).toFixed(2));
-          return asignacionPersonalService.updateCosecha(p.id, {
-            cantidad_cosechada: resumen.cantidad,
-            tipo_grano: resumen.tipoGrano,
-            pago_calculado: pagoCalculado,
-          });
-        })
-      );
-
-      await cosechaService.create(cosechaData);
-
-      CustomAlert.show('SUCCESS', 'Éxito', 'Cosecha registrada correctamente.', () => {
-        navigation.navigate('ViewLote', { lote });
-      });
-      await fetchData();
-      setEditMode(false);
-    } catch {
-      CustomAlert.show('ERROR', 'Error', 'Fallo al guardar la cosecha.');
-    } finally {
-      setSaving(false);
-    }
+  const cosechaData = {
+    // Si es edición, reutiliza el id existente; si es creación, genera uno nuevo
+    id: esEdicion ? cosechaExistente.id : `cosecha_${Date.now()}`,
+    lote_id: lote.id,
+    responsable_id: userId ?? '',
+    grados_brix: brix,
+    peso_kilos: pesoTotal,
+    calidad_cosecha: calidadGeneral,
+    tarifa_por_kilo: parseFloat(tarifaGeneral.toFixed(2)),
+    imagen_evidencia_uri: harvestEvidenceUri || cosechaExistente?.imagen_evidencia_uri,
+    observaciones: harvestObservations,
+    fecha_inicio: fechaInicio || cosechaExistente?.fecha_inicio || new Date().toISOString(),
+    fecha_final: harvestDate,
+    duracion_horas: harvestDuration ? parseFloat(harvestDuration) : undefined,
   };
+
+  try {
+    setSaving(true);
+
+    await Promise.all(
+      harvestPersonnelLive.map((p: any, index: number) => {
+        const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+        const resumen = workersResumen.find((w: any) => w.key === key);
+        if (!resumen) return Promise.resolve();
+        const pagoCalculado = parseFloat((resumen.cantidad * resumen.tarifa).toFixed(2));
+        return asignacionPersonalService.updateCosecha(p.id, {
+          cantidad_cosechada: resumen.cantidad,
+          tipo_grano: resumen.tipoGrano,
+          pago_calculado: pagoCalculado,
+        });
+      })
+    );
+
+    if (esEdicion) {
+  const { id, ...updateData } = cosechaData;
+  await cosechaService.update(cosechaExistente.id, updateData);
+} else {
+  await cosechaService.create(cosechaData);
+}
+
+    CustomAlert.show('SUCCESS', 'Éxito', esEdicion ? 'Cosecha actualizada correctamente.' : 'Cosecha registrada correctamente.', () => {
+      navigation.navigate('ViewLote', { lote });
+    });
+    await fetchData();
+    setEditMode(false);
+  } catch {
+    CustomAlert.show('ERROR', 'Error', 'Fallo al guardar la cosecha.');
+  } finally {
+    setSaving(false);
+  }
+};
+
+const handleEditar = () => {
+  setHarvestBrix(String(cosechaExistente?.grados_brix ?? ''));
+  setHarvestEvidenceUri(cosechaExistente?.imagen_evidencia_uri ?? '');
+  setHarvestObservations(cosechaExistente?.observaciones ?? '');
+  setHarvestDate(cosechaExistente?.fecha_final ?? new Date().toISOString().slice(0, 10));
+  setFechaInicio(cosechaExistente?.fecha_inicio ?? null);
+
+  const initialWorkerData: Record<string, { cantidad: string; tipoGrano: string }> = {};
+  harvestPersonnelLive.forEach((p: any, index: number) => {
+    const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
+    const registrado = workersRegistrados.find((w: any) => w.id === key);
+    initialWorkerData[key] = {
+      cantidad: registrado?.cantidad_cosechada ? String(registrado.cantidad_cosechada) : '',
+      tipoGrano: registrado?.tipo_grano || '',
+    };
+  });
+  setWorkerHarvestData(initialWorkerData);
+
+  setEditMode(true);
+};
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -406,7 +442,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
 
             {/* Botón Editar — solo si ya existe cosecha y el usuario es el técnico */}
             {hayDatos && role === ROL_TECNICO && !editMode && (
-              <TouchableOpacity style={styles.editPhaseBtn} onPress={() => setEditMode(true)}>
+              <TouchableOpacity style={styles.editPhaseBtn} onPress={handleEditar}>
                 <Edit2 size={14} color={Theme.colors.terroirBrown} />
                 <Text style={styles.editPhaseText}>EDITAR</Text>
               </TouchableOpacity>
@@ -531,7 +567,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
                   harvestPersonnelLive.map((p: any, index: number) => {
                     const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
                     const workerName = `${p.trabajador?.first_name || 'Trabajador'} ${p.trabajador?.last_name || ''}`.trim();
-                    const workerData = workerHarvestData[key] || { cantidad: '', tipoGrano: 'Rojo' };
+                    const workerData = workerHarvestData[key] || { cantidad: '', tipoGrano: '' };
                     const registrado = workersRegistrados.find((w: any) => w.id === key);
                     const soloLectura = hayDatos && !editMode;
 
@@ -662,23 +698,31 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
 
               {/* Observaciones */}
               <View style={styles.metricInputGroup}>
-                <Text style={styles.standardLabel}>OBSERVACIONES</Text>
-                <View style={[styles.standardInputWrapper, styles.textareaWrapper, (hayDatos && !editMode) && styles.inputDisabled]}>
-                  <TextInput
-                    style={[styles.standardInput, styles.textarea]}
-                    value={hayDatos && !editMode ? (cosechaExistente?.observaciones || '') : harvestObservations}
-                    onChangeText={(text) => {
-                      const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).filter(Boolean).length;
-                      if (wordCount <= 100) setHarvestObservations(text);
-                    }}
-                    editable={!hayDatos || editMode}
-                    multiline
-                    textAlignVertical="top"
-                    placeholder="Notas técnicas de madurez, selección o incidencias..."
-                    placeholderTextColor={Theme.colors.terroirGray}
-                  />
-                </View>
-              </View>
+  <Text style={styles.standardLabel}>OBSERVACIONES</Text>
+  {hayDatos && !editMode ? (
+    <View style={[styles.standardInputWrapper, styles.textareaWrapper, styles.inputDisabled, { height: 'auto', minHeight: 48 }]}>
+      <Text style={styles.standardInput}>
+        {cosechaExistente?.observaciones || 'Sin observaciones'}
+      </Text>
+    </View>
+  ) : (
+    <View style={[styles.standardInputWrapper, styles.textareaWrapper]}>
+      <TextInput
+        style={[styles.standardInput, styles.textarea]}
+        value={harvestObservations}
+        onChangeText={(text) => {
+          const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).filter(Boolean).length;
+          if (wordCount <= 75) setHarvestObservations(text);
+        }}
+        multiline
+        scrollEnabled
+        textAlignVertical="top"
+        placeholder="Notas técnicas de madurez, selección o incidencias..."
+        placeholderTextColor={Theme.colors.terroirGray}
+      />
+    </View>
+  )}
+</View>
 
               {/* Botón GUARDAR / FINALIZAR — visible si hay formulario activo o estamos editando */}
               {(modo === 'form' || editMode) && fechaInicio !== null || (modo === 'form' && !fechaInicio) ? null : null}
