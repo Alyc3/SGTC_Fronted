@@ -2,6 +2,7 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { jwtDecode } from "jwt-decode";
 import { offlineAuthService } from "./offline-auth.service";
+import { hashPassword } from "./crypto.helper";
 
 const API_URL = "https://auth-service-w3lo.onrender.com";
 
@@ -104,7 +105,67 @@ export const authService = {
    */
   async login(data: any) {
     const response = await authApi.post("/api/auth/login", data);
-    return response.data;
+    const responseData = response.data;
+
+    let remoteUserId: string | null = null;
+    let remoteUserRole: string | null = null;
+
+    if (responseData.access_token) {
+      try {
+        const decoded: any = jwtDecode(responseData.access_token);
+        remoteUserId = decoded.sub;
+        remoteUserRole = decoded.role;
+      } catch (e) {
+        console.error("[auth-service] No se pudo decodificar el token:", e);
+      }
+    }
+
+    if (remoteUserId) {
+      try {
+        const { db } = require("../db");
+        const { users } = require("../db/schema");
+        const { eq } = require("drizzle-orm");
+
+        const passwordToStore = await hashPassword(data.password); // o el hash con expo-crypto
+
+        const localUserExists = await db.query.users.findFirst({
+          where: (u, { eq }) => eq(u.id, remoteUserId),
+        });
+
+        if (localUserExists) {
+          await db
+            .update(users)
+            .set({
+              email: data.email,
+              password_hash: passwordToStore,
+              // role_id si lo necesitas mapear desde remoteUserRole
+            })
+            .where(eq(users.id, remoteUserId));
+        } else {
+          await db.insert(users).values({
+            id: remoteUserId,
+            email: data.email,
+            password_hash: passwordToStore,
+            status: "ACTIVO",
+          });
+        }
+
+        console.log(
+          `[Offline Auth] Credenciales locales actualizadas para: ${data.email}`,
+        );
+      } catch (dbError) {
+        console.error(
+          "Error al guardar las credenciales locales para uso offline:",
+          dbError,
+        );
+      }
+    } else {
+      console.warn(
+        "[auth-service] No se pudo obtener el ID del usuario desde el token.",
+      );
+    }
+
+    return responseData;
   },
 
   /**

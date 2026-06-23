@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { db } from "../db";
 import { users } from "../db/schema";
+import { verifyPassword } from "./crypto.helper";
 
 const OFFLINE_AUTH_CACHE_KEY = "offlineAuthCache";
 const OFFLINE_AUTH_SESSION_KEY = "offlineAuthSession";
@@ -219,14 +220,38 @@ const buildSession = (
 
 export const offlineAuthService = {
   async cacheUsers(remoteUsers: AnyRecord[]) {
-    const usersCache = mapUsersForCache(
+    // 1. Obtenemos el caché que está actualmente guardado en el SecureStore
+    const currentCache = await getStoredCache();
+
+    // 2. Mapeamos los usuarios nuevos de la API
+    const incomingUsers = mapUsersForCache(
       Array.isArray(remoteUsers) ? remoteUsers : [],
     );
+
+    // 3. Fusionamos: Si el usuario ya existía en el caché y el nuevo no trae password, mantenemos el password anterior
+    const updatedUsersCache = incomingUsers.map((newUser) => {
+      const existingUser = currentCache.users.find((u) => u.id === newUser.id);
+
+      // Si el usuario ya existía y el nuevo viene sin password (o con el placeholder)
+      if (
+        existingUser &&
+        (!newUser.password_hash || newUser.password_hash === "API_NO_PASSWORD")
+      ) {
+        return {
+          ...newUser,
+          password_hash: existingUser.password_hash, // Preservamos la clave local
+        };
+      }
+      return newUser;
+    });
+
+    // 4. Guardamos en el SecureStore
     await saveCache({
-      users: usersCache,
+      users: updatedUsersCache,
       updatedAt: new Date().toISOString(),
     });
-    return usersCache;
+
+    return updatedUsersCache;
   },
 
   async cacheRoles(remoteRoles: AnyRecord[]) {
@@ -277,12 +302,20 @@ export const offlineAuthService = {
   },
 
   async login(data: { email: string; password: string }) {
+    console.log("========================================");
+    console.log(
+      "[DEBUG] offlineAuthService.login() INICIO. Email:",
+      data.email,
+    );
+
     const email = normalizeKey(data.email);
     const password = normalizeText(data.password);
 
     const localUser = await db.query.users.findFirst({
       where: (user, { eq }) => eq(user.email, email),
     });
+
+    console.log("[DEBUG] localUser encontrado:", localUser ? "SÍ" : "NO");
 
     if (!localUser) {
       throw new Error(
@@ -293,9 +326,9 @@ export const offlineAuthService = {
     if (!isSessionActive(localUser as AnyRecord)) {
       throw new Error("La cuenta local está inactiva o suspendida.");
     }
-
-    if (!isPasswordMatch(password, localUser.password_hash)) {
-      throw new Error("La contraseña es incorrecta.");
+    const passwordOk = await verifyPassword(password, localUser.password_hash);
+    if (!passwordOk) {
+      throw new Error(`Contraseña incorrecta.`);
     }
 
     const roles = await this.getAllRoles();
@@ -386,7 +419,6 @@ export const offlineAuthService = {
 
     await saveCache({
       users: usersCache,
-      roles: rolesCache,
       permissionsByRole: buildPermissionsByRole(rolesCache),
       updatedAt: new Date().toISOString(),
     });
