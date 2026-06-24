@@ -1,7 +1,9 @@
 import { db } from '../../db';
-import { parcelas, lotes } from '../../db/schema';
+import { parcelas, lotes, semillas } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { neon } from '@neondatabase/serverless';
+import { semillasSync } from './semillas.sync';
+
 const sql = neon(process.env.EXPO_PUBLIC_DATABASE_URL!);
 
 export const parcelasSync = {
@@ -21,39 +23,46 @@ export const parcelasSync = {
 
     for (const record of pending) {
       try {
-        await sql`
-          INSERT INTO parcelas (
-            id, nombre, hectareas, latitud, longitud, ph_suelo, textura, 
-            altitud_msnm, cortinas_rompevientos, orientacion_ladera, 
-            tipo_terreno, tipo_zona, estado, fecha_creacion, fecha_modificacion, is_synced
-          )
-          VALUES (
-            ${record.id}, ${record.nombre}, ${record.hectareas}, ${record.latitud}, ${record.longitud}, ${record.phSuelo}, ${record.textura}, 
-            ${record.altitudMsnm}, ${record.cortinasRompevientos ? true : false}, ${record.orientacionLadera}, 
-            ${record.tipoTerreno}, ${record.tipoZona || null}, ${record.estado}, ${record.fecha_creacion}, ${record.fecha_modificacion}, true
-          )
-          ON CONFLICT (id) DO UPDATE SET 
-            nombre = EXCLUDED.nombre,
-            hectareas = EXCLUDED.hectareas,
-            latitud = EXCLUDED.latitud,
-            longitud = EXCLUDED.longitud,
-            ph_suelo = EXCLUDED.ph_suelo,
-            textura = EXCLUDED.textura,
-            altitud_msnm = EXCLUDED.altitud_msnm,
-            cortinas_rompevientos = EXCLUDED.cortinas_rompevientos,
-            orientacion_ladera = EXCLUDED.orientacion_ladera,
-            tipo_terreno = EXCLUDED.tipo_terreno,
-            tipo_zona = EXCLUDED.tipo_zona,
-            estado = EXCLUDED.estado,
-            fecha_modificacion = EXCLUDED.fecha_modificacion,
-            is_synced = true
-        `;
-
-        await db.update(parcelas).set({ is_synced: true }).where(eq(parcelas.id, record.id));
+        await this.pushParcelaRecord(record);
       } catch (err) {
         console.error(`Sync error parcelas ${record.id}:`, err);
       }
     }
+  },
+
+  async pushParcelaRecord(record: any) {
+    const fechaCreacion = record.fecha_creacion ? new Date(record.fecha_creacion).toISOString() : new Date().toISOString();
+    const fechaModificacion = record.fecha_modificacion ? new Date(record.fecha_modificacion).toISOString() : new Date().toISOString();
+
+    await sql`
+      INSERT INTO parcelas (
+        id, nombre, hectareas, latitud, longitud, ph_suelo, textura, 
+        altitud_msnm, cortinas_rompevientos, orientacion_ladera, 
+        tipo_terreno, tipo_zona, estado, fecha_creacion, fecha_modificacion, is_synced
+      )
+      VALUES (
+        ${record.id}, ${record.nombre}, ${record.hectareas}, ${record.latitud}, ${record.longitud}, ${record.phSuelo}, ${record.textura}, 
+        ${record.altitudMsnm}, ${record.cortinasRompevientos ? true : false}, ${record.orientacionLadera}, 
+        ${record.tipoTerreno}, ${record.tipoZona || null}, ${record.estado}, ${fechaCreacion}, ${fechaModificacion}, true
+      )
+      ON CONFLICT (id) DO UPDATE SET 
+        nombre = EXCLUDED.nombre,
+        hectareas = EXCLUDED.hectareas,
+        latitud = EXCLUDED.latitud,
+        longitud = EXCLUDED.longitud,
+        ph_suelo = EXCLUDED.ph_suelo,
+        textura = EXCLUDED.textura,
+        altitud_msnm = EXCLUDED.altitud_msnm,
+        cortinas_rompevientos = EXCLUDED.cortinas_rompevientos,
+        orientacion_ladera = EXCLUDED.orientacion_ladera,
+        tipo_terreno = EXCLUDED.tipo_terreno,
+        tipo_zona = EXCLUDED.tipo_zona,
+        estado = EXCLUDED.estado,
+        fecha_modificacion = EXCLUDED.fecha_modificacion,
+        is_synced = true
+    `;
+
+    await db.update(parcelas).set({ is_synced: true }).where(eq(parcelas.id, record.id));
   },
 
   async pullParcelas() {
@@ -110,37 +119,72 @@ export const parcelasSync = {
 
     for (const record of pending) {
       try {
-        await sql`
-          INSERT INTO lotes (
-            id, codigo, parcela_id, semilla_id, zona_seleccionada, hectareas_lote, 
-            variedad_cafe, porcentaje_progreso, costo_total_mano_obra, 
-            estado_lote, calidad_final, fecha_creacion, fecha_modificacion, is_synced
-          )
-          VALUES (
-            ${record.id}, ${record.codigo}, ${record.parcela_id}, ${record.semilla_id}, ${record.zona_seleccionada || null}, ${record.hectareas_lote}, 
-            ${record.variedadCafe}, ${record.porcentajeProgreso}, ${record.costoTotalManoObra}, 
-            ${record.estado_lote}, ${record.calidadFinal || null}, ${record.fecha_creacion}, ${record.fecha_modificacion}, true
-          )
-          ON CONFLICT (id) DO UPDATE SET 
-            codigo = EXCLUDED.codigo,
-            parcela_id = EXCLUDED.parcela_id,
-            semilla_id = EXCLUDED.semilla_id,
-            zona_seleccionada = EXCLUDED.zona_seleccionada,
-            hectareas_lote = EXCLUDED.hectareas_lote,
-            variedad_cafe = EXCLUDED.variedad_cafe,
-            porcentaje_progreso = EXCLUDED.porcentaje_progreso,
-            costo_total_mano_obra = EXCLUDED.costo_total_mano_obra,
-            estado_lote = EXCLUDED.estado_lote,
-            calidad_final = EXCLUDED.calidad_final,
-            fecha_modificacion = EXCLUDED.fecha_modificacion,
-            is_synced = true
-        `;
-
-        await db.update(lotes).set({ is_synced: true }).where(eq(lotes.id, record.id));
+        await this.pushLoteRecord(record);
       } catch (err) {
         console.error(`Sync error lotes ${record.id}:`, err);
       }
     }
+  },
+
+  async pushLoteRecord(record: any) {
+    const fechaCreacion = record.fecha_creacion ? new Date(record.fecha_creacion).toISOString() : new Date().toISOString();
+    const fechaModificacion = record.fecha_modificacion ? new Date(record.fecha_modificacion).toISOString() : new Date().toISOString();
+
+    // 1. Asegurar semilla en Neon
+    const remoteSeed = await sql`SELECT id FROM semillas WHERE id = ${record.semilla_id}`;
+    if (remoteSeed.length === 0) {
+      console.log(`[parcelasSync] Semilla ${record.semilla_id} no encontrada en Neon. Forzando push...`);
+      const localSeed = await db.query.semillas.findFirst({
+        where: eq(semillas.id, record.semilla_id)
+      });
+      if (localSeed) {
+        await semillasSync.pushRecord(localSeed);
+      } else {
+        throw new Error(`Semilla con ID ${record.semilla_id} no existe localmente.`);
+      }
+    }
+
+    // 2. Asegurar parcela en Neon
+    const remoteParcel = await sql`SELECT id FROM parcelas WHERE id = ${record.parcela_id}`;
+    if (remoteParcel.length === 0) {
+      console.log(`[parcelasSync] Parcela ${record.parcela_id} no encontrada en Neon. Forzando push...`);
+      const localParcel = await db.query.parcelas.findFirst({
+        where: eq(parcelas.id, record.parcela_id)
+      });
+      if (localParcel) {
+        await this.pushParcelaRecord(localParcel);
+      } else {
+        throw new Error(`Parcela con ID ${record.parcela_id} no existe localmente.`);
+      }
+    }
+
+    await sql`
+      INSERT INTO lotes (
+        id, codigo, parcela_id, semilla_id, zona_seleccionada, hectareas_lote, 
+        variedad_cafe, porcentaje_progreso, costo_total_mano_obra, 
+        estado_lote, calidad_final, fecha_creacion, fecha_modificacion, is_synced
+      )
+      VALUES (
+        ${record.id}, ${record.codigo}, ${record.parcela_id}, ${record.semilla_id}, ${record.zona_seleccionada || null}, ${record.hectareas_lote}, 
+        ${record.variedadCafe}, ${record.porcentajeProgreso}, ${record.costoTotalManoObra}, 
+        ${record.estado_lote}, ${record.calidadFinal || null}, ${fechaCreacion}, ${fechaModificacion}, true
+      )
+      ON CONFLICT (id) DO UPDATE SET 
+        codigo = EXCLUDED.codigo,
+        parcela_id = EXCLUDED.parcela_id,
+        semilla_id = EXCLUDED.semilla_id,
+        zona_seleccionada = EXCLUDED.zona_seleccionada,
+        hectareas_lote = EXCLUDED.hectareas_lote,
+        variedad_cafe = EXCLUDED.variedad_cafe,
+        porcentaje_progreso = EXCLUDED.porcentaje_progreso,
+        costo_total_mano_obra = EXCLUDED.costo_total_mano_obra,
+        estado_lote = EXCLUDED.estado_lote,
+        calidad_final = EXCLUDED.calidad_final,
+        fecha_modificacion = EXCLUDED.fecha_modificacion,
+        is_synced = true
+    `;
+
+    await db.update(lotes).set({ is_synced: true }).where(eq(lotes.id, record.id));
   },
 
   async pullLotes() {
