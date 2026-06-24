@@ -203,6 +203,15 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     const result = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true });
     if (!result.canceled && result.assets?.[0]) {
       const asset = result.assets[0];
+
+      if (asset.size !== undefined) {
+        const sizeKB = (asset.size / 1024).toFixed(2);
+        const sizeMB = (asset.size / (1024 * 1024)).toFixed(2);
+        console.log(`[Evidencia] Tamaño de imagen: ${asset.size} bytes (${sizeKB} KB / ${sizeMB} MB)`);
+      } else {
+        console.log('[Evidencia] No se pudo determinar el tamaño de la imagen seleccionada.');
+      }
+
       if (asset.size !== undefined && asset.size > MAX_IMAGE_SIZE_BYTES) {
         const maxSizeReadable = (MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(1);
         const fileSizeReadable = (asset.size / (1024 * 1024)).toFixed(2);
@@ -290,6 +299,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
   };
   
   const handleConfirmHarvest = async () => {
+  
   const brix = parseFloat(harvestBrix);
   const workersResumen = harvestPersonnelLive.map((p: any, index: number) => {
     const key = p.id || p.trabajador_id || p.trabajador?.id || String(index);
@@ -320,8 +330,8 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     tarifa_por_kilo: parseFloat(tarifaGeneral.toFixed(2)),
     imagen_evidencia_uri: harvestEvidenceUri || cosechaExistente?.imagen_evidencia_uri,
     observaciones: harvestObservations,
-    fecha_inicio: fechaInicio || cosechaExistente?.fecha_inicio || new Date().toISOString(),
-    fecha_final: harvestDate,
+    fecha_inicio: new Date().toISOString(), // fecha de cierre de de la etapa de sembrado o fecha de inicio de la cosecha
+    fecha_final: fechaInicio || cosechaExistente?.fecha_inicio || new Date().toISOString(),
     duracion_horas: harvestDuration ? parseFloat(harvestDuration) : undefined,
   };
 
@@ -480,7 +490,7 @@ const handleEditar = () => {
               {/* Fechas con botones INICIAR / FINALIZAR */}
               <View style={styles.datesGrid}>
                 <View style={styles.dateInputGroup}>
-                  <Text style={styles.dateLabel}>INICIO</Text>
+                  <Text style={styles.dateLabel}>Fecha de Cierre*</Text>
                   {hayDatos && !editMode ? (
                     <View style={styles.dateDisplay}>
                       <Text style={styles.dateText}>{cosechaExistente?.fecha_inicio?.split('T')[0] || '—'}</Text>
@@ -493,24 +503,6 @@ const handleEditar = () => {
                     <TouchableOpacity style={styles.dateButton} onPress={handleIniciar}>
                       <Play size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
                       <Text style={styles.dateButtonText}>INICIAR</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <View style={styles.dateInputGroup}>
-                  <Text style={styles.dateLabel}>FECHA DE CIERRE *</Text>
-                  {hayDatos && !editMode ? (
-                    <View style={styles.dateDisplay}>
-                      <Text style={styles.dateText}>{cosechaExistente?.fecha_final || '—'}</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.dateDisplay, !fechaInicio && styles.btnDisabled]}
-                      onPress={() => fechaInicio && setShowDatePicker(true)}
-                      disabled={!fechaInicio}
-                    >
-                      <Text style={styles.dateText}>{harvestDate}</Text>
-                      <Calendar size={14} color={Theme.colors.terroirBrown} />
                     </TouchableOpacity>
                   )}
                 </View>
