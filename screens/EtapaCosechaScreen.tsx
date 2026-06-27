@@ -275,7 +275,13 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     if (hasExceededLimit) return 'Ningún trabajador puede registrar más de 100 kg.';
 
     if (!harvestDate.trim()) return 'Selecciona la fecha de la cosecha.';
+
+    if (!harvestEvidenceUri && !cosechaExistente?.imagen_evidencia_uri) {
+      return 'Debes seleccionar una imagen de evidencia.';
+    }
+
     return null;
+  
   };
 
   const handleFinalizar = () => {
@@ -629,7 +635,7 @@ const handleEditar = () => {
               <View style={styles.metricInputGroup}>
                 <View style={styles.sectionInlineHeader}>
                   <Camera size={14} color={Theme.colors.terroirBrown} />
-                  <Text style={styles.standardLabel}>EVIDENCIA</Text>
+                  <Text style={styles.standardLabel}>EVIDENCIA*</Text>
                 </View>
                 {hayDatos && !editMode ? (
                   cosechaExistente?.imagen_evidencia_uri ? (
