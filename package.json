@@ -20,6 +20,7 @@
     "drizzle-orm": "^0.45.2",
     "expo": "~54.0.35",
     "expo-constants": "~18.0.13",
+    "expo-crypto": "~15.0.9",
     "expo-document-picker": "~14.0.8",
     "expo-drizzle-studio-plugin": "^0.2.1",
     "expo-linear-gradient": "~15.0.8",
