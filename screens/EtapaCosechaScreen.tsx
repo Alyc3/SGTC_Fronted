@@ -37,14 +37,14 @@ import { asignacionPersonalService, cosechaService } from '../services/cosecha.s
 import { lotesService } from '../services/lotes.service';
 import { CustomAlert } from '../components/GlobalAlert';
 
-// ─── Constantes (mismas reglas que el HarvestModal original) ─────────────────
+// ─── Constantes ─────────────────
 
 const GRAIN_TYPES = ['Verde', 'Rojo', 'Variado'];
-const ROL_TECNICO = 'TECNICO_AGRONOMO';
+const ROL_TECNICO = 'TECNICO_AGRONOMO'; //Tener cuidado con esto si cambia el rol pude dar un error silenciono
 const ESTADO_EN_PRODUCCION = 'en_produccion';
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
-const ROLE_ID_CLASIFICADOR = '4777c479-e907-4d81-bf19-9a6c2c963bc0';
+const ROLE_ID_CLASIFICADOR = '4777c479-e907-4d81-bf19-9a6c2c963bc0'; //aca igual si se crean registros nuevo esto se debe actualizar
 const ROLE_ID_RECOLECTOR = '54982b58-db99-4c80-809f-8e3fde952743';
 const ROLES_COSECHA_IDS = [ROLE_ID_CLASIFICADOR, ROLE_ID_RECOLECTOR];
 
@@ -74,8 +74,6 @@ const getInitials = (nombre: string) =>
   nombre.split(' ').slice(0, 2).map(n => n[0]?.toUpperCase() || '').join('');
 
 // ─── Pantalla principal ────────────────────────────────────────────────────────
-// Reemplaza al HarvestModal: misma lógica de negocio, pero presentada como
-// pantalla completa con el mismo lenguaje visual que EtapaSembradosScreen.
 
 const EtapaCosechaScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
@@ -228,18 +226,24 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
   // ── INICIAR (igual que handleConfirmStart de Sembrado) ────────────────────
 
   const handleIniciar = () => {
-    CustomAlert.show(
-      'ALERTA',
-      'Iniciar Cosecha',
-      '¿Estás seguro de iniciar el registro de la cosecha?',
-      () => {
+  CustomAlert.show(
+    'ALERTA',
+    'Iniciar Cosecha',
+    '¿Estás seguro de iniciar el registro de la cosecha?',
+    async () => {
+      try {
+        // Igual que Sembrado: al iniciar, la etapa pasa a En_Proceso en la BD
+        await lotesService.updateStageStatus(lote.id, 'Cosechado', 'En_Proceso');
         setFechaInicio(new Date().toISOString());
-      },
-      'ACEPTAR',
-      () => {},
-      'CANCELAR'
-    );
-  };
+      } catch (error) {
+        CustomAlert.show('ERROR', 'Error', 'No se pudo iniciar la etapa de cosecha.');
+      }
+    },
+    'ACEPTAR',
+    () => {},
+    'CANCELAR'
+  );
+};
 
   // ── FINALIZAR / GUARDAR (igual que handleConfirmEnd + handleConfirmHarvest) ─
 
@@ -287,7 +291,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
   const handleFinalizar = () => {
     const errorMsg = validarFormulario();
     if (errorMsg) {
-      CustomAlert.show('ALERTA', 'Datos Incorrectos', errorMsg);
+      CustomAlert.show('ALERTA', 'Datos Incompletos', errorMsg);
       return;
     }
 
@@ -359,11 +363,13 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     );
 
     if (esEdicion) {
-  const { id, ...updateData } = cosechaData;
-  await cosechaService.update(cosechaExistente.id, updateData);
-} else {
-  await cosechaService.create(cosechaData);
-}
+      const { id, ...updateData } = cosechaData;
+      await cosechaService.update(cosechaExistente.id, updateData);
+    } else {
+      await cosechaService.create(cosechaData);
+    }
+
+    await lotesService.updateStageStatus(lote.id, 'Cosechado', 'Completada');
 
     CustomAlert.show('SUCCESS', 'Éxito', esEdicion ? 'Cosecha actualizada correctamente.' : 'Cosecha registrada correctamente.', () => {
       navigation.navigate('ViewLote', { lote });

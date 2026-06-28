@@ -231,15 +231,22 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
   );
 
   const handleStartStage = async (etapa: string) => {
-    try {
-      await lotesService.updateStageStatus(lote.id, etapa as any, 'En_Proceso');
-      syncWorker.syncPendingData();
-      fetchData();
-      CustomAlert.show('SUCCESS', 'Etapa Iniciada', `Se ha marcado la etapa ${etapa} como En Proceso.`);
-    } catch (error) {
-      CustomAlert.show('ERROR', 'Error', 'No se pudo iniciar la etapa.');
-    }
-  };
+  // Cosechado no se inicia con un simple cambio de estado:
+  // se abre el modal/flujo de EtapaCosecha (misma lógica que "Simular cosecha")
+  if (etapa === 'Cosechado') {
+    openHarvestModal();
+    return;
+  }
+
+  try {
+    await lotesService.updateStageStatus(lote.id, etapa as any, 'En_Proceso');
+    syncWorker.syncPendingData();
+    fetchData();
+    CustomAlert.show('SUCCESS', 'Etapa Iniciada', `Se ha marcado la etapa ${etapa} como En Proceso.`);
+  } catch (error) {
+    CustomAlert.show('ERROR', 'Error', 'No se pudo iniciar la etapa.');
+  }
+};
 
   const ROLE_ID_CLASIFICADOR = '4777c479-e907-4d81-bf19-9a6c2c963bc0';
   const ROLE_ID_RECOLECTOR = '54982b58-db99-4c80-809f-8e3fde952743';
@@ -310,7 +317,16 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
     const otherWorkers = stagePersonnel.filter(p => p !== capataz);
 
     const isAssignedTechnical = stagePersonnel.some(t => t.trabajador?.id === userId);
-    const canStart = isAssignedTechnical && isEnabled && status === 'Pendiente';
+
+    // Restricción extra: para Cosechado, solo el tecnico_agronomo (assignedStage === 'Cosechado')
+    // puede iniciar la etapa, aunque haya otro personal asignado (recolectores, clasificadores, etc.)
+    const canStartCosechado = title === 'Cosechado'
+      ? (isStrictTechnician ? assignedStage === 'Cosechado' : isAdminOrManager)
+      : true;
+
+    const canStart = isAssignedTechnical && isEnabled && status === 'Pendiente' && canStartCosechado;
+
+    //const canStart = isAssignedTechnical && isEnabled && status === 'Pendiente';
 
     return (
       <View key={title} style={[
@@ -602,12 +618,13 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
 
           <View style={styles.stagesList}>
             {EtapaProcesoValues
-              .filter(etapa => {
-                if (etapa === 'Administración') return false;
-                if (isStrictTechnician) return etapa === assignedStage;
-                return true;
-              })
-              .map((etapa, index) => renderStageCard(etapa, index))}
+            .map((etapa, originalIndex) => ({ etapa, originalIndex }))
+            .filter(({ etapa }) => {
+              if (etapa === 'Administración') return false;
+              if (isStrictTechnician) return etapa === assignedStage;
+              return true;
+            })
+            .map(({ etapa, originalIndex }) => renderStageCard(etapa, originalIndex))}
           </View>
         </View>
 
