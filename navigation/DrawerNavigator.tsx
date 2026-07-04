@@ -17,6 +17,7 @@ import AssignCapatazScreen from '../screens/AssignCapatazScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import GestionRolesScreen from '../screens/GestionRolesScreen';
 import EtapaCosechaScreen from '../screens/EtapaCosechaScreen';
+import EtapaDespulpadoScreen from '../screens/EtapaDespulpadoScreen';
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
@@ -166,6 +167,16 @@ export const DrawerNavigator = () => {
           headerShown: false
         }}
       />
+
+      <Drawer.Screen 
+        name="EtapaDespulpado" 
+        component={EtapaDespulpadoScreen}
+        options={{
+          title: 'Control de Despulpado',
+          drawerItemStyle: { display: 'none' },
+          headerShown: false
+        }}
+      />  
 
       <Drawer.Screen 
         name="GestionRoles" 

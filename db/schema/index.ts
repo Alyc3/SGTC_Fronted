@@ -8,4 +8,5 @@ export * from './asignacion_personal';
 export * from './estado_etapa';
 export * from './sembrado_metricas';
 export * from './cosecha';
+export * from './despulpado';
 export * from './relations';

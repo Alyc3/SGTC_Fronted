@@ -262,6 +262,21 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
     navigation.navigate('EtapaCosecha', { lote, harvestPersonnel, assignedPersonnel });
   };// ← simplificado
 
+  const openPulpingModal = () => {
+    const cosechaStage = stages.find(s => s.etapa === 'Cosechado');
+    const estadoCosecha = cosechaStage?.estado || 'Pendiente';
+    if (estadoCosecha == 'Completada') {
+      navigation.navigate('EtapaDespulpado', { lote, assignedPersonnel });
+    } else {
+      CustomAlert.show(
+        'ERROR',
+        'Etapa Previa Incompleta',
+        'Por favor, complete la etapa de Cosechado antes de iniciar el Despulpado.'
+      );
+      return;
+    }
+  };
+
   const renderSensor = (icon: any, label: string, value: string, color: string) => (
     <View style={styles.sensorCard}>
       <View style={[styles.sensorIconContainer, { backgroundColor: color + '15' }]}>
@@ -595,13 +610,17 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
         <View style={styles.sectionPadding}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionLabel}>CONTROL DE ETAPAS</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
               <Text style={styles.progressPct}>
                 {isStrictTechnician ? 'VISTA TÉCNICA' : 'GESTIÓN SECUENCIAL'}
               </Text>
               <TouchableOpacity style={styles.simulateHarvestButton} onPress={openHarvestModal}>
                 <ClipboardCheck size={13} color={Theme.colors.secondary} />
                 <Text style={styles.simulateHarvestText}>Simular cosecha</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.simulateHarvestButton} onPress={openPulpingModal}>
+                <ClipboardCheck size={13} color={Theme.colors.secondary} />
+                <Text style={styles.simulateHarvestText}>Simular despulpado</Text>
               </TouchableOpacity>
             </View>
           </View>

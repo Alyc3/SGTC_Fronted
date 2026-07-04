@@ -83,6 +83,13 @@
       "when": 1780873793155,
       "tag": "0011_sweet_shriek",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1782694258867,
+      "tag": "0012_--name=add_tabla_despulpado",
+      "breakpoints": true
     }
   ]
 }
