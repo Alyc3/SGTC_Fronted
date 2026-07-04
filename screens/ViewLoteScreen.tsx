@@ -75,7 +75,7 @@ const SubFaseTimeline = ({ subFaseActual, isProduccion, stageStatus, stages, lot
   useEffect(() => {
     // 1. Miramos el estado de etapa guardado
     const sembradoStage = stages.find(s => s.etapa === 'Sembrado');
-    let baseFase = sembradoStage?.subFaseSiembra || subFaseActual;
+    const baseFase = sembradoStage?.subFaseSiembra || subFaseActual;
     
     // 2. Comprobamos la BD directamente si no estamos seguros, o para asegurar la última activa
     import('../services/sembrado_metricas.service').then(({ sembradoMetricasService }) => {

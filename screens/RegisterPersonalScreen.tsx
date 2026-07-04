@@ -94,6 +94,12 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<any>(null);
   const [isActive, setIsActive] = useState(true);
+  const [firstNameError, setFirstNameError] = useState('');
+  const [lastNameError, setLastNameError] = useState('');
+  const [identifierError, setIdentifierError] = useState('');
+  const [phoneNumberError, setPhoneNumberError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   
   // Nuevos estados para tipo de documento
   const [documentType, setDocumentType] = useState('Cedula');
@@ -132,6 +138,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     if (!editWorker) {
       setIdentifier('');
+      setIdentifierError('');
     }
   }, [documentType]);
 
@@ -167,15 +174,25 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
 
   const handleFirstNameChange = (text: string) => {
     const filtered = text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
-    if (filtered.length <= 30) {
+    if (filtered.length <= 45) {
       setFirstName(filtered);
+      if (filtered.length >= 2 && filtered.length <= 45) {
+        setFirstNameError('');
+      } else if (filtered.length > 0) {
+        setFirstNameError('La longitud debe ser de 2 a 45 caracteres');
+      }
     }
   };
 
   const handleLastNameChange = (text: string) => {
     const filtered = text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
-    if (filtered.length <= 30) {
+    if (filtered.length <= 75) {
       setLastName(filtered);
+      if (filtered.length >= 3 && filtered.length <= 75) {
+        setLastNameError('');
+      } else if (filtered.length > 0) {
+        setLastNameError('La longitud debe ser de 3 a 75 caracteres');
+      }
     }
   };
 
@@ -184,12 +201,79 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
       const filtered = text.replace(/[^0-9]/g, '');
       if (filtered.length <= 10) {
         setIdentifier(filtered);
+        if (filtered.length === 10) {
+          const isValid = personalService.validateCedula(filtered);
+          setIdentifierError(isValid ? '' : 'Identificación no válida (Fallo algoritmo módulo 10)');
+        } else if (filtered.length > 0) {
+          setIdentifierError('Deben ser exactamente 10 dígitos numéricos');
+        } else {
+          setIdentifierError('');
+        }
       }
     } else {
       const filtered = text.replace(/[^a-zA-Z0-9]/g, '');
-      if (filtered.length <= 8) {
+      if (filtered.length <= 9) {
         setIdentifier(filtered);
+        if (filtered.length === 9) {
+          setIdentifierError('');
+        } else if (filtered.length > 0) {
+          setIdentifierError('Deben ser exactamente 9 caracteres alfanuméricos');
+        } else {
+          setIdentifierError('');
+        }
       }
+    }
+  };
+
+  const handlePhoneNumberChange = (text: string) => {
+    const filtered = text.replace(/[^0-9]/g, '');
+    if (filtered.length <= 10) {
+      setPhoneNumber(filtered);
+      if (filtered.length === 10) {
+        setPhoneNumberError('');
+      } else if (filtered.length > 0) {
+        setPhoneNumberError('Deben ser exactamente 10 dígitos');
+      } else {
+        setPhoneNumberError('');
+      }
+    }
+  };
+
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!text) {
+      setEmailError('');
+    } else if (!emailRegex.test(text)) {
+      setEmailError('Sintaxis de correo inválida');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const validatePasswordStrength = (pass: string) => {
+    if (!pass) return '';
+    if (pass.length < 8) {
+      return 'Mínimo 8 caracteres';
+    }
+    if (!/[A-Z]/.test(pass)) {
+      return 'Debe incluir al menos una mayúscula';
+    }
+    if (!/[0-9]/.test(pass)) {
+      return 'Debe incluir al menos un número';
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(pass)) {
+      return 'Debe incluir al menos un carácter especial';
+    }
+    return '';
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (!text && isEditMode) {
+      setPasswordError('');
+    } else {
+      setPasswordError(validatePasswordStrength(text));
     }
   };
 
@@ -202,12 +286,138 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
     setPassword('');
     setRole(null);
     setIsActive(true);
+    setFirstNameError('');
+    setLastNameError('');
+    setIdentifierError('');
+    setPhoneNumberError('');
+    setEmailError('');
+    setPasswordError('');
   };
 
   const handleRegister = async () => {
-    if (!firstName || !lastName || !email || (!isEditMode && !password) || !role || !identifier) {
+    // 1. Verificar campos obligatorios e inicializar errores
+    if (!firstName || !lastName || !email || (!isEditMode && !password) || !role || !identifier || !phoneNumber) {
+      if (!firstName || firstName.length < 2) {
+        setFirstNameError('La longitud debe ser de 2 a 45 caracteres');
+      }
+      if (!lastName || lastName.length < 3) {
+        setLastNameError('La longitud debe ser de 3 a 75 caracteres');
+      }
+      if (!identifier) {
+        setIdentifierError('La identificación es obligatoria');
+      }
+      if (!phoneNumber) {
+        setPhoneNumberError('El teléfono es obligatorio');
+      }
+      if (!email) {
+        setEmailError('El correo electrónico es obligatorio');
+      }
+      if (!isEditMode && !password) {
+        setPasswordError('La contraseña es obligatoria');
+      }
       CustomAlert.show('ALERTA', 'Campos Incompletos', 'Por favor, complete todos los campos obligatorios.');
       return;
+    }
+
+    // 2. Validaciones detalladas de formato y longitud
+    let hasErrors = false;
+
+    // Nombres (2 a 45 caracteres)
+    if (firstName.length < 2 || firstName.length > 45) {
+      setFirstNameError('La longitud debe ser de 2 a 45 caracteres');
+      hasErrors = true;
+    } else {
+      setFirstNameError('');
+    }
+
+    // Apellidos (3 a 75 caracteres)
+    if (lastName.length < 3 || lastName.length > 75) {
+      setLastNameError('La longitud debe ser de 3 a 75 caracteres');
+      hasErrors = true;
+    } else {
+      setLastNameError('');
+    }
+
+    // Identificación (10 dígitos para Cédula con Módulo 10, o 9 alfanuméricos para Pasaporte)
+    if (documentType === 'Cedula') {
+      if (identifier.length !== 10) {
+        setIdentifierError('Deben ser exactamente 10 dígitos numéricos');
+        hasErrors = true;
+      } else if (!personalService.validateCedula(identifier)) {
+        setIdentifierError('Identificación no válida (Fallo algoritmo módulo 10)');
+        hasErrors = true;
+      } else {
+        setIdentifierError('');
+      }
+    } else {
+      if (identifier.length !== 9 || !/^[a-zA-Z0-9]+$/.test(identifier)) {
+        setIdentifierError('Deben ser exactamente 9 caracteres alfanuméricos');
+        hasErrors = true;
+      } else {
+        setIdentifierError('');
+      }
+    }
+
+    // Teléfono (10 números obligatorios)
+    if (phoneNumber.length !== 10) {
+      setPhoneNumberError('Deben ser exactamente 10 dígitos');
+      hasErrors = true;
+    } else {
+      setPhoneNumberError('');
+    }
+
+    // Contraseña (mínimo 8 caracteres, una mayúscula, un carácter especial y un número)
+    if (!isEditMode || password) {
+      const strengthError = validatePasswordStrength(password);
+      if (strengthError) {
+        setPasswordError(strengthError);
+        hasErrors = true;
+      } else {
+        setPasswordError('');
+      }
+    }
+
+    if (hasErrors) {
+      CustomAlert.show('ALERTA', 'Campos Inválidos', 'Por favor, corrija los campos resaltados.');
+      return;
+    }
+
+    // 2.1 Verificar duplicados en la base de datos para evitar fallos de restricción UNIQUE
+    try {
+      const excludeId = isEditMode ? editWorker.id : undefined;
+
+      const isDupIdentifier = await personalService.checkDuplicate('identifier', identifier, excludeId);
+      if (isDupIdentifier) {
+        setIdentifierError('Esta identificación ya está registrada');
+        CustomAlert.show('ALERTA', 'Identificación Duplicada', 'La identificación ingresada ya existe en el sistema.');
+        return;
+      }
+
+      const isDupEmail = await personalService.checkDuplicate('email', email, excludeId);
+      if (isDupEmail) {
+        setEmailError('Este correo electrónico ya está registrado');
+        CustomAlert.show('ALERTA', 'Correo Duplicado', 'El correo electrónico ingresado ya existe en el sistema.');
+        return;
+      }
+
+      const isDupPhone = await personalService.checkDuplicate('phone_number', phoneNumber, excludeId);
+      if (isDupPhone) {
+        setPhoneNumberError('Este teléfono ya está registrado');
+        CustomAlert.show('ALERTA', 'Teléfono Duplicado', 'El número de teléfono ingresado ya existe en el sistema.');
+        return;
+      }
+    } catch (dbError) {
+      console.error('Error checking duplicate fields:', dbError);
+    }
+
+    // 3. Validación de correo en 4 capas (Syntax, DoH MX lookup, SMTP simulation, Risk filtering)
+    const emailResult = await personalService.validateEmail(email);
+    if (!emailResult.valid) {
+      setEmailError(emailResult.message || 'Correo inválido');
+      CustomAlert.show('ALERTA', 'Correo Inválido', emailResult.message || 'El correo electrónico no es válido.');
+      return;
+    } else {
+      setEmailError('');
     }
     
     try {
@@ -300,7 +510,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Nombres</Text>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, firstNameError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Ej. Antonio"
@@ -309,11 +519,14 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
                   onChangeText={handleFirstNameChange}
                 />
               </View>
+              {firstNameError ? (
+                <Text style={styles.errorText}>{firstNameError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Apellidos</Text>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, lastNameError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={styles.input}
                   placeholder="Ej. García"
@@ -322,6 +535,9 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
                   onChangeText={handleLastNameChange}
                 />
               </View>
+              {lastNameError ? (
+                <Text style={styles.errorText}>{lastNameError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
@@ -341,7 +557,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Identificación ({documentType === 'Cedula' ? 'Cédula' : 'Pasaporte'})</Text>
-              <View style={[styles.inputWrapper, isEditMode && { backgroundColor: Theme.colors.surfaceContainerLow }]}>
+              <View style={[styles.inputWrapper, isEditMode && { backgroundColor: Theme.colors.surfaceContainerLow }, identifierError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={[styles.input, isEditMode && { color: Theme.colors.outline }]}
                   placeholder={documentType === 'Cedula' ? "Ej. 0102030405" : "Ej. A1234567"}
@@ -352,21 +568,27 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
                   editable={!isEditMode}
                 />
               </View>
+              {identifierError ? (
+                <Text style={styles.errorText}>{identifierError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Teléfono</Text>
-              <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }]}>
+              <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }, phoneNumberError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={[styles.input, (isEditMode && isCapatazUser) && { color: Theme.colors.outline }]}
                   placeholder="Ej. 0985369858"
                   placeholderTextColor={Theme.colors.outline}
                   keyboardType="phone-pad"
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
+                  onChangeText={handlePhoneNumberChange}
                   editable={!isEditMode || !isCapatazUser}
                 />
               </View>
+              {phoneNumberError ? (
+                <Text style={styles.errorText}>{phoneNumberError}</Text>
+              ) : null}
             </View>
           </View>
 
@@ -382,7 +604,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Correo Electrónico</Text>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, emailError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={styles.input}
                   placeholder="correo@ejemplo.com"
@@ -390,21 +612,24 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={handleEmailChange}
                 />
               </View>
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>{isEditMode ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}</Text>
-              <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }]}>
+              <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }, passwordError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={[styles.input, (isEditMode && isCapatazUser) && { color: Theme.colors.outline }]}
                   placeholder="••••••••"
                   placeholderTextColor={Theme.colors.outline}
                   secureTextEntry={!showPassword}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={handlePasswordChange}
                   editable={!isEditMode || !isCapatazUser}
                 />
                 {!isCapatazUser && (
@@ -417,6 +642,9 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
                   </TouchableOpacity>
                 )}
               </View>
+              {passwordError ? (
+                <Text style={styles.errorText}>{passwordError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
@@ -659,6 +887,15 @@ const styles = StyleSheet.create({
     height: 52,
     borderWidth: 1,
     borderColor: 'transparent',
+  },
+  inputErrorBorder: {
+    borderColor: Theme.colors.error,
+  },
+  errorText: {
+    color: Theme.colors.error,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 12,
   },
   input: {
     flex: 1,
