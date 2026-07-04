@@ -16,6 +16,7 @@ import AssignPersonalScreen from '../screens/AssignPersonalScreen';
 import AssignCapatazScreen from '../screens/AssignCapatazScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import GestionRolesScreen from '../screens/GestionRolesScreen';
+import EtapaCosechaScreen from '../screens/EtapaCosechaScreen';
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
@@ -152,6 +153,16 @@ export const DrawerNavigator = () => {
           title: 'Control de Sembrado',
           drawerIcon: ({ color }) => <Flower size={20} color={color} />,
           drawerItemStyle: canAccessControlSembrado ? {} : { display: 'none' },
+          headerShown: false
+        }}
+      />
+
+      <Drawer.Screen 
+        name="EtapaCosecha" 
+        component={EtapaCosechaScreen} 
+        options={{ 
+          title: 'Control de Cosecha',
+          drawerItemStyle: { display: 'none' },
           headerShown: false
         }}
       />

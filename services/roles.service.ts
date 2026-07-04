@@ -1,4 +1,5 @@
-import { authApi } from './auth-service';
+import { authApi } from "./auth-service";
+import { offlineAuthService } from "./offline-auth.service";
 
 export const rolesService = {
   /**
@@ -6,13 +7,22 @@ export const rolesService = {
    */
   async getAll() {
     try {
-      const response = await authApi.get('/api/roles/');
+      const response = await authApi.get("/api/roles/");
+      const rolesData = Array.isArray(response.data)
+        ? response.data
+        : response.data.roles || response.data.data || [];
+      await offlineAuthService.cacheRoles(rolesData);
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 403) {
-        console.log('[rolesService] Acceso restringido (403): El rol actual no tiene permisos para listar roles remotos. Usando datos locales.');
+        console.log(
+          "[rolesService] Acceso restringido (403): El rol actual no tiene permisos para listar roles remotos. Usando datos locales.",
+        );
       } else {
-        console.warn('rolesService.getAll: No se pudieron obtener los roles.', error.response?.status || error.message);
+        console.warn(
+          "rolesService.getAll: No se pudieron obtener los roles.",
+          error.response?.status || error.message,
+        );
       }
       return []; // Devolvemos un array vacío para evitar romper la UI
     }
@@ -21,15 +31,15 @@ export const rolesService = {
   /**
    * Create a new role
    */
-  async create(data: { name: string, description?: string }) {
-    const response = await authApi.post('/api/roles/', data);
+  async create(data: { name: string; description?: string }) {
+    const response = await authApi.post("/api/roles/", data);
     return response.data;
   },
 
   /**
    * Update an existing role
    */
-  async update(id: string, data: { name: string, description?: string }) {
+  async update(id: string, data: { name: string; description?: string }) {
     const response = await authApi.put(`/api/roles/${id}`, data);
     return response.data;
   },
@@ -40,5 +50,5 @@ export const rolesService = {
   async delete(id: string) {
     const response = await authApi.delete(`/api/roles/${id}`);
     return response.data;
-  }
+  },
 };

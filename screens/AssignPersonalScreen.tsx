@@ -91,7 +91,9 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   const [personnel, setPersonnel] = useState<any[]>([]);
   const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
   const [selectedLote, setSelectedLote] = useState<any>(route.params?.lote || null);
-  const [selectedEtapa, setSelectedEtapa] = useState<string>(route.params?.etapa || EtapaProcesoValues[0]);
+  const [selectedEtapa, setSelectedEtapa] = useState<string>(
+  route.params?.etapa || EtapaProcesoValues.find(e => e !== 'Administración') || EtapaProcesoValues[0]
+);
   const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>([]);
   const [existingAssignments, setExistingAssignments] = useState<any[]>([]);
   const [initialSelectedIds, setInitialSelectedIds] = useState<string[]>([]);
@@ -275,15 +277,21 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   };
 
   const handleAssign = async () => {
-    if (!isAuthorized) {
-      CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para realizar esta acción.');
-      return;
-    }
+  if (!isAuthorized) {
+    CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para realizar esta acción.');
+    return;
+  }
 
-    if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
-      CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
-      return;
-    }
+  // NUEVO: evita guardar con una etapa inválida
+  if (!selectedEtapa || selectedEtapa === 'Administración') {
+    CustomAlert.show('ALERTA', 'Etapa inválida', 'Debe seleccionar una etapa de trabajo válida antes de asignar.');
+    return;
+  }
+
+  if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
+    CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
+    return;
+  }
 
     try {
       setLoading(true);
