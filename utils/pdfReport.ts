@@ -1,6 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
+import { sembradoMetricasService as svc } from '../services/sembrado_metricas.service';
 
 const BROWN = '#5D3A2C';
 const BEIGE = '#F5EDE8';
@@ -61,63 +62,57 @@ function duracion(inicio: string | undefined | null, fin: string | undefined | n
 // ─── Detección de incidencias (misma lógica que checkIncidenceAlerts) ────────
 
 function computeAlertas(phaseId: string, m: any): { titulo: string; msg: string }[] {
-  const n = (v: any) => (v === undefined || v === null || v === '') ? null : Number(v);
   const out: { titulo: string; msg: string }[] = [];
 
   if (phaseId === 'Germinacion') {
-    const tasa = n(m.tasa_germinacion), dias = n(m.dias_emergencia);
-    if (tasa !== null && tasa < 80)
+    if (svc.esTasaGerminacionCritica(m.tasa_germinacion))
       out.push({ titulo: 'Baja Tasa de Germinación', msg: 'El porcentaje de germinación menor al 80% indica problemas de viabilidad de la semilla o mal manejo de humedad/temperatura.' });
-    if (dias !== null && dias > 75)
+    if (svc.esSurgimientoRetrasado(m.dias_emergencia))
       out.push({ titulo: 'Surgimiento Retrasado', msg: 'Pasarse de los 75 días es sinónimo de pérdidas por hongos o debilidad estructural en la planta.' });
     if (m.presencia_hongos && m.presencia_hongos !== 'Ninguna')
       out.push({ titulo: 'Presencia de Hongos', msg: `Se ha detectado una presencia ${String(m.presencia_hongos).toLowerCase()} de hongos. Se recomienda aplicar tratamiento fungicida preventivo.` });
   }
 
   if (phaseId === 'Vivero') {
-    const hojas = n(m.pares_hojas_verdaderas), altura = n(m.altura_plantula);
-    if (hojas !== null && hojas < 2)
+    if (svc.esHojasVerdaderasJoven(m.pares_hojas_verdaderas))
       out.push({ titulo: 'Planta Demasiado Joven', msg: 'La planta es demasiado joven; su sistema de raíces no se ha desarrollado lo suficiente.' });
-    if (hojas !== null && hojas > 8)
+    if (svc.esHojasVerdaderasPasada(m.pares_hojas_verdaderas))
       out.push({ titulo: 'Planta Pasada de Tiempo', msg: 'La planta se ha "pasado de tiempo" en la bolsa.' });
-    if (altura !== null && altura < 15)
+    if (svc.esAlturaMuyCorta(m.altura_plantula))
       out.push({ titulo: 'Tallo muy Corto', msg: 'El tallo es muy corto y frágil; la maleza o acumulación de tierra podrían asfixiarla en campo.' });
-    if (altura !== null && altura > 35)
+    if (svc.esAlturaMuyLarga(m.altura_plantula))
       out.push({ titulo: 'Tallo muy Largo (Hilvanado)', msg: 'La planta sufrió hilvanado por exceso de sombra; el tallo es largo pero muy débil ante el viento.' });
   }
 
   if (phaseId === 'Crecimiento') {
-    const indice = n(m.indice_crecimiento), grosor = n(m.grosor_tallo);
-    const bandolas = n(m.formacion_bandolas), foliar = n(m.incidencia_foliar);
-    if (indice !== null && indice < 0.50)
+    if (svc.esIndiceEnanismo(m.indice_crecimiento))
       out.push({ titulo: 'Retraso de Desarrollo', msg: 'Retraso severo en el desarrollo (enanismo). Verificar compactación del suelo o presencia de nematodos.' });
-    if (indice !== null && indice > 2.20)
+    if (svc.esIndiceExcesivo(m.indice_crecimiento))
       out.push({ titulo: 'Crecimiento Excesivo', msg: 'Planta demasiado alta; se dificulta la recolección manual y se pierde eficiencia productiva.' });
-    if (grosor !== null && grosor < 10)
+    if (svc.esTalloRaquitico(m.grosor_tallo))
       out.push({ titulo: 'Tallo Raquítico', msg: 'Tallo raquítico o hilado; la planta carece de la fuerza estructural para sostener futuras cosechas.' });
-    if (grosor !== null && grosor > 60)
+    if (svc.esTalloDesproporcionado(m.grosor_tallo))
       out.push({ titulo: 'Grosor Desproporcionado', msg: 'Posible desbalance nutricional por exceso de fertilización dirigida únicamente al tronco.' });
-    if (bandolas !== null && bandolas < 10)
+    if (svc.esBandolasDeficiente(m.formacion_bandolas))
       out.push({ titulo: 'Bandolas Deficientes', msg: 'Pocas ramas se traducirán directamente en una baja o nula producción de café.' });
-    if (bandolas !== null && bandolas > 50)
+    if (svc.esBandolasExcesivo(m.formacion_bandolas))
       out.push({ titulo: 'Exceso de Densidad Foliar', msg: 'La sombra interna puede arruinar la maduración y crear un microclima propenso a hongos.' });
-    if (foliar !== null && foliar > 15)
+    if (svc.esIncidenciaFoliarSevera(m.incidencia_foliar))
       out.push({ titulo: 'Incidencia Foliar Crítica', msg: 'Ataque severo de plagas o enfermedades detectado. Riesgo inminente de defoliación; aplique tratamiento fitosanitario.' });
-    else if (foliar !== null && foliar > 10)
+    else if (svc.esIncidenciaFoliarModerada(m.incidencia_foliar))
       out.push({ titulo: 'Alta Incidencia Foliar', msg: 'La incidencia foliar supera el 10%. Revise el estado nutricional y sanitario de las hojas.' });
   }
 
   if (phaseId === 'Maduracion') {
-    const cuajado = n(m.porcentaje_cuajado), broca = n(m.incidencia_broca), brix = n(m.grados_brix);
-    if (cuajado !== null && cuajado < 60)
+    if (svc.esCuajadoBajo(m.porcentaje_cuajado))
       out.push({ titulo: 'Bajo Cuajado de Fruto', msg: 'Baja eficiencia de amarre de fruto; se proyecta una pérdida significativa en el rendimiento de la cosecha.' });
-    if (broca !== null && broca > 5)
+    if (svc.esBrocaSuperCritica(m.incidencia_broca))
       out.push({ titulo: 'Incidencia de Broca Crítica', msg: 'La incidencia de Broca supera el 5%. Se requiere la creación de una incidencia técnica obligatoria.' });
-    else if (broca !== null && broca > 3)
+    else if (svc.esBrocaCritica(m.incidencia_broca))
       out.push({ titulo: 'Alerta de Plaga', msg: 'La incidencia de broca supera el límite permitido, poniendo en riesgo la calidad física del grano.' });
-    if (brix !== null && brix < 14)
+    if (svc.esBrixBajo(m.grados_brix))
       out.push({ titulo: 'Baja Concentración de Azúcares', msg: 'Posible deficiencia nutricional o estrés hídrico que afectará el dulzor y notas de sabor del café.' });
-    if (brix !== null && brix > 22)
+    if (svc.esBrixAlto(m.grados_brix))
       out.push({ titulo: 'Maduración Acelerada', msg: 'Maduración acelerada por golpe de calor o deshidratación interna del fruto; verificar uniformidad del lote.' });
   }
 
