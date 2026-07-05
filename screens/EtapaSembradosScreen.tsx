@@ -44,6 +44,7 @@
   import { CustomAlert } from '../components/GlobalAlert';
   import { useAuthStore } from '../store/authStore';
   import { SembradoWizard } from '../components/SembradoWizard';
+  import { generarInformeSembrado } from '../utils/pdfReport';
 
   const { width } = Dimensions.get('window');
 
@@ -774,8 +775,19 @@
       setPickerModal({ ...pickerModal, visible: false, field: '', options: [], title: '' });
     };
 
-    const handleGenerateReport = () => {
-      CustomAlert.show('SUCCESS', 'Informe Generado', 'Se ha compilado el historial técnico de sembrado en un documento digital (PDF).');
+    const handleGenerateReport = async () => {
+      try {
+        const asignaciones = await lotesService.getAssignedPersonnel(lote.id);
+        const encargados = asignaciones.map((a: any) => ({
+          first_name: a.trabajador?.first_name,
+          last_name: a.trabajador?.last_name,
+          email: a.trabajador?.email,
+          etapa: a.etapa,
+        }));
+        await generarInformeSembrado(lote, dbMetrics, encargados);
+      } catch {
+        CustomAlert.show('ERROR', 'Error', 'No se pudo generar el informe. Intente nuevamente.');
+      }
     };
 
     if (loading) {
