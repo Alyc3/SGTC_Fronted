@@ -44,6 +44,7 @@
   import { CustomAlert } from '../components/GlobalAlert';
   import { useAuthStore } from '../store/authStore';
   import { SembradoWizard } from '../components/SembradoWizard';
+  import { generarInformeSembrado } from '../utils/pdfReport';
 
   const { width } = Dimensions.get('window');
 
@@ -774,8 +775,19 @@
       setPickerModal({ ...pickerModal, visible: false, field: '', options: [], title: '' });
     };
 
-    const handleGenerateReport = () => {
-      CustomAlert.show('SUCCESS', 'Informe Generado', 'Se ha compilado el historial técnico de sembrado en un documento digital (PDF).');
+    const handleGenerateReport = async () => {
+      try {
+        const asignaciones = await lotesService.getAssignedPersonnel(lote.id);
+        const encargados = asignaciones.map((a: any) => ({
+          first_name: a.trabajador?.first_name,
+          last_name: a.trabajador?.last_name,
+          email: a.trabajador?.email,
+          etapa: a.etapa,
+        }));
+        await generarInformeSembrado(lote, dbMetrics, encargados);
+      } catch {
+        CustomAlert.show('ERROR', 'Error', 'No se pudo generar el informe. Intente nuevamente.');
+      }
     };
 
     if (loading) {
@@ -952,7 +964,11 @@
           </SembradoWizard>
 
           <View style={styles.reportSection}>
-            <TouchableOpacity style={styles.reportButton} onPress={handleGenerateReport}>
+            <TouchableOpacity
+              style={[styles.reportButton, !['Germinacion','Vivero','Crecimiento','Floracion','Maduracion'].every(f => dbMetrics[f]?.fecha_fin) && styles.reportButtonDisabled]}
+              onPress={handleGenerateReport}
+              disabled={!['Germinacion','Vivero','Crecimiento','Floracion','Maduracion'].every(f => dbMetrics[f]?.fecha_fin)}
+            >
               <FileText size={20} color="white" />
               <Text style={styles.reportButtonText}>GENERAR INFORME TÉCNICO</Text>
             </TouchableOpacity>
@@ -1605,6 +1621,10 @@
       paddingVertical: 18,
       borderRadius: 20,
       ...Theme.shadows.ambient,
+    },
+    reportButtonDisabled: {
+      backgroundColor: '#C4B5AD',
+      opacity: 0.6,
     },
     reportButtonText: {
       fontFamily: 'Manrope',

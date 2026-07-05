@@ -36,6 +36,7 @@ import { useAuthStore } from '../store/authStore';
 import { asignacionPersonalService, cosechaService } from '../services/cosecha.service';
 import { lotesService } from '../services/lotes.service';
 import { CustomAlert } from '../components/GlobalAlert';
+import { generarInformeCosecha } from '../utils/pdfReport';
 
 // ─── Constantes ─────────────────
 
@@ -404,6 +405,20 @@ const handleEditar = () => {
   setEditMode(true);
 };
 
+  const handleGenerateReport = async () => {
+    try {
+      const workers = workersRegistrados.map((w: any) => ({
+        nombre: `${w.trabajador?.first_name || ''} ${w.trabajador?.last_name || ''}`.trim(),
+        cantidad_cosechada: w.cantidad_cosechada ?? 0,
+        tipo_grano: w.tipo_grano ?? '—',
+        pago_calculado: w.pago_calculado ?? 0,
+      }));
+      await generarInformeCosecha(lote, cosechaExistente, workers);
+    } catch {
+      CustomAlert.show('ERROR', 'Error', 'No se pudo generar el informe. Intente nuevamente.');
+    }
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -749,6 +764,14 @@ const handleEditar = () => {
           )}
         </View>
 
+        {modo === 'readonly_cosecha' && (
+          <View style={styles.reportSection}>
+            <TouchableOpacity style={styles.reportButton} onPress={handleGenerateReport}>
+              <Text style={styles.reportButtonText}>GENERAR INFORME TÉCNICO</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -825,6 +848,9 @@ const styles = StyleSheet.create({
   evidenceImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 10, backgroundColor: '#F3F4F6' },
   previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   previewImage: { width: '100%', height: '100%' },
+  reportSection: { padding: 16, paddingBottom: 8 },
+  reportButton: { backgroundColor: '#5D3A2C', borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center' },
+  reportButtonText: { fontFamily: 'Manrope', fontSize: 10, fontWeight: '800', color: 'white', letterSpacing: 1.5 },
 });
 
 export default EtapaCosechaScreen;
