@@ -964,7 +964,11 @@
           </SembradoWizard>
 
           <View style={styles.reportSection}>
-            <TouchableOpacity style={styles.reportButton} onPress={handleGenerateReport}>
+            <TouchableOpacity
+              style={[styles.reportButton, Object.keys(dbMetrics).length === 0 && styles.reportButtonDisabled]}
+              onPress={handleGenerateReport}
+              disabled={Object.keys(dbMetrics).length === 0}
+            >
               <FileText size={20} color="white" />
               <Text style={styles.reportButtonText}>GENERAR INFORME TÉCNICO</Text>
             </TouchableOpacity>
@@ -1617,6 +1621,10 @@
       paddingVertical: 18,
       borderRadius: 20,
       ...Theme.shadows.ambient,
+    },
+    reportButtonDisabled: {
+      backgroundColor: '#C4B5AD',
+      opacity: 0.6,
     },
     reportButtonText: {
       fontFamily: 'Manrope',
