@@ -965,9 +965,9 @@
 
           <View style={styles.reportSection}>
             <TouchableOpacity
-              style={[styles.reportButton, Object.keys(dbMetrics).length === 0 && styles.reportButtonDisabled]}
+              style={[styles.reportButton, !['Germinacion','Vivero','Crecimiento','Floracion','Maduracion'].every(f => dbMetrics[f]?.fecha_fin) && styles.reportButtonDisabled]}
               onPress={handleGenerateReport}
-              disabled={Object.keys(dbMetrics).length === 0}
+              disabled={!['Germinacion','Vivero','Crecimiento','Floracion','Maduracion'].every(f => dbMetrics[f]?.fecha_fin)}
             >
               <FileText size={20} color="white" />
               <Text style={styles.reportButtonText}>GENERAR INFORME TÉCNICO</Text>
