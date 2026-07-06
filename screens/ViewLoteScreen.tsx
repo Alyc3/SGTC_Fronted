@@ -429,6 +429,16 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
               </TouchableOpacity>
             )}
 
+            {title === 'Cosechado' && isCompleted && (
+              <TouchableOpacity
+                style={styles.monitorStageButton}
+                onPress={() => navigation.navigate('EtapaCosecha', { lote, readOnly: userRole.includes('capataz') })}
+              >
+                <Eye size={14} color={Theme.colors.white} />
+                <Text style={styles.monitorStageText}>Monitorear</Text>
+              </TouchableOpacity>
+            )}
+
             {title === 'Sembrado' && (status === 'En_Proceso' || status === 'Completada') && (
               <TouchableOpacity
                 style={styles.monitorStageButton}
@@ -600,10 +610,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
               <Text style={styles.progressPct}>
                 {isStrictTechnician ? 'VISTA TÉCNICA' : 'GESTIÓN SECUENCIAL'}
               </Text>
-              <TouchableOpacity style={styles.simulateHarvestButton} onPress={openHarvestModal}>
-                <ClipboardCheck size={13} color={Theme.colors.secondary} />
-                <Text style={styles.simulateHarvestText}>Simular cosecha</Text>
-              </TouchableOpacity>
+              
             </View>
           </View>
 

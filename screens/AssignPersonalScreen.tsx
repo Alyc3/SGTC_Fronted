@@ -234,9 +234,17 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
     );
   }, [existingAssignments, selectedEtapa]);
 
+  const assignedInOtherStagesIds = useMemo(() => {
+    return new Set(
+      existingAssignments
+        .filter(a => a.etapa !== selectedEtapa)
+        .map(a => a.trabajador_id || a.trabajador?.id)
+    );
+  }, [existingAssignments, selectedEtapa]);
+
   const togglePersonnelSelection = (id: string) => {
     // Si NO estamos en modo edición y ya está asignado, bloqueamos la selección
-    if (!isEditMode && alreadyAssignedIds.has(id)) return;
+    if (!isEditMode && (alreadyAssignedIds.has(id) || assignedInOtherStagesIds.has(id))) return;
 
     const worker = personnel.find(p => p.id === id);
     const roleNameRaw = rolesMap[worker?.role_id] || '';
@@ -299,6 +307,29 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       const normalize = (str: string) => 
         str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
 
+      const idsToAssign = isEditMode
+        ? selectedPersonnel.filter(id => !initialSelectedIds.includes(id))
+        : selectedPersonnel;
+
+      for (const workerId of idsToAssign) {
+        if (assignedInOtherStagesIds.has(workerId)) {
+          const worker = personnel.find(p => p.id === workerId);
+          const workerName = worker ? `${worker.first_name || ''} ${worker.last_name || ''}`.trim() : 'El trabajador';
+          CustomAlert.show(
+            'ALERTA',
+            'Asignación Repetida',
+            `${workerName} ya está asignado en otra etapa de este lote. Debe finalizar o liberar esa asignación antes de volver a usarlo.`
+          );
+          return;
+        }
+
+        const alreadyAssigned = await parcelasService.hasAsignacion(selectedLote.id, workerId, selectedEtapa as any);
+        if (alreadyAssigned) {
+          CustomAlert.show('ALERTA', 'Asignación Duplicada', 'El trabajador ya está asignado a esta etapa y lote.');
+          return;
+        }
+      }
+
       // 1. Identificar si estamos asignando un técnico en la selección actual
       const tecnicoSeleccionado = selectedPersonnel.find(pId => {
         const p = personnel.find(w => w.id === pId);
@@ -328,8 +359,8 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           await parcelasService.desasignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
         }
 
-        // C. Insertar los que quedaron seleccionados (la función asignarPersonal ya evita duplicados internos)
-        for (const workerId of selectedPersonnel) {
+        // C. Insertar únicamente los nuevos seleccionados para no recrear asignaciones existentes
+        for (const workerId of idsToAssign) {
           await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
         }
 
@@ -346,7 +377,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           await parcelasService.limpiarAsignacionesEspecificas(selectedLote.id, selectedEtapa, idsTecnicosPosibles);
         }
 
-        for (const workerId of selectedPersonnel) {
+        for (const workerId of idsToAssign) {
           await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
         }
       }
@@ -375,10 +406,11 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   const renderPersonnelItem = ({ item }: { item: any }) => {
     const isSelected = selectedPersonnel.includes(item.id);
     const isAlreadyAssigned = alreadyAssignedIds.has(item.id);
+    const isAssignedInOtherStage = assignedInOtherStagesIds.has(item.id);
     const roleName = rolesMap[item.role_id] || item.role_id || 'TRABAJADOR';
 
     // En modo edición, el "sombreado" no bloquea si el usuario está en la lista de seleccionados actual
-    const shouldShade = !isEditMode && isAlreadyAssigned;
+    const shouldShade = !isEditMode && (isAlreadyAssigned || isAssignedInOtherStage);
 
     return (
       <TouchableOpacity
@@ -404,7 +436,9 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
         {shouldShade ? (
           <View style={{ alignItems: 'center' }}>
             <ShieldCheck size={24} color={Theme.colors.secondary} />
-            <Text style={{ fontSize: 8, color: Theme.colors.secondary, fontWeight: '700' }}>ASIGNADO</Text>
+            <Text style={{ fontSize: 8, color: Theme.colors.secondary, fontWeight: '700' }}>
+              {isAssignedInOtherStage ? 'EN OTRA ETAPA' : 'ASIGNADO'}
+            </Text>
           </View>
         ) : isSelected ? (
           <CheckCircle2 size={24} color={Theme.colors.primary} />

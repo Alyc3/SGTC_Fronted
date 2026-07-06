@@ -92,7 +92,8 @@ const InventarioSemillasScreen = ({ navigation }: any) => {
           await semillasService.delete(id);
           CustomAlert.show('SUCCESS', 'Éxito', 'Semilla dada de baja correctamente.');
         } catch (error) {
-          CustomAlert.show('ERROR', 'Error', 'No se pudo procesar la baja.');
+          const message = error instanceof Error ? error.message : 'No se pudo procesar la baja.';
+          CustomAlert.show('ERROR', 'Error', message);
         }
       },
       'CONFIRMAR',

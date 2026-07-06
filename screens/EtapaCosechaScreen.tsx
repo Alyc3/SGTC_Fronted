@@ -37,6 +37,7 @@ import { asignacionPersonalService, cosechaService } from '../services/cosecha.s
 import { lotesService } from '../services/lotes.service';
 import { CustomAlert } from '../components/GlobalAlert';
 import { generarInformeCosecha } from '../utils/pdfReport';
+import { syncWorker } from '../services/sync.worker';
 
 // ─── Constantes ─────────────────
 
@@ -147,6 +148,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
 
       const resumen = (cosechaPersonnel.length > 0 ? cosechaPersonnel : harvestPersonnel).map((p: any, index: number) => ({
         id: p.id || p.trabajador_id || p.trabajador?.id || String(index),
+        asignacionId: p.id || null,
         nombre: `${p.trabajador?.first_name || 'Trabajador'} ${p.trabajador?.last_name || ''}`.trim(),
         cantidad_cosechada: p.cantidad_cosechada ?? 0,
         tipo_grano: p.tipo_grano ?? 'Rojo',
@@ -355,7 +357,9 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
         const resumen = workersResumen.find((w: any) => w.key === key);
         if (!resumen) return Promise.resolve();
         const pagoCalculado = parseFloat((resumen.cantidad * resumen.tarifa).toFixed(2));
-        return asignacionPersonalService.updateCosecha(p.id, {
+        const asignacionId = p.asignacionId || p.id || p.trabajador_id || p.trabajador?.id;
+        if (!asignacionId) return Promise.resolve();
+        return asignacionPersonalService.updateCosecha(asignacionId, {
           cantidad_cosechada: resumen.cantidad,
           tipo_grano: resumen.tipoGrano,
           pago_calculado: pagoCalculado,
@@ -371,6 +375,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     }
 
     await lotesService.updateStageStatus(lote.id, 'Cosechado', 'Completada');
+    await syncWorker.syncPendingData();
 
     CustomAlert.show('SUCCESS', 'Éxito', esEdicion ? 'Cosecha actualizada correctamente.' : 'Cosecha registrada correctamente.', () => {
       navigation.navigate('ViewLote', { lote });

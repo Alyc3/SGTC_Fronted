@@ -278,6 +278,12 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
         const generatedCode = lotesService.generateLotCode(parcela.nombre, lot.variedadCafe);
         const finalCode = lotesData.length > 1 ? `${generatedCode}-${(i+1).toString().padStart(2, '0')}` : generatedCode;
 
+        const hasDuplicateCode = await lotesService.hasDuplicateCode(parcelaId, finalCode, isEditing ? loteId : undefined);
+        if (hasDuplicateCode) {
+          CustomAlert.show('ALERTA', 'Lote Duplicado', `Ya existe un lote con el código ${finalCode} en esta parcela.`);
+          return;
+        }
+
         const data: any = {
           id: isEditing ? loteId : `lote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           codigo: finalCode,

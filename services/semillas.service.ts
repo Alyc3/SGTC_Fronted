@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { semillas } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { semillas, lotes } from '../db/schema';
+import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { neon } from '@neondatabase/serverless';
 import { networkService } from './network.service';
@@ -73,6 +73,26 @@ export const semillasService = {
       where: eq(semillas.id, id)
     });
   },
+  async hasTechnicalDuplicate(data: typeof semillas.$inferInsert, excludeId?: string) {
+    const existing = await db.query.semillas.findFirst({
+      where: (seed, { eq, and, ne }) => {
+        const baseFilter = and(
+          eq(seed.variedad_id, data.variedad_id),
+          eq(seed.pais_origen_id, data.pais_origen_id),
+          eq(seed.distribuidor_id, data.distribuidor_id),
+          eq(seed.metodo_secado_id, data.metodo_secado_id),
+          eq(seed.seleccion_id, data.seleccion_id),
+          eq(seed.olor_id, data.olor_id),
+          eq(seed.color_id, data.color_id),
+          eq(seed.integridad_id, data.integridad_id)
+        );
+
+        return excludeId ? and(baseFilter, ne(seed.id, excludeId)) : baseFilter;
+      }
+    });
+
+    return !!existing;
+  },
   async create(data: typeof semillas.$inferInsert) {
     return await db.insert(semillas).values({ ...data, id: data.id ?? uuidv4() }).returning();
   },
@@ -84,6 +104,14 @@ export const semillasService = {
     }).where(eq(semillas.id, id)).returning();
   },
   async delete(id: string) {
+    const linkedLot = await db.query.lotes.findFirst({
+      where: eq(lotes.semilla_id, id)
+    });
+
+    if (linkedLot) {
+      throw new Error('No se puede dar de baja una semilla que ya está registrada en un lote.');
+    }
+
     // Soft delete (dar de baja)
     return await db.update(semillas)
       .set({ 

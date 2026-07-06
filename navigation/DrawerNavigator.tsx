@@ -120,7 +120,7 @@ export const DrawerNavigator = () => {
         name="ListarParcela" 
         component={ListarParcelaScreen} 
         options={{ 
-          title: 'Parcelas',
+          title: 'Gestión de Parcelas',
           drawerIcon: ({ color }) => <Map size={20} color={color} />,
           drawerItemStyle: canAccessParcelas ? {} : { display: 'none' }
         }}
@@ -130,7 +130,7 @@ export const DrawerNavigator = () => {
         name="InventarioSemillas" 
         component={InventarioSemillasScreen} 
         options={{ 
-          title: 'Semillas',
+          title: 'Gestión de Semillas',
           drawerIcon: ({ color }) => <Sprout size={20} color={color} />,
           drawerItemStyle: canAccessSemillas ? {} : { display: 'none' }
         }}
@@ -140,7 +140,7 @@ export const DrawerNavigator = () => {
         name="Personal" 
         component={PersonalScreen} 
         options={{ 
-          title: 'Personal',
+          title: 'Gestión de Personal',
           drawerIcon: ({ color }) => <Users size={20} color={color} />,
           drawerItemStyle: canAccessPersonal ? {} : { display: 'none' }
         }}

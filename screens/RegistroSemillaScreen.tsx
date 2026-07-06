@@ -391,6 +391,12 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
           integridad_id: data.integridad_id || null,
         };
 
+        const hasDuplicateSeed = await semillasService.hasTechnicalDuplicate(finalData as any, isEditing ? seedId : undefined);
+        if (hasDuplicateSeed) {
+          CustomAlert.show('ALERTA', 'Semilla Duplicada', 'Ya existe una semilla con la misma combinación técnica registrada.');
+          return;
+        }
+
         if (isEditing) {
           await semillasService.update(seedId, { ...finalData, fecha_modificacion: new Date().toISOString() });
           CustomAlert.show('SUCCESS', 'Éxito', 'Semilla actualizada correctamente.');

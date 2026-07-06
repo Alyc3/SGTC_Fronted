@@ -40,6 +40,18 @@ export const parcelasService = {
     }).returning();
   },
 
+  async hasAsignacion(loteId: string, trabajadorId: string, etapa: any) {
+    const existing = await db.query.asignacion_personal.findFirst({
+      where: (asig, { eq, and }) => and(
+        eq(asig.lote_id, loteId),
+        eq(asig.trabajador_id, trabajadorId),
+        eq(asig.etapa, etapa)
+      )
+    });
+
+    return !!existing;
+  },
+
   async desasignarPersonal(loteId: string, trabajadorId: string, etapa: any) {
     // 1. Buscar el registro exacto para asegurar un borrado infalible por ID primario
     const existing = await db.query.asignacion_personal.findFirst({
