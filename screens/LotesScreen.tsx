@@ -363,6 +363,8 @@ const LotesScreen = () => {
   }));
 
   const sections = useMemo(() => {
+    console.log('AUTH userId:', userId);
+console.log('Asignaciones crudas:', JSON.stringify(lotes.map(l => l.asignaciones?.map((a:any) => a.trabajador_id))));
     // 1. Filtrado usando el servicio (incluye lógica de permisos)
     const filtered = lotesService.filterLotes(
       lotes || [],

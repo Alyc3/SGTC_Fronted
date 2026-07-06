@@ -285,33 +285,48 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   };
 
   const handleAssign = async () => {
-  if (!isAuthorized) {
-    CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para realizar esta acción.');
-    return;
-  }
+    if (!isAuthorized) {
+      CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para realizar esta acción.');
+      return;
+    }
 
-  // NUEVO: evita guardar con una etapa inválida
-  if (!selectedEtapa || selectedEtapa === 'Administración') {
-    CustomAlert.show('ALERTA', 'Etapa inválida', 'Debe seleccionar una etapa de trabajo válida antes de asignar.');
-    return;
-  }
+    // NUEVO: evita guardar con una etapa inválida
+    if (!selectedEtapa || selectedEtapa === 'Administración') {
+      CustomAlert.show('ALERTA', 'Etapa inválida', 'Debe seleccionar una etapa de trabajo válida antes de asignar.');
+      return;
+    }
 
-  if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
-    CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
-    return;
-  }
+    if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
+      CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
+      return;
+    }
 
     try {
       setLoading(true);
 
-      const normalize = (str: string) => 
+      const normalize = (str: string) =>
         str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+
+      const isCapatazWorker = (workerId: string) => {
+        const worker = personnel.find(p => p.id === workerId);
+        const roleName = normalize(rolesMap[worker?.role_id] || '');
+        return roleName === 'capataz';
+      };
+
+      // El capataz siempre se registra como global (etapa 'Administración'),
+      // sin importar qué etapa esté seleccionada en el carrusel.
+      const getEtapaParaAsignar = (workerId: string) =>
+        isCapatazWorker(workerId) ? 'Administración' : selectedEtapa;
 
       const idsToAssign = isEditMode
         ? selectedPersonnel.filter(id => !initialSelectedIds.includes(id))
         : selectedPersonnel;
 
       for (const workerId of idsToAssign) {
+        // Si es capataz, no aplican las validaciones de "asignado en otra etapa":
+        // su asignación es intencionalmente global.
+        if (isCapatazWorker(workerId)) continue;
+
         if (assignedInOtherStagesIds.has(workerId)) {
           const worker = personnel.find(p => p.id === workerId);
           const workerName = worker ? `${worker.first_name || ''} ${worker.last_name || ''}`.trim() : 'El trabajador';
@@ -323,7 +338,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           return;
         }
 
-        const alreadyAssigned = await parcelasService.hasAsignacion(selectedLote.id, workerId, selectedEtapa as any);
+        const alreadyAssigned = await parcelasService.hasAsignacion(selectedLote.id, workerId, getEtapaParaAsignar(workerId) as any);
         if (alreadyAssigned) {
           CustomAlert.show('ALERTA', 'Asignación Duplicada', 'El trabajador ya está asignado a esta etapa y lote.');
           return;
@@ -339,8 +354,8 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
 
       if (isEditMode) {
         // MODO EDICIÓN: Estrategia de Reemplazo Total para Técnicos y Diff para el resto
-        
-        // A. Si hay un técnico seleccionado, barremos CUALQUIER técnico previo de la BD 
+
+        // A. Si hay un técnico seleccionado, barremos CUALQUIER técnico previo de la BD
         // para asegurar el reemplazo, sin importar IDs.
         if (tecnicoSeleccionado) {
           const idsTecnicosPosibles = personnel
@@ -349,7 +364,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
               return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
             })
             .map(p => p.id);
-          
+
           await parcelasService.limpiarAsignacionesEspecificas(selectedLote.id, selectedEtapa, idsTecnicosPosibles);
         }
 
@@ -361,33 +376,33 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
 
         // C. Insertar únicamente los nuevos seleccionados para no recrear asignaciones existentes
         for (const workerId of idsToAssign) {
-          await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
+          await parcelasService.asignarPersonal(selectedLote.id, workerId, getEtapaParaAsignar(workerId) as any);
         }
 
       } else {
         // MODO NORMAL: Barrer técnicos previos si se está agregando uno nuevo
         if (tecnicoSeleccionado) {
-           const idsTecnicosPosibles = personnel
+          const idsTecnicosPosibles = personnel
             .filter(p => {
               const rName = normalize(rolesMap[p.role_id] || '');
               return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
             })
             .map(p => p.id);
-          
+
           await parcelasService.limpiarAsignacionesEspecificas(selectedLote.id, selectedEtapa, idsTecnicosPosibles);
         }
 
         for (const workerId of idsToAssign) {
-          await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
+          await parcelasService.asignarPersonal(selectedLote.id, workerId, getEtapaParaAsignar(workerId) as any);
         }
       }
-      
+
       // Disparar sincronización silenciosa en segundo plano
       syncWorker.syncPendingData();
-      
+
       CustomAlert.show('SUCCESS', 'Asignación Actualizada', 'Los cambios en la cuadrilla han sido guardados exitosamente.', () => {
         if (!isEditMode) setSelectedPersonnel([]);
-        fetchData(); 
+        fetchData();
         if (navigation.canGoBack()) {
           navigation.goBack();
         } else {
