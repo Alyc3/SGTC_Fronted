@@ -244,7 +244,7 @@
   } catch (error) {
     CustomAlert.show('ERROR', 'Error', 'No se pudo iniciar la etapa.');
   }
-};
+}; // Fin de handleStartStage
 
     const ROLE_ID_CLASIFICADOR = '4777c479-e907-4d81-bf19-9a6c2c963bc0';
     const ROLE_ID_RECOLECTOR = '54982b58-db99-4c80-809f-8e3fde952743';
