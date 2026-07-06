@@ -36,6 +36,8 @@ import { useAuthStore } from '../store/authStore';
 import { asignacionPersonalService, cosechaService } from '../services/cosecha.service';
 import { lotesService } from '../services/lotes.service';
 import { CustomAlert } from '../components/GlobalAlert';
+import { generarInformeCosecha } from '../utils/pdfReport';
+import { syncWorker } from '../services/sync.worker';
 
 // ─── Constantes ─────────────────
 
@@ -80,6 +82,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
   const harvestPersonnel = route.params?.harvestPersonnel || [];
   const assignedPersonnel = route.params?.assignedPersonnel || [];
   const { role, userId } = useAuthStore();
+  const readOnlyParam = route.params?.readOnly === true;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,8 +92,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
 
   // 'form' = técnico asignado puede registrar; 'readonly_cosecha' = ya existe;
   // 'readonly_nopermiso' = sin permiso / sin asignación
-  const [modo, setModo] = useState<'loading' | 'form' | 'readonly_cosecha' | 'readonly_nopermiso'>('loading');
-  const [cosechaExistente, setCosechaExistente] = useState<any>(null);
+const [modo, setModo] = useState<'loading' | 'form' | 'readonly_cosecha' | 'readonly_pending' | 'readonly_nopermiso'>('loading');  const [cosechaExistente, setCosechaExistente] = useState<any>(null);
   const [workersRegistrados, setWorkersRegistrados] = useState<any[]>([]);
   const [editMode, setEditMode] = useState(false);
 
@@ -132,10 +134,14 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     if (!lote?.id) return;
     try {
       setLoading(true);
-      const [cosecha, personnelFresh] = await Promise.all([
+      const [cosecha, personnelFresh, stages] = await Promise.all([
         cosechaService.getByLoteId(lote.id),
         lotesService.getAssignedPersonnel(lote.id),
+        lotesService.getStages(lote.id),
       ]);
+
+      const cosechaStage = (stages || []).find((s: any) => s.etapa === 'Cosechado');
+      const stageFechaInicio = cosechaStage?.fecha_inicio || null;
 
       // Reemplazamos la lista "congelada" que llegó por route.params
       // con los datos actualizados (cantidad_cosechada, pago_calculado, tipo_grano)
@@ -146,12 +152,16 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
 
       const resumen = (cosechaPersonnel.length > 0 ? cosechaPersonnel : harvestPersonnel).map((p: any, index: number) => ({
         id: p.id || p.trabajador_id || p.trabajador?.id || String(index),
+        asignacionId: p.id || null,
         nombre: `${p.trabajador?.first_name || 'Trabajador'} ${p.trabajador?.last_name || ''}`.trim(),
         cantidad_cosechada: p.cantidad_cosechada ?? 0,
         tipo_grano: p.tipo_grano ?? 'Rojo',
         pago_calculado: p.pago_calculado ?? 0,
       }));
       setWorkersRegistrados(resumen);
+
+      const esTecnico = role === ROL_TECNICO;
+      const hayPersonalAsignado = harvestPersonnel.length > 0 || assignedPersonnel.length > 0;
 
       if (cosecha) {
         setCosechaExistente(cosecha);
@@ -160,17 +170,24 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
         return;
       }
 
-      const esTecnico = role === ROL_TECNICO;
-      const hayPersonalAsignado = harvestPersonnel.length > 0 || assignedPersonnel.length > 0;
+      // La etapa la inicia el capataz desde ViewLoteScreen; aquí solo mostramos
+      // esa fecha real, sin pedir al técnico que la vuelva a iniciar.
+      setFechaInicio(stageFechaInicio);
 
-      if (!esTecnico || !hayPersonalAsignado) {
+      if (esTecnico && hayPersonalAsignado) {
         setCosechaExistente(null);
-        setModo('readonly_nopermiso');
+        setModo('form');
+        return;
+      }
+
+      if (readOnlyParam) {
+        setCosechaExistente(null);
+        setModo('readonly_pending');
         return;
       }
 
       setCosechaExistente(null);
-      setModo('form');
+      setModo('readonly_nopermiso');
     } catch (error) {
       console.error('Error fetching cosecha:', error);
       setModo('readonly_nopermiso');
@@ -354,7 +371,9 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
         const resumen = workersResumen.find((w: any) => w.key === key);
         if (!resumen) return Promise.resolve();
         const pagoCalculado = parseFloat((resumen.cantidad * resumen.tarifa).toFixed(2));
-        return asignacionPersonalService.updateCosecha(p.id, {
+        const asignacionId = p.asignacionId || p.id || p.trabajador_id || p.trabajador?.id;
+        if (!asignacionId) return Promise.resolve();
+        return asignacionPersonalService.updateCosecha(asignacionId, {
           cantidad_cosechada: resumen.cantidad,
           tipo_grano: resumen.tipoGrano,
           pago_calculado: pagoCalculado,
@@ -370,6 +389,7 @@ const EtapaCosechaScreen = ({ navigation, route }: any) => {
     }
 
     await lotesService.updateStageStatus(lote.id, 'Cosechado', 'Completada');
+    await syncWorker.syncPendingData();
 
     CustomAlert.show('SUCCESS', 'Éxito', esEdicion ? 'Cosecha actualizada correctamente.' : 'Cosecha registrada correctamente.', () => {
       navigation.navigate('ViewLote', { lote });
@@ -404,6 +424,20 @@ const handleEditar = () => {
   setEditMode(true);
 };
 
+  const handleGenerateReport = async () => {
+    try {
+      const workers = workersRegistrados.map((w: any) => ({
+        nombre: `${w.trabajador?.first_name || ''} ${w.trabajador?.last_name || ''}`.trim(),
+        cantidad_cosechada: w.cantidad_cosechada ?? 0,
+        tipo_grano: w.tipo_grano ?? '—',
+        pago_calculado: w.pago_calculado ?? 0,
+      }));
+      await generarInformeCosecha(lote, cosechaExistente, workers);
+    } catch {
+      CustomAlert.show('ERROR', 'Error', 'No se pudo generar el informe. Intente nuevamente.');
+    }
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -414,8 +448,10 @@ const handleEditar = () => {
     );
   }
 
-  const hayDatos = modo === 'readonly_cosecha';
+    const hayDatos = modo === 'readonly_cosecha';
   const sinPermiso = modo === 'readonly_nopermiso';
+  const soloMonitoreo = modo === 'readonly_pending';
+  const esEditable = modo === 'form' || editMode;
   const calidad = cosechaExistente?.calidad_cosecha;
 
   return (
@@ -493,8 +529,10 @@ const handleEditar = () => {
             </View>
           )}
 
+          
+
           {/* Caso: cosecha registrada (solo lectura, salvo modo edición) o formulario activo */}
-          {(hayDatos || modo === 'form') && (
+         {(hayDatos || modo === 'form' || soloMonitoreo) && ( 
             <View style={[
               styles.metricsCard,
               hayDatos ? styles.cardBeige : styles.cardGreenLight,
@@ -512,10 +550,9 @@ const handleEditar = () => {
                       <Text style={styles.dateText}>{fechaInicio.split('T')[0]}</Text>
                     </View>
                   ) : (
-                    <TouchableOpacity style={styles.dateButton} onPress={handleIniciar}>
-                      <Play size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
-                      <Text style={styles.dateButtonText}>INICIAR</Text>
-                    </TouchableOpacity>
+                    <View style={styles.dateDisplay}>
+                      <Text style={styles.dateText}>Pendiente</Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -539,7 +576,7 @@ const handleEditar = () => {
               {/* Grados Brix */}
               <View style={styles.metricInputGroup}>
                 <Text style={styles.standardLabel}>GRADOS BRIX*</Text>
-                <View style={[styles.standardInputWrapper, (hayDatos && !editMode) && styles.inputDisabled]}>
+                <View style={[styles.standardInputWrapper, !esEditable && styles.inputDisabled]}>
                   <TextInput
                     style={styles.standardInput}
                     keyboardType="numeric"
@@ -551,8 +588,8 @@ const handleEditar = () => {
                       if (!isNaN(numeric) && numeric > 50) return;
                       setHarvestBrix(text);
                     }}
-                    editable={!hayDatos || editMode}
-                    placeholder="18.5"
+                    editable={esEditable}
+                    placeholder={soloMonitoreo ? 'Pendiente' : '18.5'}
                     placeholderTextColor={Theme.colors.terroirGray}
                   />
                 </View>
@@ -573,7 +610,7 @@ const handleEditar = () => {
                     const workerName = `${p.trabajador?.first_name || 'Trabajador'} ${p.trabajador?.last_name || ''}`.trim();
                     const workerData = workerHarvestData[key] || { cantidad: '', tipoGrano: '' };
                     const registrado = workersRegistrados.find((w: any) => w.id === key);
-                    const soloLectura = hayDatos && !editMode;
+                     const soloLectura = !esEditable;
 
                     return (
                       <View key={key} style={styles.workerCard}>
@@ -643,7 +680,7 @@ const handleEditar = () => {
                   <Camera size={14} color={Theme.colors.terroirBrown} />
                   <Text style={styles.standardLabel}>EVIDENCIA*</Text>
                 </View>
-                {hayDatos && !editMode ? (
+                {!esEditable ? (
                   cosechaExistente?.imagen_evidencia_uri ? (
                     <TouchableOpacity onPress={() => setPreviewVisible(true)} activeOpacity={0.85}>
                       <RNImage
@@ -693,7 +730,7 @@ const handleEditar = () => {
                   onPress={() => setPreviewVisible(false)}
                 >
                   <RNImage
-                    source={{ uri: hayDatos && !editMode ? cosechaExistente?.imagen_evidencia_uri : harvestEvidenceUri }}
+                    source={{ uri: !esEditable ? cosechaExistente?.imagen_evidencia_uri : harvestEvidenceUri }}
                     style={styles.previewImage}
                     resizeMode="contain"
                   />
@@ -703,7 +740,7 @@ const handleEditar = () => {
               {/* Observaciones */}
               <View style={styles.metricInputGroup}>
   <Text style={styles.standardLabel}>OBSERVACIONES</Text>
-  {hayDatos && !editMode ? (
+  {!esEditable ? (
     <View style={[styles.standardInputWrapper, styles.textareaWrapper, styles.inputDisabled, { height: 'auto', minHeight: 48 }]}>
       <Text style={styles.standardInput}>
         {cosechaExistente?.observaciones || 'Sin observaciones'}
@@ -748,6 +785,14 @@ const handleEditar = () => {
             </View>
           )}
         </View>
+
+        {modo === 'readonly_cosecha' && (
+          <View style={styles.reportSection}>
+            <TouchableOpacity style={styles.reportButton} onPress={handleGenerateReport}>
+              <Text style={styles.reportButtonText}>GENERAR INFORME TÉCNICO</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -825,6 +870,9 @@ const styles = StyleSheet.create({
   evidenceImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 10, backgroundColor: '#F3F4F6' },
   previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   previewImage: { width: '100%', height: '100%' },
+  reportSection: { padding: 16, paddingBottom: 8 },
+  reportButton: { backgroundColor: '#5D3A2C', borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center' },
+  reportButtonText: { fontFamily: 'Manrope', fontSize: 10, fontWeight: '800', color: 'white', letterSpacing: 1.5 },
 });
 
 export default EtapaCosechaScreen;

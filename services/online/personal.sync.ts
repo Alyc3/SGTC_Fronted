@@ -18,7 +18,7 @@ export const personalSync = {
     if (pending.length === 0) return;
 
     // 1. Obtener los roles disponibles para mapear el ID al Nombre
-    let rolesMap: Record<string, string> = {};
+    const rolesMap: Record<string, string> = {};
     try {
       const rolesData = await rolesService.getAll();
       const rolesArray = Array.isArray(rolesData)

@@ -273,31 +273,51 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
       setLoading(true);
       
       for (let i = 0; i < lotesData.length; i++) {
-        const lot = lotesData[i];
-        // Generate code on save
-        const generatedCode = lotesService.generateLotCode(parcela.nombre, lot.variedadCafe);
-        const finalCode = lotesData.length > 1 ? `${generatedCode}-${(i+1).toString().padStart(2, '0')}` : generatedCode;
+  const lot = lotesData[i];
+  const generatedCode = lotesService.generateLotCode(parcela.nombre, lot.variedadCafe);
+  const baseCode = lotesData.length > 1 ? `${generatedCode}-${(i+1).toString().padStart(2, '0')}` : generatedCode;
 
-        const data: any = {
-          id: isEditing ? loteId : `lote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          codigo: finalCode,
-          parcela_id: parcelaId,
-          semilla_id: lot.semilla_id,
-          hectareas_lote: parseFloat(lot.hectareas),
-          variedadCafe: lot.variedadCafe,
-          estado_lote: 'Reservado' as any, // Estado por defecto solicitado
-        };
+  let finalCode = baseCode;
+  let suffix = 2;
+  let saved = false;
 
-        if (lot.zona_seleccionada) {
-          data.zona_seleccionada = lot.zona_seleccionada;
-        }
+  while (!saved) {
+    const data: any = {
+      id: isEditing ? loteId : `lote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      codigo: finalCode,
+      parcela_id: parcelaId,
+      semilla_id: lot.semilla_id,
+      hectareas_lote: parseFloat(lot.hectareas),
+      variedadCafe: lot.variedadCafe,
+      estado_lote: 'Reservado' as any, // Estado por defecto solicitado
+    };
 
-        if (isEditing) {
-          await parcelasService.updateLote(loteId, data);
-        } else {
-          await parcelasService.createLote(data);
-        }
+    if (lot.zona_seleccionada) {
+      data.zona_seleccionada = lot.zona_seleccionada;
+    }
+
+    try {
+      if (isEditing) {
+        await parcelasService.updateLote(loteId, data);
+      } else {
+        await parcelasService.createLote(data);
       }
+      saved = true;
+    } catch (err: any) {
+      const msg = err?.message || '';
+      const isUniqueCodeError = msg.includes('UNIQUE constraint failed') && msg.includes('lotes.codigo');
+
+      if (isUniqueCodeError && suffix <= 50) {
+        // El código ya existe en la base de datos real: probamos con el siguiente sufijo
+        finalCode = `${baseCode}-${suffix}`;
+        suffix++;
+      } else {
+        // Otro tipo de error, o se agotaron los reintentos: propagamos para que lo maneje el catch general
+        throw err;
+      }
+    }
+  }
+}
       
       CustomAlert.show('SUCCESS', 'Éxito', isEditing ? 'Lote actualizado correctamente.' : `${numLotes} lote(s) registrado(s).`, () => {
         if (navigation.canGoBack()) {
@@ -307,6 +327,7 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
         }
       });
     } catch (error) {
+      console.error('Error al guardar lote:', error);
       CustomAlert.show('ERROR', 'Fallo al Guardar', 'No se pudo procesar la solicitud.');
     } finally {
       setLoading(false);

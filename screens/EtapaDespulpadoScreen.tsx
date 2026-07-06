@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   Camera,
   ClipboardCheck,
-  Play,
   Edit2,
   Lock,
   AlertCircle,
@@ -30,7 +29,6 @@ import {
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { lotesService } from '../services/lotes.service';
-// Asumimos que has creado despulpadoService con los mismos métodos que cosechaService
 import { despulpadoService } from '../services/despulpado.service'; 
 import { CustomAlert } from '../components/GlobalAlert';
 
@@ -57,6 +55,7 @@ const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
   const lote = route.params?.lote;
   const assignedPersonnel = route.params?.assignedPersonnel || [];
+  const readOnlyParam = route.params?.readOnly; // Para capataces que solo monitorean
   const { role, userId } = useAuthStore();
 
   const [loading, setLoading] = useState(true);
@@ -69,8 +68,6 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
   const [editMode, setEditMode] = useState(false);
 
   // Form state
-  /*const [tipoProceso, setTipoProceso] = useState<string>('');
-  const [olorPercibido, setOlorPercibido] = useState<string>('');*/
   const [tipoProceso, setTipoProceso] = useState<'lavado' | 'honey' | 'natural' | null>(null);
   const [olorPercibido, setOlorPercibido] = useState<'fruta_fresca' | 'vinagre' | 'podrido' | null>(null);
   const [evidenceUri, setEvidenceUri] = useState('');
@@ -101,19 +98,31 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
     if (!lote?.id) return;
     try {
       setLoading(true);
-      const despulpado = await despulpadoService.getByLoteId(lote.id);
+      
+      // Consultamos el registro de despulpado y las etapas generales del lote
+      const [despulpado, stagesData] = await Promise.all([
+        despulpadoService.getByLoteId(lote.id).catch(() => null),
+        lotesService.getStages(lote.id).catch(() => [])
+      ]);
+
+      // Extraemos la fecha de inicio desde la tabla de etapas (ya que se inició en la tarjeta)
+      const despulpadoStage = stagesData.find((s: any) => s.etapa === 'Despulpado');
+      const stageFechaInicio = despulpadoStage?.fecha_inicio || new Date().toISOString();
 
       if (despulpado) {
         setDespulpadoExistente(despulpado);
         setModo('readonly_despulpado');
-        setFechaInicio(despulpado.fecha_inicio || null);
+        setFechaInicio(despulpado.fecha_inicio || stageFechaInicio);
         return;
       }
 
-      // Validar si es el técnico correcto (ajusta esta validación según cómo manejes los roles en tu app)
-      const esTecnico = role === ROL_TECNICO || role === 'ADMIN'; 
+      setFechaInicio(stageFechaInicio); // Seteamos la fecha que viene de la etapa iniciada
+
+      // Validar si es el técnico correcto o admin
+      const cleanRole = (typeof role === 'string' ? role : (role as any)?.name || '').toUpperCase();
+      const esTecnico = cleanRole.includes(ROL_TECNICO) || cleanRole === 'ADMIN' || cleanRole === 'GERENTE GENERAL'; 
       
-      if (!esTecnico) {
+      if (!esTecnico || readOnlyParam) {
         setDespulpadoExistente(null);
         setModo('readonly_nopermiso');
         return;
@@ -127,7 +136,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
     } finally {
       setLoading(false);
     }
-  }, [lote?.id, role]);
+  }, [lote?.id, role, readOnlyParam]);
 
   useEffect(() => {
     fetchData();
@@ -144,7 +153,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
         if (asset.size !== undefined && asset.size > MAX_IMAGE_SIZE_BYTES) {
           const maxSizeReadable = (MAX_IMAGE_SIZE_BYTES / (1024 * 1024)).toFixed(1);
           const fileSizeReadable = (asset.size / (1024 * 1024)).toFixed(2);
-          CustomAlert.show('ALERTA', 'Imagen demasiado pesada', `El archivo seleccionado pesa ${fileSizeReadable} MB. El máximo permitido es ${maxSizeReadable} MB.`);
+          CustomAlert.show('ALERTA', 'Imagen demasiado pesada', `El archivo pesa ${fileSizeReadable} MB. El máximo es ${maxSizeReadable} MB.`);
           return;
         }
         setEvidenceUri(asset.uri);
@@ -154,28 +163,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ── INICIAR ────────────────────
-
-  const handleIniciar = () => {
-    CustomAlert.show(
-      'ALERTA',
-      'Iniciar Despulpado',
-      '¿Estás seguro de iniciar el proceso de despulpado?',
-      async () => {
-        try {
-          await lotesService.updateStageStatus(lote.id, 'Despulpado', 'En_Proceso');
-          setFechaInicio(new Date().toISOString());
-        } catch (error) {
-          CustomAlert.show('ERROR', 'Error', 'No se pudo iniciar la etapa de despulpado.');
-        }
-      },
-      'ACEPTAR',
-      () => {},
-      'CANCELAR'
-    );
-  };
-
-  // ── FINALIZAR / GUARDAR ─
+  // ── FINALIZAR / GUARDAR ────────────────────────────────────────────────────
 
   const validarFormulario = (): string | null => {
     if (!tipoProceso) return 'Selecciona el tipo de proceso a realizar.';
@@ -208,6 +196,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
   
   const handleConfirmDespulpado = async () => {
     const esEdicion = !!despulpadoExistente?.id;
+    const now = new Date().toISOString();
 
     const despulpadoData = {
       id: esEdicion ? despulpadoExistente.id : `despulpado_${Date.now()}`,
@@ -216,8 +205,8 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
       tipo_proceso: tipoProceso as 'lavado' | 'honey' | 'natural', 
       olor_percibido: olorPercibido as 'fruta_fresca' | 'vinagre' | 'podrido',
       imagen_evidencia_uri: evidenceUri || despulpadoExistente?.imagen_evidencia_uri,
-      fecha_inicio: fechaInicio || despulpadoExistente?.fecha_inicio || new Date().toISOString(),
-      fecha_final: new Date().toISOString(),
+      fecha_inicio: fechaInicio || now, // Usa la fecha que viene de la etapa
+      fecha_final: now, // <--- Aquí registramos el momento exacto en el que termina
     };
 
     try {
@@ -230,6 +219,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
         await despulpadoService.create(despulpadoData);
       }
 
+      // Marcamos la etapa general como completada
       await lotesService.updateStageStatus(lote.id, 'Despulpado', 'Completada');
 
       CustomAlert.show('SUCCESS', 'Éxito', esEdicion ? 'Despulpado actualizado correctamente.' : 'Despulpado registrado correctamente.', () => {
@@ -249,7 +239,6 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
     setTipoProceso(despulpadoExistente?.tipo_proceso);
     setOlorPercibido(despulpadoExistente?.olor_percibido);
     setEvidenceUri(despulpadoExistente?.imagen_evidencia_uri ?? '');
-    setFechaInicio(despulpadoExistente?.fecha_inicio ?? null);
     setEditMode(true);
   };
 
@@ -308,7 +297,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
               {!hayDatos && !sinPermiso && <Text style={styles.activeTag}>EN PROCESO</Text>}
             </View>
 
-            {hayDatos && (role === ROL_TECNICO || role === 'ADMIN') && !editMode && (
+            {hayDatos && !readOnlyParam && !editMode && (
               <TouchableOpacity style={styles.editPhaseBtn} onPress={handleEditar}>
                 <Edit2 size={14} color={Theme.colors.terroirBrown} />
                 <Text style={styles.editPhaseText}>EDITAR</Text>
@@ -316,15 +305,15 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
             )}
           </View>
 
-          {/* Caso: sin permiso */}
-          {sinPermiso && (
+          {/* Caso: sin permiso / solo lectura de capataz */}
+          {sinPermiso && !hayDatos && (
             <View style={[styles.metricsCard, styles.cardWhiteDashed]}>
               <View style={styles.lockedBanner}>
                 <Lock size={15} color="#E6A817" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.lockedBannerTitle}>Acceso restringido</Text>
+                  <Text style={styles.lockedBannerTitle}>Fase En Proceso</Text>
                   <Text style={styles.lockedBannerSub}>
-                    Solo el técnico asignado a la fase de Despulpado puede registrar esta información.
+                    El técnico asignado está realizando la labor. No tienes permisos para cerrar la fase.
                   </Text>
                 </View>
               </View>
@@ -338,30 +327,21 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
             </View>
           )}
 
-          {/* Caso: Formulario / Lectura */}
+          {/* Caso: Formulario / Lectura con datos */}
           {(hayDatos || modo === 'form') && (
             <View style={[
               styles.metricsCard,
               hayDatos ? styles.cardBeige : styles.cardGreenLight,
             ]}>
-              {/* Fechas con botones INICIAR */}
+              {/* Fechas de inicio (Solo lectura, generada al iniciar) */}
               <View style={styles.datesGrid}>
                 <View style={styles.dateInputGroup}>
-                  <Text style={styles.dateLabel}>Inicio de fase*</Text>
-                  {hayDatos && !editMode ? (
-                    <View style={styles.dateDisplay}>
-                      <Text style={styles.dateText}>{despulpadoExistente?.fecha_inicio?.split('T')[0] || '—'}</Text>
-                    </View>
-                  ) : fechaInicio ? (
-                    <View style={styles.dateDisplay}>
-                      <Text style={styles.dateText}>{fechaInicio.split('T')[0]}</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity style={styles.dateButton} onPress={handleIniciar}>
-                      <Play size={12} color={Theme.colors.terroirBrown} fill={Theme.colors.terroirBrown} />
-                      <Text style={styles.dateButtonText}>INICIAR</Text>
-                    </TouchableOpacity>
-                  )}
+                  <Text style={styles.dateLabel}>Inicio de fase (Automático)</Text>
+                  <View style={styles.dateDisplay}>
+                    <Text style={styles.dateText}>
+                      {fechaInicio ? new Date(fechaInicio).toLocaleString() : '—'}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
@@ -500,17 +480,17 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
               </Modal>
 
               {/* Botón GUARDAR / FINALIZAR */}
-              {(modo === 'form' || editMode) && fechaInicio !== null && (
+              {(modo === 'form' || editMode) && (
                 <TouchableOpacity
-                  style={[styles.actionButton, !fechaInicio && !hayDatos && styles.btnDisabled]}
+                  style={styles.actionButton}
                   onPress={handleFinalizar}
-                  disabled={saving || (!fechaInicio && !hayDatos)}
+                  disabled={saving}
                 >
                   {saving ? (
                     <ActivityIndicator size="small" color="white" />
                   ) : (
                     <Text style={styles.actionButtonText}>
-                      {hayDatos ? 'GUARDAR ACTUALIZACIÓN' : 'REGISTRAR CIERRE'}
+                      {hayDatos ? 'GUARDAR ACTUALIZACIÓN' : 'REGISTRAR CIERRE DE ETAPA'}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -552,11 +532,8 @@ const styles = StyleSheet.create({
   datesGrid: { flexDirection: 'row', gap: 8 },
   dateInputGroup: { flex: 1 },
   dateLabel: { fontFamily: 'Manrope', fontSize: 9, fontWeight: '800', color: Theme.colors.terroirGray, marginBottom: 4, textTransform: 'uppercase' },
-  dateDisplay: { backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 },
+  dateDisplay: { backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   dateText: { fontSize: 10, fontFamily: 'Manrope', fontWeight: '700', color: Theme.colors.terroirText },
-  dateButton: { backgroundColor: 'white', borderWidth: 1, borderColor: Theme.colors.terroirBrown, borderRadius: 8, height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  dateButtonText: { fontSize: 9, fontFamily: 'Manrope', fontWeight: '800', color: Theme.colors.terroirBrown, letterSpacing: 0.5 },
-  btnDisabled: { opacity: 0.4, borderColor: '#E5E7EB' },
   metricInputGroup: { gap: 8 },
   standardLabel: { fontFamily: 'Manrope', fontSize: 10, fontWeight: '800', color: Theme.colors.terroirBrown, marginLeft: 2, letterSpacing: 1 },
   sectionInlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },

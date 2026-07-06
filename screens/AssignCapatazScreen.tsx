@@ -164,8 +164,17 @@ const AssignCapatazScreen = ({ navigation, route }: any) => {
       );
 
       if (!validation.valid) {
-        CustomAlert.show('ALERTA', 'Restricción de Asignación', validation.message);
+        const restrictionMessage: string = validation.message ? validation.message : 'No se pudo completar la asignación.';
+        CustomAlert.show('ALERTA', 'Restricción de Asignación', restrictionMessage);
         return;
+      }
+
+      for (const capatazId of selectedCapataces) {
+        const alreadyAssigned = await parcelasService.hasAsignacion(selectedLote.id, capatazId, 'Administración');
+        if (alreadyAssigned) {
+          CustomAlert.show('ALERTA', 'Asignación Duplicada', 'Este capataz ya está asignado a este lote en la etapa Administración.');
+          return;
+        }
       }
 
       // Realizar las asignaciones una por una

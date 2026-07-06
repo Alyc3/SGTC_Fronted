@@ -234,9 +234,17 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
     );
   }, [existingAssignments, selectedEtapa]);
 
+  const assignedInOtherStagesIds = useMemo(() => {
+    return new Set(
+      existingAssignments
+        .filter(a => a.etapa !== selectedEtapa)
+        .map(a => a.trabajador_id || a.trabajador?.id)
+    );
+  }, [existingAssignments, selectedEtapa]);
+
   const togglePersonnelSelection = (id: string) => {
     // Si NO estamos en modo edición y ya está asignado, bloqueamos la selección
-    if (!isEditMode && alreadyAssignedIds.has(id)) return;
+    if (!isEditMode && (alreadyAssignedIds.has(id) || assignedInOtherStagesIds.has(id))) return;
 
     const worker = personnel.find(p => p.id === id);
     const roleNameRaw = rolesMap[worker?.role_id] || '';
@@ -277,27 +285,65 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   };
 
   const handleAssign = async () => {
-  if (!isAuthorized) {
-    CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para realizar esta acción.');
-    return;
-  }
+    if (!isAuthorized) {
+      CustomAlert.show('ALERTA', 'Acceso Denegado', 'No tienes permisos para realizar esta acción.');
+      return;
+    }
 
-  // NUEVO: evita guardar con una etapa inválida
-  if (!selectedEtapa || selectedEtapa === 'Administración') {
-    CustomAlert.show('ALERTA', 'Etapa inválida', 'Debe seleccionar una etapa de trabajo válida antes de asignar.');
-    return;
-  }
+    // NUEVO: evita guardar con una etapa inválida
+    if (!selectedEtapa || selectedEtapa === 'Administración') {
+      CustomAlert.show('ALERTA', 'Etapa inválida', 'Debe seleccionar una etapa de trabajo válida antes de asignar.');
+      return;
+    }
 
-  if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
-    CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
-    return;
-  }
+    if (!selectedLote || (selectedPersonnel.length === 0 && !isEditMode)) {
+      CustomAlert.show('ALERTA', 'Incompleto', 'Por favor seleccione un lote y al menos un trabajador.');
+      return;
+    }
 
     try {
       setLoading(true);
 
-      const normalize = (str: string) => 
+      const normalize = (str: string) =>
         str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+
+      const isCapatazWorker = (workerId: string) => {
+        const worker = personnel.find(p => p.id === workerId);
+        const roleName = normalize(rolesMap[worker?.role_id] || '');
+        return roleName === 'capataz';
+      };
+
+      // El capataz siempre se registra como global (etapa 'Administración'),
+      // sin importar qué etapa esté seleccionada en el carrusel.
+      const getEtapaParaAsignar = (workerId: string) =>
+        isCapatazWorker(workerId) ? 'Administración' : selectedEtapa;
+
+      const idsToAssign = isEditMode
+        ? selectedPersonnel.filter(id => !initialSelectedIds.includes(id))
+        : selectedPersonnel;
+
+      for (const workerId of idsToAssign) {
+        // Si es capataz, no aplican las validaciones de "asignado en otra etapa":
+        // su asignación es intencionalmente global.
+        if (isCapatazWorker(workerId)) continue;
+
+        if (assignedInOtherStagesIds.has(workerId)) {
+          const worker = personnel.find(p => p.id === workerId);
+          const workerName = worker ? `${worker.first_name || ''} ${worker.last_name || ''}`.trim() : 'El trabajador';
+          CustomAlert.show(
+            'ALERTA',
+            'Asignación Repetida',
+            `${workerName} ya está asignado en otra etapa de este lote. Debe finalizar o liberar esa asignación antes de volver a usarlo.`
+          );
+          return;
+        }
+
+        const alreadyAssigned = await parcelasService.hasAsignacion(selectedLote.id, workerId, getEtapaParaAsignar(workerId) as any);
+        if (alreadyAssigned) {
+          CustomAlert.show('ALERTA', 'Asignación Duplicada', 'El trabajador ya está asignado a esta etapa y lote.');
+          return;
+        }
+      }
 
       // 1. Identificar si estamos asignando un técnico en la selección actual
       const tecnicoSeleccionado = selectedPersonnel.find(pId => {
@@ -308,8 +354,8 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
 
       if (isEditMode) {
         // MODO EDICIÓN: Estrategia de Reemplazo Total para Técnicos y Diff para el resto
-        
-        // A. Si hay un técnico seleccionado, barremos CUALQUIER técnico previo de la BD 
+
+        // A. Si hay un técnico seleccionado, barremos CUALQUIER técnico previo de la BD
         // para asegurar el reemplazo, sin importar IDs.
         if (tecnicoSeleccionado) {
           const idsTecnicosPosibles = personnel
@@ -318,7 +364,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
               return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
             })
             .map(p => p.id);
-          
+
           await parcelasService.limpiarAsignacionesEspecificas(selectedLote.id, selectedEtapa, idsTecnicosPosibles);
         }
 
@@ -328,35 +374,35 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
           await parcelasService.desasignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
         }
 
-        // C. Insertar los que quedaron seleccionados (la función asignarPersonal ya evita duplicados internos)
-        for (const workerId of selectedPersonnel) {
-          await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
+        // C. Insertar únicamente los nuevos seleccionados para no recrear asignaciones existentes
+        for (const workerId of idsToAssign) {
+          await parcelasService.asignarPersonal(selectedLote.id, workerId, getEtapaParaAsignar(workerId) as any);
         }
 
       } else {
         // MODO NORMAL: Barrer técnicos previos si se está agregando uno nuevo
         if (tecnicoSeleccionado) {
-           const idsTecnicosPosibles = personnel
+          const idsTecnicosPosibles = personnel
             .filter(p => {
               const rName = normalize(rolesMap[p.role_id] || '');
               return rName === 'tecnico_sembrado' || rName === 'tecnico_agronomo';
             })
             .map(p => p.id);
-          
+
           await parcelasService.limpiarAsignacionesEspecificas(selectedLote.id, selectedEtapa, idsTecnicosPosibles);
         }
 
-        for (const workerId of selectedPersonnel) {
-          await parcelasService.asignarPersonal(selectedLote.id, workerId, selectedEtapa as any);
+        for (const workerId of idsToAssign) {
+          await parcelasService.asignarPersonal(selectedLote.id, workerId, getEtapaParaAsignar(workerId) as any);
         }
       }
-      
+
       // Disparar sincronización silenciosa en segundo plano
       syncWorker.syncPendingData();
-      
+
       CustomAlert.show('SUCCESS', 'Asignación Actualizada', 'Los cambios en la cuadrilla han sido guardados exitosamente.', () => {
         if (!isEditMode) setSelectedPersonnel([]);
-        fetchData(); 
+        fetchData();
         if (navigation.canGoBack()) {
           navigation.goBack();
         } else {
@@ -375,10 +421,11 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   const renderPersonnelItem = ({ item }: { item: any }) => {
     const isSelected = selectedPersonnel.includes(item.id);
     const isAlreadyAssigned = alreadyAssignedIds.has(item.id);
+    const isAssignedInOtherStage = assignedInOtherStagesIds.has(item.id);
     const roleName = rolesMap[item.role_id] || item.role_id || 'TRABAJADOR';
 
     // En modo edición, el "sombreado" no bloquea si el usuario está en la lista de seleccionados actual
-    const shouldShade = !isEditMode && isAlreadyAssigned;
+    const shouldShade = !isEditMode && (isAlreadyAssigned || isAssignedInOtherStage);
 
     return (
       <TouchableOpacity
@@ -404,7 +451,9 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
         {shouldShade ? (
           <View style={{ alignItems: 'center' }}>
             <ShieldCheck size={24} color={Theme.colors.secondary} />
-            <Text style={{ fontSize: 8, color: Theme.colors.secondary, fontWeight: '700' }}>ASIGNADO</Text>
+            <Text style={{ fontSize: 8, color: Theme.colors.secondary, fontWeight: '700' }}>
+              {isAssignedInOtherStage ? 'EN OTRA ETAPA' : 'ASIGNADO'}
+            </Text>
           </View>
         ) : isSelected ? (
           <CheckCircle2 size={24} color={Theme.colors.primary} />

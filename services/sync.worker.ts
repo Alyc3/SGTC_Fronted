@@ -1,8 +1,8 @@
 import { db } from '../db';
-import { parcelas, semillas, lotes, asignacion_personal } from '../db/schema';
+import { parcelas, semillas, lotes, asignacion_personal, cosecha } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { networkService } from './network.service';
-import { semillasSync, parcelasSync, personalSync, catalogoSync, asignacionPersonalSync } from './online';
+import { semillasSync, parcelasSync, personalSync, catalogoSync, asignacionPersonalSync, cosechaSync } from './online';
 
 /**
  * SyncWorker: Centraliza la lógica de sincronización en segundo plano.
@@ -30,6 +30,7 @@ export const syncWorker = {
       await parcelasSync.syncLotes();
       await personalSync.sync();
       await asignacionPersonalSync.sync();
+      await cosechaSync.sync();
 
       // 3. Verificación adicional de estados 'pending' o 'error' locales
       await this.cleanupSyncStates();
@@ -50,7 +51,8 @@ export const syncWorker = {
       { schema: parcelas, name: 'parcelas' },
       { schema: semillas, name: 'semillas' },
       { schema: lotes, name: 'lotes' },
-      { schema: asignacion_personal, name: 'asignacion_personal' }
+      { schema: asignacion_personal, name: 'asignacion_personal' },
+      { schema: cosecha, name: 'cosecha' }
     ];
 
     for (const table of tables) {

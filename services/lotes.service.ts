@@ -60,6 +60,21 @@ export const lotesService = {
     return `${cleanParcel}-${cleanVariety}-${month}${year}`;
   },
 
+  async hasDuplicateCode(parcelaId: string, codigo: string, excludeId?: string) {
+    const existing = await db.query.lotes.findFirst({
+      where: (lote, { eq, and, ne }) => {
+        const baseFilter = and(
+          eq(lote.parcela_id, parcelaId),
+          eq(lote.codigo, codigo)
+        );
+
+        return excludeId ? and(baseFilter, ne(lote.id, excludeId)) : baseFilter;
+      }
+    });
+
+    return !!existing;
+  },
+
   async create(data: typeof lotes.$inferInsert) {
     const id = data.id ?? uuidv4();
     await db.insert(lotes).values({ ...data, id });
