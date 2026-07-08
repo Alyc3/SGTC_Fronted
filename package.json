@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "db:generate": "drizzle-kit generate",
     "db:generate:named": "drizzle-kit generate --name",
-    "build:preview": "eas build --platform android --profile preview"
+    "build:preview": "eas build --platform android --profile preview",
+    "test": "jest"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
