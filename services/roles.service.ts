@@ -14,6 +14,21 @@ export const rolesService = {
       await offlineAuthService.cacheRoles(rolesData);
       return response.data;
     } catch (error: any) {
+      try {
+        const localRoles = await offlineAuthService.getAllRoles();
+        if (localRoles.length > 0) {
+          console.log(
+            "[rolesService] Usando roles locales cacheados porque la API no estuvo disponible.",
+          );
+          return localRoles;
+        }
+      } catch (localError) {
+        console.warn(
+          "rolesService.getAll: No se pudieron obtener los roles locales.",
+          localError,
+        );
+      }
+
       if (error.response?.status === 403) {
         console.log(
           "[rolesService] Acceso restringido (403): El rol actual no tiene permisos para listar roles remotos. Usando datos locales.",
