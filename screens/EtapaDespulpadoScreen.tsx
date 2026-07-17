@@ -29,7 +29,7 @@ import {
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { lotesService } from '../services/lotes.service';
-import { despulpadoService } from '../services/despulpado.service'; 
+import { despulpadoService } from '../services/despulpado.service';
 import { CustomAlert } from '../components/GlobalAlert';
 
 // ─── Constantes ─────────────────
@@ -46,7 +46,7 @@ const OLOR_TYPES = [
   { label: 'Podrido', value: 'podrido' as const }
 ];
 
-const ROL_TECNICO = 'TECNICO_DESPULPADO'; 
+const ROL_TECNICO = 'TECNICO_DESPULPADO';
 const ESTADO_EN_PRODUCCION = 'en_produccion';
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -98,7 +98,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
     if (!lote?.id) return;
     try {
       setLoading(true);
-      
+
       // Consultamos el registro de despulpado y las etapas generales del lote
       const [despulpado, stagesData] = await Promise.all([
         despulpadoService.getByLoteId(lote.id).catch(() => null),
@@ -118,10 +118,10 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
 
       setFechaInicio(stageFechaInicio); // Seteamos la fecha que viene de la etapa iniciada
 
-      // Validar si es el técnico correcto o admin
+      // Validar si es el técnico correcto o admin (Se dejó por ahora para probar, cambiar después solo permitir a Técnico)
       const cleanRole = (typeof role === 'string' ? role : (role as any)?.name || '').toUpperCase();
-      const esTecnico = cleanRole.includes(ROL_TECNICO) || cleanRole === 'ADMIN' || cleanRole === 'GERENTE GENERAL'; 
-      
+      const esTecnico = cleanRole.includes(ROL_TECNICO) || cleanRole === 'ADMIN' || cleanRole === 'GERENTE GENERAL';
+
       if (!esTecnico || readOnlyParam) {
         setDespulpadoExistente(null);
         setModo('readonly_nopermiso');
@@ -189,11 +189,11 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
         await handleConfirmDespulpado();
       },
       'ACEPTAR',
-      () => {},
+      () => { },
       'CANCELAR'
     );
   };
-  
+
   const handleConfirmDespulpado = async () => {
     const esEdicion = !!despulpadoExistente?.id;
     const now = new Date().toISOString();
@@ -202,7 +202,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
       id: esEdicion ? despulpadoExistente.id : `despulpado_${Date.now()}`,
       lote_id: lote.id,
       responsable_id: userId ?? '',
-      tipo_proceso: tipoProceso as 'lavado' | 'honey' | 'natural', 
+      tipo_proceso: tipoProceso as 'lavado' | 'honey' | 'natural',
       olor_percibido: olorPercibido as 'fruta_fresca' | 'vinagre' | 'podrido',
       imagen_evidencia_uri: evidenceUri || despulpadoExistente?.imagen_evidencia_uri,
       fecha_inicio: fechaInicio || now, // Usa la fecha que viene de la etapa
@@ -225,7 +225,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
       CustomAlert.show('SUCCESS', 'Éxito', esEdicion ? 'Despulpado actualizado correctamente.' : 'Despulpado registrado correctamente.', () => {
         navigation.navigate('ViewLote', { lote });
       });
-      
+
       await fetchData();
       setEditMode(false);
     } catch {
@@ -404,7 +404,7 @@ const EtapaDespulpadoScreen = ({ navigation, route }: any) => {
                         onPress={() => setOlorPercibido(type.value)}
                       >
                         <Text style={[
-                          styles.optionButtonText, 
+                          styles.optionButtonText,
                           selected && !isWarning && styles.optionButtonTextActive,
                           selected && isWarning && styles.optionButtonTextWarning
                         ]}>

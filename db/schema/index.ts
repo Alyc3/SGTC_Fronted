@@ -9,4 +9,6 @@ export * from './estado_etapa';
 export * from './sembrado_metricas';
 export * from './cosecha';
 export * from './despulpado';
+export * from './tostado';
+export * from './molido';
 export * from './relations';

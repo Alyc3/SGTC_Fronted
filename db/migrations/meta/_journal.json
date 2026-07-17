@@ -90,6 +90,20 @@
       "when": 1782694258867,
       "tag": "0012_--name=add_tabla_despulpado",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1784235533237,
+      "tag": "0013_hard_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1784251528024,
+      "tag": "0014_elite_firebrand",
+      "breakpoints": true
     }
   ]
 }
