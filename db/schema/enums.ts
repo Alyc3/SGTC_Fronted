@@ -3,7 +3,7 @@
 export const EstadoLoteValues = ['Creado', 'Reservado', 'En_Produccion', 'Completada'] as const;
 //Enum para Parcela
 export const TexturaSueloValues = ['Franco-Arenosa', 'Franco-Arcillosa'] as const;
-export const OrientacionLaderaValues = ['NORTE', 'SUR'] as const;
+export const OrientacionLaderaValues = ['NORTE', 'SUR', 'ESTE', 'OESTE'] as const;
 export const TipoTerrenoValues = ['Irregular', 'Regular'] as const;
 export const EstadoParcelaValues = ['Libre', 'EnProduccion'] as const;
 export const TipoZona = ['Zona Alta','Zona Inclinada','Zona Baja','Zona Plana'] as const;

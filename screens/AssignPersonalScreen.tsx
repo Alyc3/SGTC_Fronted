@@ -14,7 +14,8 @@ import {
   BackHandler,
   Modal,
   Animated,
-  Platform
+  Platform,
+  TextInput
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -101,6 +102,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   
   // Modal State
   const [isModalVisible, setModalVisible] = useState(false);
+  const [searchText, setSearchText] = useState('');
 
   // Control de gestos y botón físico de atrás
   useFocusEffect(
@@ -221,10 +223,12 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   }, [selectedEtapa]); // Escuchamos solo el cambio de etapa
 
   const filteredPersonnel = useMemo(() => {
-    // Para Gerente General, Capataz y ADMIN, se permite asignar a cualquier fase 
-    // sin restricciones de rol por fase, mostrando todo el personal permitido.
-    return personnel;
-  }, [personnel]);
+    if (!searchText.trim()) return personnel;
+    const q = searchText.trim().toLowerCase();
+    return personnel.filter(p =>
+      `${p.first_name} ${p.last_name}`.toLowerCase().includes(q)
+    );
+  }, [personnel, searchText]);
 
   const alreadyAssignedIds = useMemo(() => {
     return new Set(
@@ -614,7 +618,7 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
         visible={isModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => { setModalVisible(false); setSearchText(''); }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.bottomSheet}>
@@ -627,6 +631,23 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
                 <X size={24} color={Theme.colors.onSurface} />
               </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+              <TextInput
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Buscar por nombre..."
+                placeholderTextColor={Theme.colors.onSurfaceVariant}
+                style={{
+                  backgroundColor: Theme.colors.surfaceContainerHighest,
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  fontSize: 14,
+                  color: Theme.colors.onSurface,
+                }}
+              />
             </View>
 
             <FlatList

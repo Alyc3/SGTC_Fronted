@@ -210,10 +210,8 @@ export const parcelasService = {
         errors.nombre = 'El nombre de la parcela es obligatorio.';
       } else if (data.nombre.length < 3) {
         errors.nombre = 'El nombre debe tener al menos 3 caracteres.';
-      } else if (data.nombre.length > 15) {
-        errors.nombre = 'El nombre no puede exceder los 15 caracteres.';
-      } else if (/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/.test(data.nombre)) {
-        errors.nombre = 'Solo se permiten letras y espacios.';
+      } else if (data.nombre.length > 50) {
+        errors.nombre = 'El nombre no puede exceder los 50 caracteres.';
       }
     }
 
@@ -238,7 +236,7 @@ export const parcelasService = {
     if (data.altitud !== undefined) {
       const strVal = data.altitud?.toString() ?? '';
       if (!strVal || strVal.trim() === '') {
-        errors.altitud = 'La altitud es obligatoria (Calibre GPS).';
+        errors.altitud = 'La altitud es obligatoria.';
       }
     }
 

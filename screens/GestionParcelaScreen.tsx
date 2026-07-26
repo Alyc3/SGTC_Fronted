@@ -387,15 +387,14 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
                 label="Nombre de Parcela *"
                 value={nombre}
                 onChangeText={(text: string) => {
-                  const sanitized = text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
-                  setNombre(sanitized);
+                  setNombre(text);
                   if (errorNombre) setErrorNombre('');
                 }}
                 placeholder="Nombre de la Parcela"
                 error={errorNombre}
                 styles={styles}
                 editable={!readOnly}
-                maxLength={15}
+                maxLength={50}
               />
 
               <InputField
@@ -556,15 +555,17 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
                 </TouchableOpacity>
               </View>
 
-              {/* Altitud (Moved here and made read-only) */}
+              {/* Altitud */}
               <View style={styles.section}>
                 <InputField
                   label="Altitud *"
                   value={altitud}
+                  onChangeText={(v: string) => setAltitud(v.replace(/[^0-9.]/g, ''))}
                   placeholder="1800"
-                  suffix="meters"
+                  keyboardType="numeric"
+                  suffix="msnm"
                   styles={styles}
-                  editable={false}
+                  editable={!readOnly}
                 />
               </View>
 
@@ -617,7 +618,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
                   {!readOnly && (
                     <TouchableOpacity style={styles.calibrateButton} onPress={handleGPS}>
                       <MapPin size={16} color={Theme.colors.white} />
-                      <Text style={styles.calibrateText}>Calibrate GPS</Text>
+                      <Text style={styles.calibrateText}>Calibrar GPS</Text>
                     </TouchableOpacity>
                   )}
                 </View>

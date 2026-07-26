@@ -151,6 +151,8 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
   const [semillas, setSemillas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [parcela, setParcela] = useState<any>(null);
+  const [zonasDisponibles, setZonasDisponibles] = useState<string[]>([]);
+  const [lotesPerZona, setLotesPerZona] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadInitialData();
@@ -178,9 +180,13 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
           setTipoParcela(p.tipoTerreno as any);
         }
         
-        if (!isEditing && p?.tipoTerreno === 'Irregular') {
+        if (p?.tipoTerreno === 'Irregular') {
           const zonas = p.tipoZona ? JSON.parse(p.tipoZona) : [];
-          if (zonas.length > 0) {
+          setZonasDisponibles(zonas);
+          if (!isEditing && zonas.length > 0) {
+            const initialDist: Record<string, number> = {};
+            zonas.forEach((z: string) => { initialDist[z] = 1; });
+            setLotesPerZona(initialDist);
             setNumLotes(zonas.length);
             setLotesData(zonas.map((z: string) => ({
               codigo: '', semilla_id: '', variedadCafe: '', hectareas: '', zona_seleccionada: z
@@ -212,6 +218,31 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
     const updated = [...lotesData];
     updated[index] = { ...updated[index], ...newData };
     setLotesData(updated);
+  };
+
+  const updateLotesPerZona = (zona: string, delta: number) => {
+    const current = lotesPerZona[zona] ?? 1;
+    const newCount = Math.max(1, Math.min(5, current + delta));
+    if (newCount === current) return;
+
+    const updated = { ...lotesPerZona, [zona]: newCount };
+    setLotesPerZona(updated);
+
+    const newLotes: any[] = [];
+    zonasDisponibles.forEach(z => {
+      const count = updated[z] ?? 1;
+      const existing = lotesData.filter(l => l.zona_seleccionada === z);
+      for (let i = 0; i < count; i++) {
+        newLotes.push(
+          i < existing.length
+            ? existing[i]
+            : { codigo: '', semilla_id: '', variedadCafe: '', hectareas: '', zona_seleccionada: z }
+        );
+      }
+    });
+
+    setLotesData(newLotes);
+    setNumLotes(newLotes.length);
   };
 
   const handleNumLotesChange = (val: string) => {
@@ -450,17 +481,17 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
             <View style={styles.configHeader}>
               <Text style={styles.sectionTitle}>Configuración de Lotes</Text>
               <Text style={styles.sectionSubtitle}>
-                {tipoParcela === 'Regular' 
-                  ? 'Define las especificaciones técnicas para cada unidad.' 
+                {tipoParcela === 'Regular'
+                  ? 'Define las especificaciones técnicas para cada unidad.'
                   : 'Complete la información para cada zona topográfica de la parcela.'}
               </Text>
-              
+
               {!isEditing && tipoParcela === 'Regular' && (
                 <View style={styles.unitCounterContainer}>
                   <Text style={styles.unitLabel}>Número de Lotes (1-10):</Text>
                   <View style={styles.unitCounter}>
                     <TouchableOpacity onPress={() => handleNumLotesChange((numLotes - 1).toString())}>
-                       <Text style={styles.counterBtn}>-</Text>
+                      <Text style={styles.counterBtn}>-</Text>
                     </TouchableOpacity>
                     <TextInput
                       style={styles.unitInput}
@@ -469,8 +500,40 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
                       keyboardType="numeric"
                     />
                     <TouchableOpacity onPress={() => handleNumLotesChange((numLotes + 1).toString())}>
-                       <Text style={styles.counterBtn}>+</Text>
+                      <Text style={styles.counterBtn}>+</Text>
                     </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {!isEditing && tipoParcela === 'Irregular' && zonasDisponibles.length > 0 && (
+                <View style={styles.zoneDistCard}>
+                  <Text style={styles.zoneDistTitle}>Distribución por Zona</Text>
+                  <Text style={styles.zoneDistSubtitle}>
+                    Elige cuántos lotes crear en cada zona. Mínimo 1, máximo 5 por zona.
+                  </Text>
+                  {zonasDisponibles.map(z => (
+                    <View key={z} style={styles.zoneDistRow}>
+                      <View style={styles.zoneDistChip}>
+                        <Mountain size={12} color={Theme.colors.onSecondaryContainer} />
+                        <Text style={styles.zoneDistChipText} numberOfLines={1}>{z}</Text>
+                      </View>
+                      <View style={styles.unitCounter}>
+                        <TouchableOpacity onPress={() => updateLotesPerZona(z, -1)}>
+                          <Text style={styles.counterBtn}>−</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.zoneDistCounterValue}>{lotesPerZona[z] ?? 1}</Text>
+                        <TouchableOpacity onPress={() => updateLotesPerZona(z, +1)}>
+                          <Text style={styles.counterBtn}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                  <View style={styles.zoneDistTotal}>
+                    <Text style={styles.unitLabel}>Total de lotes a crear:</Text>
+                    <Text style={styles.zoneDistTotalValue}>
+                      {Object.values(lotesPerZona).reduce((a, b) => a + b, 0)}
+                    </Text>
                   </View>
                 </View>
               )}
@@ -486,6 +549,37 @@ const GestionLoteScreen = ({ navigation, route }: any) => {
                 styles={styles}
               />
             ))}
+
+            {isEditing && tipoParcela === 'Irregular' && zonasDisponibles.length > 0 && (
+              <View style={{ paddingHorizontal: 4, marginTop: 8 }}>
+                <Text style={styles.inputLabelUpper ?? { fontSize: 11, fontWeight: '700', color: '#666', marginBottom: 8 }}>ZONA TOPOGRÁFICA</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {zonasDisponibles.map((z) => {
+                      const isSelected = lotesData[0]?.zona_seleccionada === z;
+                      return (
+                        <TouchableOpacity
+                          key={z}
+                          onPress={() => updateLot(0, { zona_seleccionada: z })}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            backgroundColor: isSelected ? Theme.colors.secondaryContainer : Theme.colors.surfaceContainerHighest,
+                            borderWidth: 1,
+                            borderColor: isSelected ? Theme.colors.secondary : Theme.colors.outlineVariant,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? Theme.colors.onSecondaryContainer : Theme.colors.onSurface }}>
+                            {z}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
           </View>
         </View>
 
@@ -861,6 +955,66 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.outlineVariant,
     marginTop: 24,
     opacity: 0.5,
+  },
+  zoneDistCard: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    padding: 16,
+    borderRadius: 16,
+    marginTop: 12,
+    gap: 10,
+  },
+  zoneDistTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.onSurface,
+  },
+  zoneDistSubtitle: {
+    fontSize: 12,
+    color: Theme.colors.onSurfaceVariant,
+    marginBottom: 4,
+  },
+  zoneDistRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  zoneDistChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Theme.colors.secondaryContainer,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  zoneDistChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.onSecondaryContainer,
+    flexShrink: 1,
+  },
+  zoneDistCounterValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+    textAlign: 'center',
+    minWidth: 24,
+  },
+  zoneDistTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    marginTop: 2,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.outlineVariant,
+  },
+  zoneDistTotalValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: Theme.colors.primary,
   },
 });
 

@@ -509,7 +509,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             <View style={styles.divider} />
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nombres</Text>
+              <Text style={styles.label}>Nombres *</Text>
               <View style={[styles.inputWrapper, firstNameError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={styles.input}
@@ -525,7 +525,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Apellidos</Text>
+              <Text style={styles.label}>Apellidos *</Text>
               <View style={[styles.inputWrapper, lastNameError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={styles.input}
@@ -556,7 +556,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Identificación ({documentType === 'Cedula' ? 'Cédula' : 'Pasaporte'})</Text>
+              <Text style={styles.label}>Identificación ({documentType === 'Cedula' ? 'Cédula' : 'Pasaporte'}) *</Text>
               <View style={[styles.inputWrapper, isEditMode && { backgroundColor: Theme.colors.surfaceContainerLow }, identifierError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={[styles.input, isEditMode && { color: Theme.colors.outline }]}
@@ -574,7 +574,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Teléfono</Text>
+              <Text style={styles.label}>Teléfono *</Text>
               <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }, phoneNumberError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={[styles.input, (isEditMode && isCapatazUser) && { color: Theme.colors.outline }]}
@@ -603,7 +603,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             <View style={styles.divider} />
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Correo Electrónico</Text>
+              <Text style={styles.label}>Correo Electrónico *</Text>
               <View style={[styles.inputWrapper, emailError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={styles.input}
@@ -621,7 +621,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>{isEditMode ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}</Text>
+              <Text style={styles.label}>{isEditMode ? 'Nueva Contraseña (Opcional)' : 'Contraseña *'}</Text>
               <View style={[styles.inputWrapper, (isEditMode && isCapatazUser) && { backgroundColor: Theme.colors.surfaceContainerLow }, passwordError ? styles.inputErrorBorder : null]}>
                 <TextInput
                   style={[styles.input, (isEditMode && isCapatazUser) && { color: Theme.colors.outline }]}
@@ -648,7 +648,7 @@ const RegisterPersonalScreen = ({ navigation, route }: any) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Rol de Acceso</Text>
+              <Text style={styles.label}>Rol de Acceso *</Text>
               <TouchableOpacity 
                 style={styles.inputWrapper} 
                 activeOpacity={0.7}
