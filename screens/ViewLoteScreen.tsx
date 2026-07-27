@@ -160,6 +160,7 @@
   const isCapatazOrManager = isAdminOrManager || isCapataz;
     const canAssignCapataz = isAdminOrManager;
     const canAssign = isCapatazOrManager;
+    
 
     const getAssignedStageForTechnician = (role: string): string | null => {
       const r = role.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
@@ -180,6 +181,9 @@
     const [rolesMap, setRolesMap] = useState<Record<string, string>>({});
     const [stages, setStages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true); // ← único estado de cosecha que queda
+    const capatazAsignado = assignedPersonnel.some(p =>
+  (rolesMap[p.trabajador?.role_id] || '').toLowerCase() === 'capataz' || p.etapa === 'Administración'
+);
 
     const scrollY = useRef(new Animated.Value(0)).current;
     const headerOpacity = scrollY.interpolate({
@@ -568,22 +572,22 @@ const stagePersonnelRaw = assignedPersonnel.filter(p => {
               </View>
             </View>
 
-            {canAssignCapataz && (
-              <TouchableOpacity
-                style={styles.assignTechnicalButton}
-                onPress={() => navigation.navigate('AssignCapataz', { lote })}
-              >
-                <LinearGradient
-                  colors={[Theme.colors.secondary, '#22502d']}
-                  style={styles.assignTechnicalGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <ShieldCheck size={18} color={Theme.colors.white} />
-                  <Text style={styles.assignTechnicalText}>Asignar Capataz</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
+            {canAssignCapataz && !capatazAsignado && (
+  <TouchableOpacity
+    style={styles.assignTechnicalButton}
+    onPress={() => navigation.navigate('AssignCapataz', { lote })}
+  >
+    <LinearGradient
+      colors={[Theme.colors.secondary, '#22502d']}
+      style={styles.assignTechnicalGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+    >
+      <ShieldCheck size={18} color={Theme.colors.white} />
+      <Text style={styles.assignTechnicalText}>Asignar Capataz</Text>
+    </LinearGradient>
+  </TouchableOpacity>
+)}
           </View>
 
           <View style={styles.sectionPadding}>
@@ -591,7 +595,8 @@ const stagePersonnelRaw = assignedPersonnel.filter(p => {
             <View style={styles.foremanList}>
               {getUniquePersonnel(assignedPersonnel.filter(p => {
                 const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
-                return rName === 'capataz' || p.etapa === 'Administración';
+                const esCapataz = rName === 'capataz' || p.etapa === 'Administración';
+                return esCapataz && !!p.trabajador?.first_name; // 👈 exige que el join haya resuelto
               })).map((p, idx) => (
                 <View key={p.id || idx} style={styles.foremanCard}>
                   <View style={styles.foremanAvatar}>
@@ -606,9 +611,10 @@ const stagePersonnelRaw = assignedPersonnel.filter(p => {
                   </View>
                 </View>
               ))}
-              {assignedPersonnel.filter(p =>
-                (rolesMap[p.trabajador?.role_id] || '').toLowerCase() === 'capataz' || p.etapa === 'Administración'
-              ).length === 0 && (
+              {assignedPersonnel.filter(p => {
+                const rName = (rolesMap[p.trabajador?.role_id] || '').toLowerCase();
+                return (rName === 'capataz' || p.etapa === 'Administración') && !!p.trabajador?.first_name;
+              }).length === 0 && (
                 <View style={styles.foremanCard}>
                   <View style={styles.foremanAvatar}>
                     <User size={28} color={Theme.colors.primary} />
