@@ -6,4 +6,7 @@ export * from './lotes';
 export * from './asignacion_personal';
 export * from './estado_etapa';
 export * from './cosecha';
+export * from './despulpado';
+export * from './tostado';
+export * from './molido';
 export * from './sembrado_metricas';

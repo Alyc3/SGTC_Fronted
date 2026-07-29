@@ -17,16 +17,19 @@ import AssignCapatazScreen from '../screens/AssignCapatazScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import GestionRolesScreen from '../screens/GestionRolesScreen';
 import EtapaCosechaScreen from '../screens/EtapaCosechaScreen';
+import EtapaDespulpadoScreen from '../screens/EtapaDespulpadoScreen';
+import EtapaTostadoScreen from '../screens/EtapaTostadoScreen';
+import EtapaMolidoScreen from '../screens/EtapaMolidoScreen';
 import { Theme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { SyncStatusIcon } from '../components/SyncStatusIcon';
-import { 
-  LayoutDashboard, 
-  Boxes, 
-  Map, 
-  Sprout, 
+import {
+  LayoutDashboard,
+  Boxes,
+  Map,
+  Sprout,
   Flower,
-  Users, 
+  Users,
   Settings,
   ShieldCheck
 } from 'lucide-react-native';
@@ -35,7 +38,7 @@ const Drawer = createDrawerNavigator();
 
 export const DrawerNavigator = () => {
   const roleRaw = useAuthStore((state) => state.role);
-  
+
   const getCleanRole = () => {
     if (!roleRaw) return '';
     if (typeof roleRaw === 'string') return roleRaw;
@@ -80,14 +83,14 @@ export const DrawerNavigator = () => {
         drawerActiveBackgroundColor: Theme.colors.surfaceContainerLow,
         drawerActiveTintColor: Theme.colors.primary,
         drawerInactiveTintColor: Theme.colors.onSurfaceVariant,
-        
+
         drawerLabelStyle: {
           ...Theme.typography.body,
           fontSize: 14,
           fontWeight: '600',
           marginLeft: -4,
         },
-      
+
         drawerItemStyle: {
           borderRadius: Theme.roundness.md,
           marginLeft: 4,
@@ -97,59 +100,59 @@ export const DrawerNavigator = () => {
         }
       }}
     >
-      <Drawer.Screen 
-        name="Dashboard" 
-        component={DashboardScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
           title: 'Inicio',
           drawerIcon: ({ color }) => <LayoutDashboard size={20} color={color} />
         }}
       />
 
-      <Drawer.Screen 
-        name="Lotes" 
-        component={LotesScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Lotes"
+        component={LotesScreen}
+        options={{
           title: 'Gestión de Lotes',
           drawerIcon: ({ color }) => <Boxes size={20} color={color} />,
           drawerItemStyle: canAccessLotes ? {} : { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="ListarParcela" 
-        component={ListarParcelaScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="ListarParcela"
+        component={ListarParcelaScreen}
+        options={{
           title: 'Gestión de Parcelas',
           drawerIcon: ({ color }) => <Map size={20} color={color} />,
           drawerItemStyle: canAccessParcelas ? {} : { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="InventarioSemillas" 
-        component={InventarioSemillasScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="InventarioSemillas"
+        component={InventarioSemillasScreen}
+        options={{
           title: 'Gestión de Semillas',
           drawerIcon: ({ color }) => <Sprout size={20} color={color} />,
           drawerItemStyle: canAccessSemillas ? {} : { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="Personal" 
-        component={PersonalScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Personal"
+        component={PersonalScreen}
+        options={{
           title: 'Gestión de Personal',
           drawerIcon: ({ color }) => <Users size={20} color={color} />,
           drawerItemStyle: canAccessPersonal ? {} : { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="EtapaSembrados" 
-        component={EtapaSembradosScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="EtapaSembrados"
+        component={EtapaSembradosScreen}
+        options={{
           title: 'Control de Sembrado',
           drawerIcon: ({ color }) => <Flower size={20} color={color} />,
           drawerItemStyle: canAccessControlSembrado ? {} : { display: 'none' },
@@ -157,95 +160,125 @@ export const DrawerNavigator = () => {
         }}
       />
 
-      <Drawer.Screen 
-        name="EtapaCosecha" 
-        component={EtapaCosechaScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="EtapaCosecha"
+        component={EtapaCosechaScreen}
+        options={{
           title: 'Control de Cosecha',
           drawerItemStyle: { display: 'none' },
           headerShown: false
         }}
       />
 
-      <Drawer.Screen 
-        name="GestionRoles" 
-        component={GestionRolesScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="EtapaDespulpado"
+        component={EtapaDespulpadoScreen}
+        options={{
+          title: 'Control de Despulpado',
+          drawerItemStyle: { display: 'none' },
+          headerShown: false
+        }}
+      />
+
+      <Drawer.Screen
+        name="EtapaTostado"
+        component={EtapaTostadoScreen}
+        options={{
+          title: 'Control de Tostado',
+          drawerItemStyle: { display: 'none' },
+          headerShown: false
+        }}
+      />
+
+      <Drawer.Screen
+        name="EtapaMolido"
+        component={EtapaMolidoScreen}
+        options={{
+          title: 'Control de Molido',
+          drawerItemStyle: { display: 'none' },
+          headerShown: false
+        }}
+      />
+
+      <Drawer.Screen
+        name="GestionRoles"
+        component={GestionRolesScreen}
+        options={{
           title: 'Gestión de Roles',
           drawerIcon: ({ color }) => <ShieldCheck size={20} color={color} />,
           drawerItemStyle: canAccessRoles ? {} : { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="Configuracion" 
-        component={ConfiguracionScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Configuracion"
+        component={ConfiguracionScreen}
+        options={{
           title: 'Configuración',
           drawerIcon: ({ color }) => <Settings size={20} color={color} />
         }}
       />
 
       {/* Pantallas ocultas del Drawer pero registradas */}
-      <Drawer.Screen 
-        name="GestionParcela" 
-        component={GestionParcelaScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="GestionParcela"
+        component={GestionParcelaScreen}
+        options={{
           title: 'Gestionar Parcela',
           drawerItemStyle: { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="GestionLote" 
-        component={GestionLoteScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="GestionLote"
+        component={GestionLoteScreen}
+        options={{
           title: 'Gestionar Lote',
           drawerItemStyle: { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="ViewLote" 
-        component={ViewLoteScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="ViewLote"
+        component={ViewLoteScreen}
+        options={{
           title: 'Detalle de Lote',
           drawerItemStyle: { display: 'none' },
           headerShown: false
         }}
       />
 
-      <Drawer.Screen 
-        name="RegistroSemilla" 
-        component={RegistroSemillaScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="RegistroSemilla"
+        component={RegistroSemillaScreen}
+        options={{
           title: 'Registro de Semilla',
           drawerItemStyle: { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="RegisterPersonal" 
-        component={RegisterPersonalScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="RegisterPersonal"
+        component={RegisterPersonalScreen}
+        options={{
           title: 'Registro de Personal',
           drawerItemStyle: { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="AssignPersonal" 
-        component={AssignPersonalScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="AssignPersonal"
+        component={AssignPersonalScreen}
+        options={{
           title: 'Asignar Personal',
           drawerItemStyle: { display: 'none' }
         }}
       />
 
-      <Drawer.Screen 
-        name="AssignCapataz" 
-        component={AssignCapatazScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="AssignCapataz"
+        component={AssignCapatazScreen}
+        options={{
           title: 'Asignar Capataz',
           drawerItemStyle: { display: 'none' }
         }}
