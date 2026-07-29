@@ -127,25 +127,29 @@ export const authService = {
         const { eq } = require("drizzle-orm");
 
         const passwordToStore = await hashPassword(data.password); // o el hash con expo-crypto
+        const roleIdToStore = remoteUserRole || "COLABORADOR";
 
         const localUserExists = await db.query.users.findFirst({
-          where: (u, { eq }) => eq(u.id, remoteUserId),
+          where: (u: any, { eq }: any) => eq(u.id, remoteUserId),
         });
 
         if (localUserExists) {
-          await db
-            .update(users)
-            .set({
-              email: data.email,
-              password_hash: passwordToStore,
-              // role_id si lo necesitas mapear desde remoteUserRole
-            })
-            .where(eq(users.id, remoteUserId));
+          const updates: Record<string, string> = {
+            email: data.email,
+            password_hash: passwordToStore,
+          };
+
+          if (remoteUserRole) {
+            updates.role_id = roleIdToStore;
+          }
+
+          await db.update(users).set(updates).where(eq(users.id, remoteUserId));
         } else {
           await db.insert(users).values({
             id: remoteUserId,
             email: data.email,
             password_hash: passwordToStore,
+            role_id: roleIdToStore,
             status: "ACTIVO",
           });
         }
