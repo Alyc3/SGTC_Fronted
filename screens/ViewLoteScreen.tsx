@@ -182,7 +182,7 @@ const ViewLoteScreen = ({ navigation, route }: any) => {
     const [stages, setStages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true); // ← único estado de cosecha que queda
     const capatazAsignado = assignedPersonnel.some(p =>
-  (rolesMap[p.trabajador?.role_id] || '').toLowerCase() === 'capataz' || p.etapa === 'Administración'
+  (rolesMap[p.trabajador?.role_id] || '').toLowerCase() === 'capataz'
 );
 
   const scrollY = useRef(new Animated.Value(0)).current;
