@@ -69,7 +69,7 @@ export const personalService = {
 
     // 3. Definir reglas de negocio (Mínimo y Máximo)
     let min = 1;
-    let max = 1;
+    let max = 4; //deja hasta 4 capataces por lote por defrecto, si es más de 10 hectáreas, deja hasta 5 capataces
 
     if (hectareas > 10) {
       min = 2;

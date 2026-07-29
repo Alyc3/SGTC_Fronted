@@ -75,6 +75,7 @@ const ALLOWED_ROLES_NORMALIZED = [
 const AssignPersonalScreen = ({ navigation, route }: any) => {
   const { role: userRoleRaw } = useAuthStore();
   const isEditMode = route.params?.isEditMode || false;
+  const isCapatazAssignment = (a: any) => a.etapa === 'Administración';
   
   const getCleanRole = () => {
     if (!userRoleRaw) return 'COLABORADOR';
@@ -182,9 +183,9 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
       // Inicialización inmediata de la selección (Crucial para que se vea seleccionado al cargar)
       if (route.params?.isEditMode) {
         const currentStageIds = Array.from(new Set(assignmentsData
-          .filter((a: any) => a.etapa === selectedEtapa)
+          .filter((a: any) => a.etapa === selectedEtapa || isCapatazAssignment(a)) // 👈 incluir capataz
           .map((a: any) => a.trabajador_id || a.trabajador?.id)));
-        
+
         setSelectedPersonnel(currentStageIds);
         setInitialSelectedIds(currentStageIds);
       }
@@ -207,20 +208,19 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
 
   // Sincronizar selección cuando cambia la etapa MANUALMENTE en el carrusel
   useEffect(() => {
-    // Solo actuamos si no es la carga inicial (cuando existingAssignments ya tiene datos)
-    if (existingAssignments.length > 0) {
-      if (isEditMode) {
-        const currentStageIds = Array.from(new Set(existingAssignments
-          .filter((a: any) => a.etapa === selectedEtapa)
-          .map((a: any) => a.trabajador_id || a.trabajador?.id)));
-        
-        setSelectedPersonnel(currentStageIds);
-        setInitialSelectedIds(currentStageIds);
-      } else {
-        setSelectedPersonnel([]);
-      }
+  if (existingAssignments.length > 0) {
+    if (isEditMode) {
+      const currentStageIds = Array.from(new Set(existingAssignments
+        .filter((a: any) => a.etapa === selectedEtapa || isCapatazAssignment(a)) // 👈 incluir capataz
+        .map((a: any) => a.trabajador_id || a.trabajador?.id)));
+
+      setSelectedPersonnel(currentStageIds);
+      setInitialSelectedIds(currentStageIds);
+    } else {
+      setSelectedPersonnel([]);
     }
-  }, [selectedEtapa]); // Escuchamos solo el cambio de etapa
+  }
+}, [selectedEtapa]); // Escuchamos solo el cambio de etapa
 
   const filteredPersonnel = useMemo(() => {
     if (!searchText.trim()) return personnel;
@@ -231,20 +231,20 @@ const AssignPersonalScreen = ({ navigation, route }: any) => {
   }, [personnel, searchText]);
 
   const alreadyAssignedIds = useMemo(() => {
-    return new Set(
-      existingAssignments
-        .filter(a => a.etapa === selectedEtapa)
-        .map(a => a.trabajador_id || a.trabajador?.id)
-    );
-  }, [existingAssignments, selectedEtapa]);
+  return new Set(
+    existingAssignments
+      .filter(a => a.etapa === selectedEtapa || isCapatazAssignment(a)) // 👈
+      .map(a => a.trabajador_id || a.trabajador?.id)
+  );
+}, [existingAssignments, selectedEtapa]);
 
   const assignedInOtherStagesIds = useMemo(() => {
-    return new Set(
-      existingAssignments
-        .filter(a => a.etapa !== selectedEtapa)
-        .map(a => a.trabajador_id || a.trabajador?.id)
-    );
-  }, [existingAssignments, selectedEtapa]);
+  return new Set(
+    existingAssignments
+      .filter(a => a.etapa !== selectedEtapa && !isCapatazAssignment(a)) // 👈 excluir capataz de "otra etapa"
+      .map(a => a.trabajador_id || a.trabajador?.id)
+  );
+}, [existingAssignments, selectedEtapa]);
 
   const togglePersonnelSelection = (id: string) => {
     // Si NO estamos en modo edición y ya está asignado, bloqueamos la selección

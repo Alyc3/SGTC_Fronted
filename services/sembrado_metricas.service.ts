@@ -34,7 +34,17 @@ export const sembradoMetricasService = {
     return !isNaN(num) && num < 80;
   },
 
+
   /**
+   * Valida si los días de emergencia/surgimiento es un número entero entre 1 y 90.
+   */
+  validarDiasEmergencia(value: any): boolean {
+    if (value === undefined || value === null || value === '') return false;
+    const num = Number(value);
+    return Number.isInteger(num) && num >= 1 && num <= 90;
+  },
+
+    /**
    * Filtra el texto ingresado para permitir únicamente números enteros de días de emergencia/surgimiento (máximo 90).
    */
   filtrarDiasEmergencia(value: string): string {
@@ -46,14 +56,6 @@ export const sembradoMetricasService = {
     return num.toString();
   },
 
-  /**
-   * Valida si los días de emergencia/surgimiento es un número entero entre 1 y 90.
-   */
-  validarDiasEmergencia(value: any): boolean {
-    if (value === undefined || value === null || value === '') return false;
-    const num = Number(value);
-    return Number.isInteger(num) && num >= 1 && num <= 90;
-  },
 
   /**
    * Verifica si los días de emergencia/surgimiento superan los 75 días (de 76 a 90).

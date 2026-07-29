@@ -777,7 +777,7 @@ const handleEditar = () => {
                     <ActivityIndicator size="small" color="white" />
                   ) : (
                     <Text style={styles.actionButtonText}>
-                      {hayDatos ? 'GUARDAR ACTUALIZACIÓN' : 'GUARDAR AVANCE'}
+                      {hayDatos ? 'ACTUALIZAR' : 'FINALIZAR'}
                     </Text>
                   )}
                 </TouchableOpacity>
