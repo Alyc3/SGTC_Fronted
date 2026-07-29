@@ -567,27 +567,38 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
             </View>
 
             {/* Metadata Footer */}
-            <View style={styles.metadataFooter}>
-              <View style={styles.metadataItem}>
-                <Text style={styles.metadataLabel}>FECHA DE CREACIÓN</Text>
-                <Text style={styles.metadataValue}>{formatDate(metadata.created)}</Text>
-              </View>
-              {metadata.updated ? (
-                <View style={styles.metadataItem}>
-                  <Text style={styles.metadataLabel}>ÚLTIMA MODIFICACIÓN</Text>
-                  <Text style={styles.metadataValue}>{formatDate(metadata.updated)}</Text>
+            {(() => {
+              const isModified = Boolean(
+                metadata.updated && 
+                metadata.created && 
+                metadata.updated !== metadata.created &&
+                Math.abs(new Date(metadata.updated).getTime() - new Date(metadata.created).getTime()) > 1000
+              );
+
+              return (
+                <View style={styles.metadataFooter}>
+                  <View style={styles.metadataItem}>
+                    <Text style={styles.metadataLabel}>FECHA DE CREACIÓN</Text>
+                    <Text style={styles.metadataValue}>{formatDate(metadata.created)}</Text>
+                  </View>
+                  {isModified ? (
+                    <View style={styles.metadataItem}>
+                      <Text style={styles.metadataLabel}>ÚLTIMA MODIFICACIÓN</Text>
+                      <Text style={styles.metadataValue}>{formatDate(metadata.updated)}</Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.technicianBadge}>
+                    <View style={styles.technicianIcon}>
+                      <User size={14} color={Theme.colors.onPrimaryFixed} />
+                    </View>
+                    <View>
+                      <Text style={styles.technicianLabel}>Técnico a cargo</Text>
+                      <Text style={styles.technicianName}>{userName || 'Técnico Autenticado'}</Text>
+                    </View>
+                  </View>
                 </View>
-              ) : null}
-              <View style={styles.technicianBadge}>
-                <View style={styles.technicianIcon}>
-                  <User size={14} color={Theme.colors.onPrimaryFixed} />
-                </View>
-                <View>
-                  <Text style={styles.technicianLabel}>Técnico a cargo</Text>
-                  <Text style={styles.technicianName}>{userName || 'Técnico Autenticado'}</Text>
-                </View>
-              </View>
-            </View>
+              );
+            })()}
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
@@ -633,12 +644,21 @@ const RegistroSemillaScreen = ({ navigation, route }: any) => {
             <Text style={styles.addModalTitle}>Nuevo/a {activeCategory.label}</Text>
             <TextInput
               style={styles.addInput}
-              placeholder={`Nombre de ${activeCategory.label.toLowerCase()}...`}
+              placeholder={
+                activeCategory.key === 'PAIS_ORIGEN'
+                  ? 'Ciudad, Pais (Ej: Huila, Colombia)'
+                  : `Nombre de ${activeCategory.label.toLowerCase()}...`
+              }
               value={newVal}
               onChangeText={setNewVal}
               maxLength={30}
               autoFocus
             />
+            {activeCategory.key === 'PAIS_ORIGEN' && (
+              <Text style={styles.addHelperText}>
+                Formato requerido: Ciudad, Pais
+              </Text>
+            )}
             <View style={styles.addModalActions}>
               <TouchableOpacity 
                 style={styles.addCancelBtn} 
@@ -957,7 +977,14 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     color: Theme.colors.onSurface,
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  addHelperText: {
+    ...Theme.typography.labelSm,
+    color: Theme.colors.onSurfaceVariant,
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 20,
   },
   addModalActions: {
     flexDirection: 'row',
