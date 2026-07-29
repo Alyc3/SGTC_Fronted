@@ -88,9 +88,9 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
   const [errorNombre, setErrorNombre] = useState('');
   const [errorHectareas, setErrorHectareas] = useState('');
   const [phSuelo, setPhSuelo] = useState(6.5);
-  const [tipoTerreno, setTipoTerreno] = useState<typeof TipoTerrenoValues[number]>('Irregular');
-  const [orientacion, setOrientacion] = useState<typeof OrientacionLaderaValues[number]>('NORTE');
-  const [textura, setTextura] = useState<typeof TexturaSueloValues[number]>('Franco-Arenosa');
+  const [tipoTerreno, setTipoTerreno] = useState<typeof TipoTerrenoValues[number] | ''>('');
+  const [orientacion, setOrientacion] = useState<typeof OrientacionLaderaValues[number] | ''>('');
+  const [textura, setTextura] = useState<typeof TexturaSueloValues[number] | ''>('');
   const [cortinasRompevientos, setCortinasRompevientos] = useState(false);
   const [selectedZonas, setSelectedZonas] = useState<string[]>([]);
   const [lotesAssociated, setLotesAssociated] = useState<any[]>([]);
@@ -106,9 +106,9 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     setErrorNombre('');
     setErrorHectareas('');
     setPhSuelo(6.5);
-    setTipoTerreno('Irregular');
-    setOrientacion('NORTE');
-    setTextura('Franco-Arenosa');
+    setTipoTerreno('');
+    setOrientacion('');
+    setTextura('');
     setCortinasRompevientos(false);
     setSelectedZonas([]);
     setLotesAssociated([]);
@@ -264,6 +264,9 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
     if (!nombre) missingFields.push('Nombre de Parcela');
     if (!hectareas) missingFields.push('Hectáreas');
     if (!altitud) missingFields.push('Altitud (Calibre GPS)');
+    if (!tipoTerreno) missingFields.push('Tipo de Terreno');
+    if (!orientacion) missingFields.push('Orientación de Ladera');
+    if (!textura) missingFields.push('Textura del Suelo');
     if (tipoTerreno === 'Irregular' && selectedZonas.length === 0) missingFields.push('Clasificación de Zonas');
 
     if (missingFields.length > 0) {
@@ -329,7 +332,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
       };
 
       if (isEditing) {
-        await parcelasService.update(parcelId, data);
+        await parcelasService.update(parcelId, data as any);
         CustomAlert.show('SUCCESS', 'Éxito', 'Parcela actualizada.', () => {
           resetForm();
           if (navigation.canGoBack()) {
@@ -339,7 +342,7 @@ const GestionParcelaScreen = ({ navigation, route }: any) => {
           }
         });
       } else {
-        await parcelasService.create(data);
+        await parcelasService.create(data as any);
         CustomAlert.show('SUCCESS', 'Éxito', 'Parcela registrada.', () => {
           resetForm();
           if (navigation.canGoBack()) {
